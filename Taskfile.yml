@@ -1,0 +1,101 @@
+﻿version: '3'
+
+vars:
+  IMAGE_NAME: gridtrack.api
+  IMAGE_TAG: latest
+  K8S_NAMESPACE: default
+  APP_LABEL: gridtrack-api
+
+tasks:
+  # ============================================
+  # BUILD TASKS
+  # ============================================
+  
+  restore:
+    desc: Restore .NET dependencies
+    cmds:
+      - dotnet restore
+
+  build:
+    desc: Build .NET application
+    deps: [restore]
+    cmds:
+      - dotnet build --no-restore --configuration Release
+
+
+  # ============================================
+  # TEST TASKS
+  # ============================================
+
+  test-architecture:
+    desc: Run architecture tests
+    deps: [build]
+    cmds:
+      - dotnet run --project ./GridTrack.ArchitectureTests/GridTrack.ArchitectureTests.csproj --configuration Release -- --report-trx --report-trx-filename architecture-test-results.trx --results-directory ./TestResults/Architecture
+
+  test-domain:
+    desc: Run domain unit tests
+    cmds:
+      - dotnet run --project ./GridTrack.Domain.UnitTests/GridTrack.Domain.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename domain-unit-test-results.trx --results-directory ./TestResults/DomainUnit
+
+  test-integration:
+    desc: Run integration  tests
+    cmds:
+      - dotnet run --project ./GridTrack.IntegrationTests/GridTrack.IntegrationTests.csproj --configuration Release -- --report-trx --report-trx-filename integration-test-results.trx --results-directory ./TestResults/Integration
+
+  test-all:
+    desc: Run all tests
+    deps: []
+
+
+  # ============================================
+  # DOCKER COMPOSE TASKS
+  # ============================================
+
+  compose-up:
+    desc: Start services with Docker Compose
+    cmds:
+      - docker compose up -d --wait
+
+  compose-down:
+    desc: Stop Docker Compose services
+    cmds:
+      - docker compose down -v
+
+  compose-logs:
+    desc: Show Docker Compose logs
+    cmds:
+      - docker compose logs -f
+
+  # ============================================
+  # PIPELINE TASKS (Complete Workflows)
+  # ============================================
+
+  ci:
+    desc: Run CI pipeline (build + tests)
+    cmds:
+      - task: build
+      - task: test-all
+
+  cd-compose:
+    desc: Deploy with Docker Compose
+    cmds:
+      - task: compose-down
+      - task: compose-up
+      - echo "✅ Services started! API available at http://localhost:8000"
+
+
+  # ============================================
+  # UTILITY TASKS
+  # ============================================
+
+  clean:
+    desc: Clean all resources
+    cmds:
+      - task: compose-down
+      - dotnet clean
+
+  help:
+    desc: Show available tasks
+    cmds:
+      - task --list

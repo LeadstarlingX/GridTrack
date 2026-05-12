@@ -1,0 +1,55 @@
+<Project>
+  <ItemGroup>
+    <!-- ASP.NET Core & EF Core -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="9.0.15" />
+    <!-- SqlServer -->
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.15" />
+    <!-- Redis & Caching -->
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.15" />
+    <PackageVersion Include="Neolution.Extensions.Caching.Distributed" Version="2.1.0" />
+    <PackageVersion Include="Polly" Version="8.6.5" />
+    <!-- Logging & Monitoring -->
+    <PackageVersion Include="Serilog" Version="4.3.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="9.0.15" />
+    <PackageVersion Include="Serilog.Sinks.Seq" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.15" />
+    <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.15" />
+    <!-- Documentation -->
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="7.2.0" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="7.2.0" />
+    <!-- Utility & Patterns -->
+    <PackageVersion Include="MediatR" Version="12.5.0" />
+    <PackageVersion Include="MediatR.Contracts" Version="2.0.1" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
+    <PackageVersion Include="Dapper" Version="2.1.35" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="Bogus" Version="35.6.1" />
+    <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
+    <!-- API Versioning -->
+    <PackageVersion Include="Asp.Versioning.Http" Version="8.1.0" />
+    <PackageVersion Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" />
+    <!-- Testing -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageVersion Include="FluentAssertions" Version="7.0.0" />
+    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
+    <PackageVersion Include="TUnit" Version="1.3.25" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.10.0"/>
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.10.0"/>
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.15"/>
+    <PackageVersion Include="NSubstitute" Version="5.3.0"/>
+    <!-- NetTopologySuite -->
+    <PackageVersion Include="NetTopologySuite" Version="2.6.0"/>
+    
+  </ItemGroup>
+</Project>

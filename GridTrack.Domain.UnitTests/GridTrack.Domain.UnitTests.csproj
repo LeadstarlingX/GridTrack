@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="NetArchTest.Rules" />
+        <PackageReference Include="FluentAssertions" />
+        <PackageReference Include="TUnit" />
+    </ItemGroup>
+
+
+</Project>

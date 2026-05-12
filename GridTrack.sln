@@ -4,9 +4,53 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{A0EA4A9B-A38
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{369F163E-A54C-4F73-B88E-DCD1A27D9C2A}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solutionitems", "solutionitems", "{C01D48F1-0B76-463D-B52C-14A95A2DEDB3}"
+	ProjectSection(SolutionItems) = preProject
+		compose.yaml = compose.yaml
+		Directory.Build.props = Directory.Build.props
+		Directory.Packages.props = Directory.Packages.props
+		License.md = License.md
+		README.md = README.md
+		Taskfile.yml = Taskfile.yml
+		.gitignore = .gitignore
+		.idea\.idea.GridTrack\.idea\.gitignore = .idea\.idea.GridTrack\.idea\.gitignore
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.ArchitectureTests", "GridTrack.ArchitectureTests\GridTrack.ArchitectureTests.csproj", "{55985C3F-2869-4E53-A087-B27E7BEAA3A3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Domain", "GridTrack.Domain\GridTrack.Domain.csproj", "{90C387A5-0F90-4121-BFC1-049C00926F67}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Application", "GridTrack.Application\GridTrack.Application.csproj", "{FA364BFD-C3F6-40A5-B04F-C19105D4F8B0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Domain.UnitTests", "GridTrack.Domain.UnitTests\GridTrack.Domain.UnitTests.csproj", "{9A7F66E1-73F6-44F8-8DD4-693B63019156}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{55985C3F-2869-4E53-A087-B27E7BEAA3A3} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
+		{90C387A5-0F90-4121-BFC1-049C00926F67} = {A0EA4A9B-A384-417A-993D-93A279530C54}
+		{FA364BFD-C3F6-40A5-B04F-C19105D4F8B0} = {A0EA4A9B-A384-417A-993D-93A279530C54}
+		{9A7F66E1-73F6-44F8-8DD4-693B63019156} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{55985C3F-2869-4E53-A087-B27E7BEAA3A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55985C3F-2869-4E53-A087-B27E7BEAA3A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55985C3F-2869-4E53-A087-B27E7BEAA3A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55985C3F-2869-4E53-A087-B27E7BEAA3A3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{90C387A5-0F90-4121-BFC1-049C00926F67}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{90C387A5-0F90-4121-BFC1-049C00926F67}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{90C387A5-0F90-4121-BFC1-049C00926F67}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{90C387A5-0F90-4121-BFC1-049C00926F67}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA364BFD-C3F6-40A5-B04F-C19105D4F8B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA364BFD-C3F6-40A5-B04F-C19105D4F8B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA364BFD-C3F6-40A5-B04F-C19105D4F8B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA364BFD-C3F6-40A5-B04F-C19105D4F8B0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A7F66E1-73F6-44F8-8DD4-693B63019156}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A7F66E1-73F6-44F8-8DD4-693B63019156}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A7F66E1-73F6-44F8-8DD4-693B63019156}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A7F66E1-73F6-44F8-8DD4-693B63019156}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

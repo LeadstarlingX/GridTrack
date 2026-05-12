@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="NetArchTest.Rules" />
+        <PackageReference Include="TUnit" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
+      <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
+    </ItemGroup>
+    
+</Project>

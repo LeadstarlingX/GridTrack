@@ -1,9 +1,4 @@
 # Build outputs
-bin/
-obj/
-out/
-
-# Build results
 **/bin/
 **/obj/
 **/out/
@@ -40,8 +35,6 @@ node_modules/
 
 # Docker
 **/.docker/
-*.env
-*.env.*
 
 # OS
 .DS_Store

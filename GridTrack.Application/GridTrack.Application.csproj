@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+
+        <PackageReference Include="Dapper" />
+        <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
+    </ItemGroup>
+
+</Project>
