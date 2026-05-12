@@ -1,0 +1,48 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# Build results
+**/bin/
+**/obj/
+**/out/
+
+# Dependencies
+packages/
+node_modules/
+
+# Rider / IntelliJ
+.idea/
+.vscode/
+.vs/
+*.sln.iml
+*.suo
+*.user
+*.userprefs
+*.userosscache
+*.sln.docstates
+
+# Test results
+**/TestResults/
+
+# Environment specific settings
+.env
+.env.local
+*.env.*
+
+# NuGet
+**/packages/
+**/artifacts/
+
+# Logs
+*.log
+
+# Docker
+**/.docker/
+*.env
+*.env.*
+
+# OS
+.DS_Store
+Thumbs.db
