@@ -5,8 +5,6 @@ namespace GridTrack.Domain.Drivers;
 
 public sealed class Driver : BaseEntity
 {
-	private static readonly TimeSpan StaleThreshold = TimeSpan.FromMinutes(15);
-
 	private Driver()
 	{
 	}
@@ -89,14 +87,19 @@ public sealed class Driver : BaseEntity
 		return Result.Success(isOperational);
 	}
 
-	public Result DeactivateIfStale()
+	public Result DeactivateIfStale(TimeSpan threshold)
 	{
 		if (!IsActive)
 		{
 			return Result.Success();
 		}
 
-		if (DateTime.UtcNow - LastSeen <= StaleThreshold)
+		if (threshold <= TimeSpan.Zero)
+		{
+			return Result.Failure(DriverErrors.InvalidThreshold);
+		}
+
+		if (DateTime.UtcNow - LastSeen <= threshold)
 		{
 			return Result.Success();
 		}

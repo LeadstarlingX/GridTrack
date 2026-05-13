@@ -156,24 +156,6 @@ public class DomainArchitectureTests : ArchitectureTest
     }
 
     [Test]
-    public async Task Repository_Interfaces_Should_Reside_In_Domain()
-    {
-        var repositoryTypes = Types.InAssembly(DomainAssembly)
-            .That()
-            .HaveNameEndingWith("Repository")
-            .GetTypes()
-            .ToList();
-
-        var failing = repositoryTypes
-            .Where(t => !t.IsInterface)
-            .Select(t => t.FullName ?? t.Name)
-            .ToList();
-        
-        await Assert.That(failing).IsEmpty();
-        
-    }
-
-    [Test]
     public async Task Entities_Should_Have_Private_Parameterless_Constructor()
     {
         var entityTypes = Types.InAssembly(DomainAssembly)

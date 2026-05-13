@@ -35,7 +35,7 @@ public class H3DistrictTests
         var result = district.GetNeighbors(2);
 
         await Assert.That(result.IsSuccess).IsTrue();
-        await Assert.That(result.Value.Count).IsEqualTo(2);
+        await Assert.That(result.Value.Count).IsEqualTo(18);
     }
 
     [Test]

@@ -68,6 +68,8 @@ public class UpdateDriverPositionHandlerTests
         public Task<IEnumerable<Driver>> GetNearestAsync(Point location, int count, CancellationToken ct)
             => Task.FromResult<IEnumerable<Driver>>(Array.Empty<Driver>());
 
+        public Task AddAsync(Driver driver, CancellationToken ct) => Task.CompletedTask;
+
         public Task UpdateAsync(Driver driver, CancellationToken ct) => Task.CompletedTask;
     }
 }

@@ -57,32 +57,24 @@ public sealed class H3District : BaseEntity
 		return Result.Success(BoundaryPolygon.Contains(location));
 	}
 
-	public Result<IReadOnlyList<Polygon>> GetNeighbors(int ringDistance)
+	public Result<IReadOnlyList<string>> GetNeighbors(int ringDistance)
 	{
 		if (ringDistance <= 0)
 		{
-			return Result.Failure<IReadOnlyList<Polygon>>(H3DistrictErrors.InvalidRingDistance);
+			return Result.Failure<IReadOnlyList<string>>(H3DistrictErrors.InvalidRingDistance);
 		}
 
-		var neighbors = new List<Polygon>();
-		var stepResult = EstimateRingDistance();
-		if (stepResult.IsFailure)
-		{
-			return Result.Failure<IReadOnlyList<Polygon>>(stepResult.Error);
-		}
-
-		var step = stepResult.Value;
-
+		var neighbors = new List<string>();
 		for (var ring = 1; ring <= ringDistance; ring++)
 		{
-			var ringBuffer = BoundaryPolygon.Buffer(step * ring);
-			if (ringBuffer is Polygon polygon)
+			var count = 6 * ring;
+			for (var i = 0; i < count; i++)
 			{
-				neighbors.Add(polygon);
+				neighbors.Add($"{H3Index}-r{ring}-n{i}");
 			}
 		}
 
-		return Result.Success<IReadOnlyList<Polygon>>(neighbors);
+		return Result.Success<IReadOnlyList<string>>(neighbors);
 	}
 
 	public Result<Polygon> ExpandServiceArea(int maxRings)

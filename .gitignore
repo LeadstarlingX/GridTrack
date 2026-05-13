@@ -3,6 +3,9 @@
 **/obj/
 **/out/
 
+#tracker file
+track.md
+
 # Dependencies
 packages/
 node_modules/

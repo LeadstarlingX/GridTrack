@@ -64,7 +64,7 @@ public class DriverTests
         var driver = result.Value;
         driver.ClearDomainEvents();
 
-        var deactivateResult = driver.DeactivateIfStale();
+        var deactivateResult = driver.DeactivateIfStale(TimeSpan.FromMinutes(15));
 
         await Assert.That(deactivateResult.IsSuccess).IsTrue();
         await Assert.That(driver.IsActive).IsFalse();
@@ -100,11 +100,22 @@ public class DriverTests
         var driver = CreateDriver();
         driver.ClearDomainEvents();
 
-        var result = driver.DeactivateIfStale();
+        var result = driver.DeactivateIfStale(TimeSpan.FromMinutes(15));
 
         await Assert.That(result.IsSuccess).IsTrue();
         await Assert.That(driver.IsActive).IsTrue();
         await Assert.That(driver.DomainEvents.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task DeactivateIfStale_Should_Fail_When_Threshold_Is_Invalid()
+    {
+        var driver = CreateDriver();
+
+        var result = driver.DeactivateIfStale(TimeSpan.Zero);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DriverErrors.InvalidThreshold);
     }
 
     private static Driver CreateDriver()
