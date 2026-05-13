@@ -45,7 +45,7 @@ tasks:
 
   test-all:
     desc: Run all tests
-    deps: []
+    deps: [ test-architecture, ]
 
 
   # ============================================

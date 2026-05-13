@@ -1,4 +1,5 @@
-﻿/*using System.Reflection;
+﻿using System.Reflection;
+using GridTrack.Domain.Abstractions;
 using NetArchTest.Rules;
 
 namespace GridTrack.ArchitectureTests;
@@ -242,13 +243,7 @@ public class DomainArchitectureTests : ArchitectureTest
 
         await Assert.That(failing).IsEmpty();
     }
-
-    [Test]
-    public async Task Domain_Should_Not_Reference_System_DateTime()
-    {
-        // Illustrative only — accurate detection requires IL/Roslyn analysis.
-        await Task.CompletedTask;
-    }
+    
     
     [Test]
     public async Task Domain_Should_Not_Depend_On_Higher_Layers()
@@ -299,4 +294,4 @@ public class DomainArchitectureTests : ArchitectureTest
         await Assert.That(result.IsSuccessful).IsTrue();
     }
     
-}*/
+}
