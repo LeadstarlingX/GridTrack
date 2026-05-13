@@ -6,13 +6,15 @@ namespace GridTrack.Application.EventHandlers;
 
 public sealed class DeliveryFlaggedAnomalousHandler
 {
-    public Task Handle(DeliveryFlaggedAnomalousDomainEvent domainEvent, IEventPublisher publisher, CancellationToken ct)
+    public async Task<DeliveryFlaggedAnomalousIntegrationEvent> Handle(
+        DeliveryFlaggedAnomalousDomainEvent domainEvent, 
+        CancellationToken ct)
     {
         var integrationEvent = new DeliveryFlaggedAnomalousIntegrationEvent(
             domainEvent.DeliveryId,
             domainEvent.Type,
             domainEvent.Reason);
 
-        return publisher.PublishAsync(integrationEvent, ct);
+        return integrationEvent;
     }
 }

@@ -6,13 +6,15 @@ namespace GridTrack.Application.EventHandlers;
 
 public sealed class DriverPositionUpdatedHandler
 {
-    public Task Handle(DriverPositionUpdatedDomainEvent domainEvent, IEventPublisher publisher, CancellationToken ct)
+    public async Task<DriverPositionUpdatedIntegrationEvent> Handle(
+        DriverPositionUpdatedDomainEvent domainEvent,
+        CancellationToken ct)
     {
         var integrationEvent = new DriverPositionUpdatedIntegrationEvent(
             domainEvent.DriverId,
             domainEvent.Location,
             domainEvent.Timestamp);
 
-        return publisher.PublishAsync(integrationEvent, ct);
+        return integrationEvent;
     }
 }

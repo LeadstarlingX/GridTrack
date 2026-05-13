@@ -3,6 +3,7 @@
     <ItemGroup>
 
         <PackageReference Include="Dapper" />
+        <PackageReference Include="WolverineFx" />
         <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
 
     </ItemGroup>

@@ -6,12 +6,14 @@ namespace GridTrack.Application.EventHandlers;
 
 public sealed class DriverAvailabilityChangedHandler
 {
-    public Task Handle(DriverAvailabilityChangedDomainEvent domainEvent, IEventPublisher publisher, CancellationToken ct)
+    public async Task<DriverAvailabilityChangedIntegrationEvent> Handle(
+        DriverAvailabilityChangedDomainEvent domainEvent,
+        CancellationToken ct)
     {
         var integrationEvent = new DriverAvailabilityChangedIntegrationEvent(
             domainEvent.DriverId,
             domainEvent.IsActive);
 
-        return publisher.PublishAsync(integrationEvent, ct);
+        return integrationEvent;
     }
 }

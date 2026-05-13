@@ -6,13 +6,14 @@ namespace GridTrack.Application.EventHandlers;
 
 public sealed class DeliveryLocationUpdatedHandler
 {
-    public Task Handle(DeliveryLocationUpdatedDomainEvent domainEvent, IEventPublisher publisher, CancellationToken ct)
+    public async Task<DeliveryLocationUpdatedIntegrationEvent> Handle(DeliveryLocationUpdatedDomainEvent domainEvent,
+        CancellationToken ct)
     {
         var integrationEvent = new DeliveryLocationUpdatedIntegrationEvent(
             domainEvent.DeliveryId,
             domainEvent.Location,
             domainEvent.Timestamp);
 
-        return publisher.PublishAsync(integrationEvent, ct);
+        return integrationEvent;
     }
 }

@@ -1,10 +1,10 @@
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Dtos;
-using GridTrack.Application.EventHandlers;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Deliveries;
 using NetTopologySuite.Geometries;
+using System.Linq;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -19,12 +19,11 @@ public sealed record CreateDeliveryCommand(CreateDeliveryRequest Request);
 
 public sealed class CreateDeliveryHandler
 {
-    public async Task<Result<DeliveryCreatedResponse>> Handle(
+    public async Task<(Result<DeliveryCreatedResponse> Result, IEnumerable<object> Events)> Handle(
         CreateDeliveryCommand command,
         IDeliveryRepository repository,
         IH3GridService h3GridService,
         IDateTimeProvider dateTimeProvider,
-        IEventPublisher eventPublisher,
         CancellationToken ct)
     {
         var request = command.Request;
@@ -44,15 +43,16 @@ public sealed class CreateDeliveryHandler
 
         if (deliveryResult.IsFailure)
         {
-            return Result.Failure<DeliveryCreatedResponse>(deliveryResult.Error);
+            return (Result.Failure<DeliveryCreatedResponse>(deliveryResult.Error), Array.Empty<object>());
         }
 
         await repository.AddAsync(deliveryResult.Value, ct);
-        await DomainEventDispatcher.PublishAsync(deliveryResult.Value, eventPublisher, ct);
+        var events = deliveryResult.Value.DomainEvents.Cast<object>().ToList();
+        deliveryResult.Value.ClearDomainEvents();
 
-        return Result.Success(new DeliveryCreatedResponse(
+        return (Result.Success(new DeliveryCreatedResponse(
             deliveryResult.Value.DeliveryId,
             deliveryResult.Value.DistrictId,
-            deliveryResult.Value.CreatedAt));
+            deliveryResult.Value.CreatedAt)), events);
     }
 }

@@ -1,8 +1,7 @@
-using GridTrack.Application.Dtos;
 using GridTrack.Application.Errors;
-using GridTrack.Application.EventHandlers;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
+using System.Linq;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -12,10 +11,9 @@ public sealed record MarkDeliveryCompletedCommand(CompleteDeliveryRequest Reques
 
 public sealed class MarkDeliveryCompletedHandler
 {
-    public async Task<OperationResult> Handle(
+    public async Task<(Result Result, IEnumerable<object> Events)> Handle(
         MarkDeliveryCompletedCommand command,
         IDeliveryRepository repository,
-        IEventPublisher eventPublisher,
         CancellationToken ct)
     {
         var request = command.Request;
@@ -23,18 +21,19 @@ public sealed class MarkDeliveryCompletedHandler
 
         if (delivery is null)
         {
-            return OperationResult.Failure(ApplicationErrors.DeliveryNotFound);
+            return (Result.Failure(ApplicationErrors.DeliveryNotFound), Array.Empty<object>());
         }
 
         var result = delivery.MarkDelivered(request.Timestamp);
         if (result.IsFailure)
         {
-            return OperationResult.From(result);
+            return (result, Array.Empty<object>());
         }
 
         await repository.UpdateAsync(delivery, ct);
-        await DomainEventDispatcher.PublishAsync(delivery, eventPublisher, ct);
+        var events = delivery.DomainEvents.Cast<object>().ToList();
+        delivery.ClearDomainEvents();
 
-        return OperationResult.Success();
+        return (Result.Success(), events);
     }
 }

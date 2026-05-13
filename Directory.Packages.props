@@ -28,8 +28,7 @@
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="7.2.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="7.2.0" />
     <!-- Utility & Patterns -->
-    <PackageVersion Include="MediatR" Version="12.5.0" />
-    <PackageVersion Include="MediatR.Contracts" Version="2.0.1" />
+    <PackageVersion Include="WolverineFx" Version="5.39.0" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
     <PackageVersion Include="Dapper" Version="2.1.35" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />

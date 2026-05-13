@@ -1,9 +1,8 @@
-using GridTrack.Application.Dtos;
 using GridTrack.Application.Errors;
-using GridTrack.Application.EventHandlers;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using NetTopologySuite.Geometries;
+using System.Linq;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -13,10 +12,9 @@ public sealed record UpdateDeliveryLocationCommand(UpdateLocationRequest Request
 
 public sealed class UpdateDeliveryLocationHandler
 {
-    public async Task<OperationResult> Handle(
+    public async Task<(Result Result, IEnumerable<object> Events)> Handle(
         UpdateDeliveryLocationCommand command,
         IDeliveryRepository repository,
-        IEventPublisher eventPublisher,
         CancellationToken ct)
     {
         var request = command.Request;
@@ -24,18 +22,19 @@ public sealed class UpdateDeliveryLocationHandler
 
         if (delivery is null)
         {
-            return OperationResult.Failure(ApplicationErrors.DeliveryNotFound);
+            return (Result.Failure(ApplicationErrors.DeliveryNotFound), Array.Empty<object>());
         }
 
         var updateResult = delivery.UpdateLocation(request.Location, request.Timestamp);
         if (updateResult.IsFailure)
         {
-            return OperationResult.From(updateResult);
+            return (updateResult, Array.Empty<object>());
         }
 
         await repository.UpdateAsync(delivery, ct);
-        await DomainEventDispatcher.PublishAsync(delivery, eventPublisher, ct);
+        var events = delivery.DomainEvents.Cast<object>().ToList();
+        delivery.ClearDomainEvents();
 
-        return OperationResult.Success();
+        return (Result.Success(), events);
     }
 }

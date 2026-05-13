@@ -1,9 +1,8 @@
-using GridTrack.Application.Dtos;
 using GridTrack.Application.Errors;
-using GridTrack.Application.EventHandlers;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using NetTopologySuite.Geometries;
+using System.Linq;
 
 namespace GridTrack.Application.UseCases.Drivers;
 
@@ -13,10 +12,9 @@ public sealed record UpdateDriverPositionCommand(UpdatePositionRequest Request);
 
 public sealed class UpdateDriverPositionHandler
 {
-    public async Task<OperationResult> Handle(
+    public async Task<(Result Result, IEnumerable<object> Events)> Handle(
         UpdateDriverPositionCommand command,
         IDriverRepository repository,
-        IEventPublisher eventPublisher,
         CancellationToken ct)
     {
         var request = command.Request;
@@ -24,18 +22,19 @@ public sealed class UpdateDriverPositionHandler
 
         if (driver is null)
         {
-            return OperationResult.Failure(ApplicationErrors.DriverNotFound);
+            return (Result.Failure(ApplicationErrors.DriverNotFound), Array.Empty<object>());
         }
 
         var result = driver.UpdatePosition(request.Location, request.Timestamp);
         if (result.IsFailure)
         {
-            return OperationResult.From(result);
+            return (result, Array.Empty<object>());
         }
 
         await repository.UpdateAsync(driver, ct);
-        await DomainEventDispatcher.PublishAsync(driver, eventPublisher, ct);
+        var events = driver.DomainEvents.Cast<object>().ToList();
+        driver.ClearDomainEvents();
 
-        return OperationResult.Success();
+        return (Result.Success(), events);
     }
 }

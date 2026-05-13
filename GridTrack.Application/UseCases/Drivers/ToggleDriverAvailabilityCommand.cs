@@ -1,8 +1,7 @@
-using GridTrack.Application.Dtos;
 using GridTrack.Application.Errors;
-using GridTrack.Application.EventHandlers;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
+using System.Linq;
 
 namespace GridTrack.Application.UseCases.Drivers;
 
@@ -12,10 +11,9 @@ public sealed record ToggleDriverAvailabilityCommand(ToggleAvailabilityRequest R
 
 public sealed class ToggleDriverAvailabilityHandler
 {
-    public async Task<OperationResult> Handle(
+    public async Task<(Result Result, IEnumerable<object> Events)> Handle(
         ToggleDriverAvailabilityCommand command,
         IDriverRepository repository,
-        IEventPublisher eventPublisher,
         CancellationToken ct)
     {
         var request = command.Request;
@@ -23,18 +21,19 @@ public sealed class ToggleDriverAvailabilityHandler
 
         if (driver is null)
         {
-            return OperationResult.Failure(ApplicationErrors.DriverNotFound);
+            return (Result.Failure(ApplicationErrors.DriverNotFound), Array.Empty<object>());
         }
 
         var result = driver.SetAvailability(request.IsActive);
         if (result.IsFailure)
         {
-            return OperationResult.From(result);
+            return (result, Array.Empty<object>());
         }
 
         await repository.UpdateAsync(driver, ct);
-        await DomainEventDispatcher.PublishAsync(driver, eventPublisher, ct);
+        var events = driver.DomainEvents.Cast<object>().ToList();
+        driver.ClearDomainEvents();
 
-        return OperationResult.Success();
+        return (Result.Success(), events);
     }
 }
