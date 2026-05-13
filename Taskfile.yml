@@ -37,7 +37,17 @@ tasks:
     desc: Run domain unit tests
     cmds:
       - dotnet run --project ./GridTrack.Domain.UnitTests/GridTrack.Domain.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename domain-unit-test-results.trx --results-directory ./TestResults/DomainUnit
-
+  
+  test-namingconventions:
+    desc: Run naming convention tests
+    cmds:
+      - dotnet run --project ./GridTrack.NamingConventions/GridTrack.NamingConventions.csproj --configuration Release -- --report-trx --report-trx-filename naming-test-results.trx --results-directory ./TestResults/NamingConventions
+  
+  test-application:
+    desc: Run application unit tests
+    cmds:
+      - dotnet run --project ./GridTrack.Application.UnitTests/GridTrack.Application.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename application-unit-test-results.trx --results-directory ./TestResults/ApplicationUnit
+  
   test-integration:
     desc: Run integration  tests
     cmds:
@@ -45,7 +55,7 @@ tasks:
 
   test-all:
     desc: Run all tests
-    deps: [ test-architecture, ]
+    deps: [ test-architecture, test-domain, test-namingconventions, test-application ]
 
 
   # ============================================

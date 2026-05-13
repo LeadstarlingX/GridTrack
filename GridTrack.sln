@@ -26,6 +26,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Domain.UnitTests"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.NamingConventions", "GridTrack.NamingConventions\GridTrack.NamingConventions.csproj", "{0B0F105D-D2AC-47E5-BB70-AE383690471A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Application.UnitTests", "GridTrack.Application.UnitTests\GridTrack.Application.UnitTests.csproj", "{B2826579-BD7D-4156-A705-B6F086104DEA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -37,6 +39,7 @@ Global
 		{FA364BFD-C3F6-40A5-B04F-C19105D4F8B0} = {A0EA4A9B-A384-417A-993D-93A279530C54}
 		{9A7F66E1-73F6-44F8-8DD4-693B63019156} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
 		{0B0F105D-D2AC-47E5-BB70-AE383690471A} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
+		{B2826579-BD7D-4156-A705-B6F086104DEA} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{55985C3F-2869-4E53-A087-B27E7BEAA3A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -59,5 +62,9 @@ Global
 		{0B0F105D-D2AC-47E5-BB70-AE383690471A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0B0F105D-D2AC-47E5-BB70-AE383690471A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0B0F105D-D2AC-47E5-BB70-AE383690471A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2826579-BD7D-4156-A705-B6F086104DEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2826579-BD7D-4156-A705-B6F086104DEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2826579-BD7D-4156-A705-B6F086104DEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2826579-BD7D-4156-A705-B6F086104DEA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

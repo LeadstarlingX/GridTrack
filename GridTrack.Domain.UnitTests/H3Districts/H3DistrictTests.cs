@@ -60,6 +60,28 @@ public class H3DistrictTests
         await Assert.That(result.Error).IsEqualTo(H3DistrictErrors.InvalidRingDistance);
     }
 
+    [Test]
+    public async Task Create_Should_Fail_For_Invalid_Resolution()
+    {
+        var polygon = CreateSquare();
+
+        var result = H3District.Create("h3-1", Factory.CreatePoint(new Coordinate(0.5, 0.5)), polygon, 0);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(H3DistrictErrors.InvalidResolution);
+    }
+
+    [Test]
+    public async Task ExpandServiceArea_Should_Fail_For_Invalid_Rings()
+    {
+        var district = CreateDistrict();
+
+        var result = district.ExpandServiceArea(0);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(H3DistrictErrors.InvalidRingDistance);
+    }
+
     private static H3District CreateDistrict()
     {
         var polygon = CreateSquare();

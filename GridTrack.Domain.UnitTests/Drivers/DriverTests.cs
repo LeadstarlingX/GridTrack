@@ -71,6 +71,42 @@ public class DriverTests
         await Assert.That(driver.DomainEvents.OfType<DriverAvailabilityChangedDomainEvent>().Count()).IsEqualTo(1);
     }
 
+    [Test]
+    public async Task IsOperationalIn_Should_Fail_When_District_Is_Empty()
+    {
+        var driver = CreateDriver();
+
+        var result = driver.IsOperationalIn(string.Empty);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DriverErrors.InvalidDistrictId);
+    }
+
+    [Test]
+    public async Task SetAvailability_Should_Not_Raise_Event_When_Unchanged()
+    {
+        var driver = CreateDriver();
+        driver.ClearDomainEvents();
+
+        var result = driver.SetAvailability(true);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(driver.DomainEvents.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task DeactivateIfStale_Should_Not_Change_When_Recent()
+    {
+        var driver = CreateDriver();
+        driver.ClearDomainEvents();
+
+        var result = driver.DeactivateIfStale();
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(driver.IsActive).IsTrue();
+        await Assert.That(driver.DomainEvents.Count).IsEqualTo(0);
+    }
+
     private static Driver CreateDriver()
     {
         var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, true);

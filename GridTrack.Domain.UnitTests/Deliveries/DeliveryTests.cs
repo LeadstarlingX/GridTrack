@@ -127,6 +127,45 @@ public class DeliveryTests
         await Assert.That(result.Error).IsEqualTo(DeliveryErrors.TerminalStatus);
     }
 
+    [Test]
+    public async Task MarkDelivered_Should_Fail_When_Not_In_Transit()
+    {
+        var delivery = CreateDelivery();
+
+        var result = delivery.MarkDelivered(DateTime.UtcNow);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidStatusForOperation);
+    }
+
+    [Test]
+    public async Task UpdateLocation_Should_Not_Change_Status_When_InTransit()
+    {
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.MarkPickedUp(Factory.CreatePoint(new Coordinate(11, 11)), DateTime.UtcNow);
+        delivery.UpdateLocation(Factory.CreatePoint(new Coordinate(12, 12)), DateTime.UtcNow);
+        delivery.ClearDomainEvents();
+
+        var result = delivery.UpdateLocation(Factory.CreatePoint(new Coordinate(13, 13)), DateTime.UtcNow);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(delivery.Status).IsEqualTo(DeliveryStatus.InTransit);
+        await Assert.That(delivery.DomainEvents.OfType<DeliveryLocationUpdatedDomainEvent>().Count()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlagAnomaly_Should_Fail_When_Reason_Is_Empty()
+    {
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+
+        var result = delivery.FlagAnomaly(AnomalyType.EtaExceeded, "");
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidReason);
+    }
+
     private static Delivery CreateDelivery()
     {
         var result = Delivery.Create(
