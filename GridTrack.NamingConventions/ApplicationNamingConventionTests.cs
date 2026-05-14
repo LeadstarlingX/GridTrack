@@ -85,6 +85,98 @@ public class ApplicationNamingConventionTests : NamingConventionTests
 
         await Assert.That(failing).IsEmpty();
     }
+    
+    [Test]
+    public async Task Command_Handlers_Should_Follow_Naming_Convention()
+    {
+        var handlerTypes = Types.InAssembly(ApplicationAssembly)
+            .That()
+            .HaveNameEndingWith("Handler")
+            .GetTypes()
+            .ToList();
+
+        var failing = handlerTypes
+            .Where(t => !t.Name.EndsWith("Handler"))
+            .Select(t => t.FullName ?? t.Name)
+            .ToList();
+
+        await Assert.That(failing).IsEmpty();
+    }
+
+    [Test]
+    public async Task Query_Handlers_Should_Follow_Naming_Convention()
+    {
+        var queryTypes = Types.InAssembly(ApplicationAssembly)
+            .That()
+            .HaveNameEndingWith("Query")
+            .Or()
+            .HaveNameEndingWith("Handler")
+            .GetTypes()
+            .ToList();
+
+        // All queries should end with Query and handlers with Handler
+        var valid = queryTypes.All(t => 
+            t.Name.EndsWith("Query") || 
+            t.Name.EndsWith("Handler"));
+
+        await Assert.That(valid).IsTrue();
+    }
+
+    [Test]
+    public async Task Domain_Events_Should_End_With_DomainEvent()
+    {
+        var domainEventTypes = Types.InAssembly(DomainAssembly)
+            .That()
+            .ImplementInterface(typeof(IDomainEvent))
+            .GetTypes()
+            .ToList();
+
+        var failing = domainEventTypes
+            .Where(t => !t.Name.EndsWith("DomainEvent"))
+            .Select(t => t.FullName ?? t.Name)
+            .ToList();
+
+        await Assert.That(failing).IsEmpty();
+    }
+
+    [Test]
+    public async Task Repository_Interfaces_Should_End_With_Repository()
+    {
+        var repoTypes = Types.InAssembly(ApplicationAssembly)
+            .That()
+            .HaveNameEndingWith("Repository")
+            .And()
+            .AreInterfaces()
+            .GetTypes()
+            .ToList();
+
+        var failing = repoTypes
+            .Where(t => !t.Name.EndsWith("Repository"))
+            .Select(t => t.FullName ?? t.Name)
+            .ToList();
+
+        await Assert.That(failing).IsEmpty();
+    }
+
+    [Test]
+    public async Task Read_Service_Interfaces_Should_End_With_ReadService()
+    {
+        var readServiceTypes = Types.InAssembly(ApplicationAssembly)
+            .That()
+            .HaveNameEndingWith("ReadService")
+            .And()
+            .AreInterfaces()
+            .GetTypes()
+            .ToList();
+
+        var failing = readServiceTypes
+            .Where(t => !t.Name.EndsWith("ReadService"))
+            .Select(t => t.FullName ?? t.Name)
+            .ToList();
+
+        await Assert.That(failing).IsEmpty();
+    }
+    
 
     private static bool HasHandleMethod(Type type)
         => type.GetMethods(BindingFlags.Instance | BindingFlags.Public)

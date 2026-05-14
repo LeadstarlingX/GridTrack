@@ -40,10 +40,10 @@ public sealed class H3GridService : IH3GridService
     }
 
     public Task<IEnumerable<string>> GenerateGridBoundsAsync(
-        decimal minLat,
-        decimal maxLat,
-        decimal minLng,
-        decimal maxLng,
+        double minLat,
+        double maxLat,
+        double minLng,
+        double maxLng,
         int resolution)
     {
 

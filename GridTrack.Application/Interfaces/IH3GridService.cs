@@ -7,9 +7,9 @@ public interface IH3GridService
     Task<string> GetCellIndexForPointAsync(Point location, int resolution);
     Task<IEnumerable<string?>> GetNeighborCellsAsync(string h3Index, int ringDistance);
     Task<IEnumerable<string>> GenerateGridBoundsAsync(
-        decimal minLat,
-        decimal maxLat,
-        decimal minLng,
-        decimal maxLng,
+        double minLat,
+        double maxLat,
+        double minLng,
+        double maxLng,
         int resolution);
 }

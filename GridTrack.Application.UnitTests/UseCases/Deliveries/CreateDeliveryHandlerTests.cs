@@ -1,8 +1,11 @@
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Interfaces;
+using GridTrack.Application.UnitTests.UseCases.Drivers;
 using GridTrack.Application.UseCases.Deliveries;
+using GridTrack.Application.UseCases.Drivers;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Deliveries;
+using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
 
 namespace GridTrack.Application.UnitTests.UseCases.Deliveries;
@@ -38,7 +41,37 @@ public class CreateDeliveryHandlerTests
         await Assert.That(repository.Added!.DomainEvents.Count).IsEqualTo(0);
     }
 
-    private sealed class FakeDeliveryRepository : IDeliveryRepository
+    
+    [Test]
+    public async Task Handle_Should_Return_Failure_When_DriverId_Is_Empty()
+    {
+        var repository = new CreateDriverHandlerTests.FakeDriverRepository();
+        var h3GridService = new FakeH3GridService("h3-10");
+        var clock = new FakeClock(DateTime.UtcNow);
+        var handler = new CreateDriverHandler();
+
+        var request = new CreateDriverRequest(
+            Guid.Empty,
+            Factory.CreatePoint(new Coordinate(1, 1)),
+            9,
+            "h3-1",
+            true);
+
+        var (result, events) = await handler.Handle(
+            new CreateDriverCommand(request),
+            repository,
+            h3GridService,
+            clock,
+            CancellationToken.None);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DriverErrors.InvalidDriverId);
+        await Assert.That(events.Count()).IsEqualTo(0);
+    }
+    
+    
+    
+    internal sealed class FakeDeliveryRepository : IDeliveryRepository
     {
         public Delivery? Added { get; private set; }
 
@@ -72,10 +105,10 @@ public class CreateDeliveryHandlerTests
             => Task.FromResult<IEnumerable<string>>(Array.Empty<string>());
 
         public Task<IEnumerable<string>> GenerateGridBoundsAsync(
-            decimal minLat,
-            decimal maxLat,
-            decimal minLng,
-            decimal maxLng,
+            double minLat,
+            double maxLat,
+            double minLng,
+            double maxLng,
             int resolution)
             => Task.FromResult<IEnumerable<string>>(Array.Empty<string>());
     }

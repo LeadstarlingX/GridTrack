@@ -12,10 +12,7 @@
         <PackageReference Include="Npgsql" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
         <PackageReference Include="Microsoft.Data.SqlClient" />
-<!--        <PackageReference Include="H3.NET" />-->
-<!--        <PackageReference Include="H3" />-->
         <PackageReference Include="pocketken.H3" />
-<!--        <PackageReference Include="H3Lib" />-->
         
     </ItemGroup>
 

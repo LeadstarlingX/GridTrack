@@ -38,9 +38,6 @@
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageVersion Include="Bogus" Version="35.6.1" />
     <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
-    <PackageVersion Include="H3" Version="1.0.0" />
-    <PackageVersion Include="H3Lib" Version="3.7.2" />
-    <PackageVersion Include="H3.NET" Version="0.1.0" />
     <PackageVersion Include="pocketken.H3" Version="4.0.0" />
     
     <!-- API Versioning -->

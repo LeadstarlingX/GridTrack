@@ -53,4 +53,16 @@ public class ApplicationArchitectureTests : ArchitectureTest
 
         await Assert.That(result.IsSuccessful).IsTrue();
     }
+    
+    [Test]
+    public async Task Application_Should_Not_Depend_On_SignalR()
+    {
+        var result = Types.InAssembly(ApplicationAssembly)
+            .ShouldNot()
+            .HaveDependencyOn("Microsoft.AspNetCore.SignalR")
+            .GetResult();
+
+        await Assert.That(result.IsSuccessful).IsTrue();
+    }
+    
 }
