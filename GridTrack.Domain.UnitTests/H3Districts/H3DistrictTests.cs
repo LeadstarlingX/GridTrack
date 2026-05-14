@@ -28,14 +28,14 @@ public class H3DistrictTests
     }
 
     [Test]
-    public async Task GetNeighbors_Should_Return_List()
+    public async Task GetNeighbors_Should_Fail_When_Resolved_In_Infrastructure()
     {
         var district = CreateDistrict();
 
         var result = district.GetNeighbors(2);
 
-        await Assert.That(result.IsSuccess).IsTrue();
-        await Assert.That(result.Value.Count).IsEqualTo(18);
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(H3DistrictErrors.NeighborsResolvedInInfrastructure);
     }
 
     [Test]

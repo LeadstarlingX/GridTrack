@@ -12,4 +12,7 @@ public static class H3DistrictErrors
     public static readonly Error InvalidRingDistance = new("H3District.InvalidRingDistance", "Ring distance must be positive.");
     public static readonly Error InvalidBoundarySize = new("H3District.InvalidBoundarySize", "Boundary polygon size is invalid.");
     public static readonly Error InvalidExpansion = new("H3District.InvalidExpansion", "Expanded service area did not yield a polygon.");
+    public static readonly Error NeighborsResolvedInInfrastructure = new(
+        "H3District.NeighborsResolvedInInfrastructure",
+        "Neighbor computation is resolved in infrastructure via IH3GridService.");
 }

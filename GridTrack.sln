@@ -15,6 +15,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solutionitems", "solutionit
 		.gitignore = .gitignore
 		.github\workflows\build.yml = .github\workflows\build.yml
 		track.md = track.md
+		progress.md = progress.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.ArchitectureTests", "GridTrack.ArchitectureTests\GridTrack.ArchitectureTests.csproj", "{55985C3F-2869-4E53-A087-B27E7BEAA3A3}"
@@ -29,6 +30,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.NamingConventions
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Application.UnitTests", "GridTrack.Application.UnitTests\GridTrack.Application.UnitTests.csproj", "{B2826579-BD7D-4156-A705-B6F086104DEA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Infrastructure", "GridTrack.Infrastructure\GridTrack.Infrastructure.csproj", "{52792B63-C5A4-467E-AC01-09D9670D18BF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Infrastructure.UnitTests", "GridTrack.Infrastructure.UnitTests\GridTrack.Infrastructure.UnitTests.csproj", "{2FD19363-7119-4533-B11B-61C80D157D2F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +46,8 @@ Global
 		{9A7F66E1-73F6-44F8-8DD4-693B63019156} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
 		{0B0F105D-D2AC-47E5-BB70-AE383690471A} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
 		{B2826579-BD7D-4156-A705-B6F086104DEA} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
+		{52792B63-C5A4-467E-AC01-09D9670D18BF} = {A0EA4A9B-A384-417A-993D-93A279530C54}
+		{2FD19363-7119-4533-B11B-61C80D157D2F} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{55985C3F-2869-4E53-A087-B27E7BEAA3A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -67,5 +74,13 @@ Global
 		{B2826579-BD7D-4156-A705-B6F086104DEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B2826579-BD7D-4156-A705-B6F086104DEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B2826579-BD7D-4156-A705-B6F086104DEA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{52792B63-C5A4-467E-AC01-09D9670D18BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{52792B63-C5A4-467E-AC01-09D9670D18BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{52792B63-C5A4-467E-AC01-09D9670D18BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{52792B63-C5A4-467E-AC01-09D9670D18BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2FD19363-7119-4533-B11B-61C80D157D2F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FD19363-7119-4533-B11B-61C80D157D2F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FD19363-7119-4533-B11B-61C80D157D2F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FD19363-7119-4533-B11B-61C80D157D2F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

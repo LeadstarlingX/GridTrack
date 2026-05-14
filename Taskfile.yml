@@ -48,6 +48,11 @@ tasks:
     cmds:
       - dotnet run --project ./GridTrack.Application.UnitTests/GridTrack.Application.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename application-unit-test-results.trx --results-directory ./TestResults/ApplicationUnit
   
+  test-infrastructure-unit:
+    desc: Run infrastructure unit tests
+    cmds:
+      - dotnet run --project ./GridTrack.Infrastructure.UnitTests/GridTrack.Infrastructure.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename infrastructure-unit-test-results.trx --results-directory ./TestResults/InfrastructureUnit
+  
   test-integration:
     desc: Run integration  tests
     cmds:
@@ -55,7 +60,7 @@ tasks:
 
   test-all:
     desc: Run all tests
-    deps: [ test-architecture, test-domain, test-namingconventions, test-application ]
+    deps: [ test-architecture, test-domain, test-namingconventions, test-application, test-infrastructure-unit ]
 
 
   # ============================================

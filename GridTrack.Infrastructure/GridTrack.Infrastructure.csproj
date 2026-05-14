@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
+        <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+        <PackageReference Include="Npgsql" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="Microsoft.Data.SqlClient" />
+<!--        <PackageReference Include="H3.NET" />-->
+<!--        <PackageReference Include="H3" />-->
+        <PackageReference Include="pocketken.H3" />
+<!--        <PackageReference Include="H3Lib" />-->
+        
+    </ItemGroup>
+
+
+    
+    
+    <ItemGroup>
+      <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
+      <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
+    </ItemGroup>
+    
+</Project>

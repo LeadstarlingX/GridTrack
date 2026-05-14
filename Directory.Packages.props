@@ -11,11 +11,15 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.15" />
     <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="9.0.15" />
-    <!-- SqlServer -->
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.0" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.15" />
+    <!-- Postgres -->
+    <PackageVersion Include="Npgsql" Version="9.0.2" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
+    <PackageVersion Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <!-- Redis & Caching -->
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.15" />
+    <PackageVersion Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
     <PackageVersion Include="Neolution.Extensions.Caching.Distributed" Version="2.1.0" />
     <PackageVersion Include="Polly" Version="8.6.5" />
     <!-- Logging & Monitoring -->
@@ -34,6 +38,11 @@
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageVersion Include="Bogus" Version="35.6.1" />
     <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
+    <PackageVersion Include="H3" Version="1.0.0" />
+    <PackageVersion Include="H3Lib" Version="3.7.2" />
+    <PackageVersion Include="H3.NET" Version="0.1.0" />
+    <PackageVersion Include="pocketken.H3" Version="4.0.0" />
+    
     <!-- API Versioning -->
     <PackageVersion Include="Asp.Versioning.Http" Version="8.1.0" />
     <PackageVersion Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />

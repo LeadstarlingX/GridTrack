@@ -64,17 +64,7 @@ public sealed class H3District : BaseEntity
 			return Result.Failure<IReadOnlyList<string>>(H3DistrictErrors.InvalidRingDistance);
 		}
 
-		var neighbors = new List<string>();
-		for (var ring = 1; ring <= ringDistance; ring++)
-		{
-			var count = 6 * ring;
-			for (var i = 0; i < count; i++)
-			{
-				neighbors.Add($"{H3Index}-r{ring}-n{i}");
-			}
-		}
-
-		return Result.Success<IReadOnlyList<string>>(neighbors);
+		return Result.Failure<IReadOnlyList<string>>(H3DistrictErrors.NeighborsResolvedInInfrastructure);
 	}
 
 	public Result<Polygon> ExpandServiceArea(int maxRings)

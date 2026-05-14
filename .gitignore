@@ -3,8 +3,9 @@
 **/obj/
 **/out/
 
-#tracker file
+#tracker files
 track.md
+progress.md
 
 # Dependencies
 packages/

@@ -12,6 +12,7 @@
     <ItemGroup>
       <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
       <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
+      <ProjectReference Include="..\GridTrack.Infrastructure\GridTrack.Infrastructure.csproj" />
     </ItemGroup>
     
 </Project>
