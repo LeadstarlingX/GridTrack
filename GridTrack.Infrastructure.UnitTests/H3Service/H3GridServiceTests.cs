@@ -15,6 +15,114 @@ public class H3GridServiceTests
     // Aleppo (~350km from Damascus)
     private static readonly Point Aleppo = Factory.CreatePoint(new Coordinate(37.1611, 36.2021));
     
+    // Rio de Janeiro (Southern/Western hemisphere - tests negative coordinates)
+    private static readonly Point Rio = Factory.CreatePoint(new Coordinate(-43.1729, -22.9068));
+    // London (Prime meridian, slight negative latitude)
+    private static readonly Point London = Factory.CreatePoint(new Coordinate(-0.1276, 51.5074));
+    
+    [Test]
+    public async Task GetCellAsync_NegativeCoordinates_Returns_Valid_Cell()
+    {
+        // If X/Y or Lat/Lng is swapped, negative coordinates usually produce cells 
+        // in the wrong hemisphere (e.g., ocean instead of land).
+        var cell = await _service.GetCellAsync(Rio, 8);
+        await Assert.That(string.IsNullOrWhiteSpace(cell)).IsFalse();
+        await Assert.That(cell.Length).IsEqualTo(15);
+    }
+
+    [Test]
+    public async Task GetCellAsync_Resolution0_Returns_Valid_Cell()
+    {
+        // Res 0 is the coarsest (122 global cells). It's an edge case that can trigger edge-case math errors.
+        var cell = await _service.GetCellAsync(Damascus, 0);
+        await Assert.That(string.IsNullOrWhiteSpace(cell)).IsFalse();
+    }
+
+    [Test]
+    public async Task GetCellAsync_Resolution15_Returns_Valid_Cell()
+    {
+        // Res 15 is the finest (cm-level). It's an edge case for maximum index values.
+        var cell = await _service.GetCellAsync(Damascus, 15);
+        await Assert.That(string.IsNullOrWhiteSpace(cell)).IsFalse();
+    }
+
+    // ── GetGridDiskAsync - Subtle Bug Catchers ─────────────────────
+
+    [Test]
+    public async Task GetGridDiskAsync_NullIndex_Throws_ArgumentException()
+    {
+        // Ensure nulls are handled as cleanly as empty strings
+        await Assert.That(async () => await _service.GetGridDiskAsync(null!, 1))
+            .Throws<ArgumentException>();
+    }
+
+    // ── FillBoundingBoxAsync - Subtle Bug Catchers ─────────────────
+
+    [Test]
+    public async Task FillBoundingBoxAsync_PointBoundingBox_Returns_OneCell()
+    {
+        // A bbox where min == max is a single point. With Intersects mode, it should return exactly 1 cell.
+        var cells = await _service.FillBoundingBoxAsync(33.5138, 33.5138, 36.2765, 36.2765, 8);
+        await Assert.That(cells.Count()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task FillBoundingBoxAsync_InvertedBoundingBox_Returns_SameAsNormal()
+    {
+        // If a user accidentally passes maxLat as minLat, NTS Envelope auto-corrects it.
+        // This test ensures our service doesn't crash and returns the same data.
+        var normal = (await _service.FillBoundingBoxAsync(33.40, 33.60, 36.20, 36.40, 8)).ToList();
+        var inverted = (await _service.FillBoundingBoxAsync(33.60, 33.40, 36.40, 36.20, 8)).ToList();
+        
+        await Assert.That(inverted.Count).IsEqualTo(normal.Count);
+    }
+
+    [Test]
+    public async Task FillBoundingBoxAsync_SouthernHemisphere_CellFromPoint_Should_Be_In_Result()
+    {
+        // This is the ULTIMATE test for Lat/Lng swap bugs. 
+        // If X and Y are swapped, Rio's cell will end up in the Northern Hemisphere and fail.
+        var cell = await _service.GetCellAsync(Rio, 8);
+        var cells = await _service.FillBoundingBoxAsync(-23.00, -22.80, -43.30, -43.00, 8);
+        
+        await Assert.That(cells).Contains(cell);
+    }
+
+    [Test]
+    public async Task FillBoundingBoxAsync_OutsideCell_IsNot_In_Result()
+    {
+        // Ensures the bounding box isn't just returning random global cells
+        var aleppoCell = await _service.GetCellAsync(Aleppo, 8);
+        var damascusBoxCells = await _service.FillBoundingBoxAsync(33.40, 33.60, 36.20, 36.40, 8);
+        
+        await Assert.That(damascusBoxCells).DoesNotContain(aleppoCell);
+    }
+
+    [Test]
+    public async Task FillBoundingBoxAsync_LargerResolution_Returns_SmallerArea_Per_Cell()
+    {
+        // Ensures that while Res 9 returns MORE cells, each Res 9 cell string represents a smaller area.
+        // The H3 index structure embeds the resolution in the string. 
+        // Res 8 strings start with '88', Res 9 strings start with '89'.
+        var res8 = (await _service.FillBoundingBoxAsync(33.50, 33.52, 36.27, 36.29, 8)).ToList();
+        var res9 = (await _service.FillBoundingBoxAsync(33.50, 33.52, 36.27, 36.29, 9)).ToList();
+        
+        await Assert.That(res8.First().StartsWith("88")).IsTrue();
+        await Assert.That(res9.First().StartsWith("89")).IsTrue();
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     [Test]
     public async Task GetCellAsync_Should_Return_NonEmpty_String()
     {
@@ -210,9 +318,6 @@ public class H3GridServiceTests
         // A cell computed from a point inside the bbox should appear in the fill results
         var cell = await _service.GetCellAsync(Damascus, 8);
         var cells = await _service.FillBoundingBoxAsync(33.40, 33.60, 36.20, 36.40, 8);
-        
-        var index = new H3Index(cells.First());
-        var c = index.ToCoordinate();
         
         await Assert.That(cells).Contains(cell);
     }

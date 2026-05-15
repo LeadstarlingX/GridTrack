@@ -51,8 +51,14 @@ public sealed class H3GridService : IH3GridService
         int resolution)
     {
         
-        // 1. Envelope takes (minX, maxX, minY, maxY) 
-        // 2. Standard GIS: X = Longitude, Y = Latitude
+        if (Math.Abs(minLat - maxLat) < 1e-6 && Math.Abs(minLng - maxLng) < 1e-6)
+        {
+            var latLng = new Coordinate(minLat, minLng);
+            var cell = latLng.ToH3Index(resolution);
+            return Task.FromResult<IEnumerable<string>>(new List<string> { cell.ToString() });
+        }
+        
+        // Standard GIS: X = Longitude, Y = Latitude
         var envelope = new Envelope(minLng, maxLng, minLat, maxLat);
     
         var polygon = (Polygon)new GeometryFactory().ToGeometry(envelope);

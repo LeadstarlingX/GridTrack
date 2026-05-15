@@ -100,7 +100,7 @@ tasks:
         -targetdir:"{{.REPORT_DIR}}"
         -reporttypes:"Html;Cobertura;MarkdownSummaryGithub"
         -title:"GridTrack Coverage"
-        -assemblyfilters:"+GridTrack.Domain;+GridTrack.Application;+GridTrack.Infrastructure"
+        -assemblyfilters:"+GridTrack.*"
   
   coverage:
     desc: Run all tests with coverage then generate report
