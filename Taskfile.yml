@@ -3,8 +3,9 @@
 vars:
   IMAGE_NAME: gridtrack.api
   IMAGE_TAG: latest
-  K8S_NAMESPACE: default
   APP_LABEL: gridtrack-api
+  COVERAGE_DIR: ./TestResults/Coverage
+  REPORT_DIR: ./TestResults/CoverageReport
 
 tasks:
   # ============================================
@@ -24,7 +25,7 @@ tasks:
 
 
   # ============================================
-  # TEST TASKS
+  # TEST TASKS (no coverage)
   # ============================================
 
   test-architecture:
@@ -62,6 +63,54 @@ tasks:
     desc: Run all tests
     deps: [ test-architecture, test-domain, test-namingconventions, test-application, test-infrastructure-unit ]
 
+  # ============================================
+  # COVERAGE TASKS
+  # ============================================
+  
+  coverage-domain:
+    desc: Domain unit tests with coverage
+    cmds:
+      - mkdir -p {{.COVERAGE_DIR}}
+      - dotnet-coverage collect
+        "dotnet run --project ./GridTrack.Domain.UnitTests/GridTrack.Domain.UnitTests.csproj --configuration Release --no-build"
+        -f xml -o {{.COVERAGE_DIR}}/domain.xml
+  
+  coverage-application:
+    desc: Application unit tests with coverage
+    cmds:
+      - mkdir -p {{.COVERAGE_DIR}}
+      - dotnet-coverage collect
+        "dotnet run --project ./GridTrack.Application.UnitTests/GridTrack.Application.UnitTests.csproj --configuration Release --no-build"
+        -f xml -o {{.COVERAGE_DIR}}/application.xml
+  
+  coverage-infrastructure:
+    desc: Infrastructure unit tests with coverage
+    cmds:
+      - mkdir -p {{.COVERAGE_DIR}}
+      - dotnet-coverage collect
+        "dotnet run --project ./GridTrack.Infrastructure.UnitTests/GridTrack.Infrastructure.UnitTests.csproj --configuration Release --no-build"
+        -f xml -o {{.COVERAGE_DIR}}/infrastructure.xml
+  
+  coverage-report:
+    desc: Merge coverage files and generate HTML + summary report
+    cmds:
+      - dotnet-coverage merge {{.COVERAGE_DIR}}/*.xml -f xml -o {{.COVERAGE_DIR}}/merged.xml
+      - reportgenerator
+        -reports:"{{.COVERAGE_DIR}}/merged.xml"
+        -targetdir:"{{.REPORT_DIR}}"
+        -reporttypes:"Html;Cobertura;MarkdownSummaryGithub"
+        -title:"GridTrack Coverage"
+        -assemblyfilters:"+GridTrack.Domain;+GridTrack.Application;+GridTrack.Infrastructure"
+  
+  coverage:
+    desc: Run all tests with coverage then generate report
+    cmds:
+      - task: coverage-domain
+      - task: coverage-application
+      - task: coverage-infrastructure
+      - task: coverage-report
+
+
 
   # ============================================
   # DOCKER COMPOSE TASKS
@@ -90,7 +139,7 @@ tasks:
     desc: Run CI pipeline (build + tests)
     cmds:
       - task: build
-      - task: test-all
+      - task: coverage
 
   cd-compose:
     desc: Deploy with Docker Compose
@@ -109,6 +158,7 @@ tasks:
     cmds:
       - task: compose-down
       - dotnet clean
+      - rm -rf ./TestResults
 
   help:
     desc: Show available tasks

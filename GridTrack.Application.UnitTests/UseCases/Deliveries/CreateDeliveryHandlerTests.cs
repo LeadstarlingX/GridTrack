@@ -98,13 +98,13 @@ public class CreateDeliveryHandlerTests
             _index = index;
         }
 
-        public Task<string> GetCellIndexForPointAsync(Point location, int resolution)
+        public Task<string> GetCellAsync(Point location, int resolution)
             => Task.FromResult(_index);
 
-        public Task<IEnumerable<string>> GetNeighborCellsAsync(string h3Index, int ringDistance)
+        public Task<IEnumerable<string>> GetGridDiskAsync(string h3Index, int ringDistance)
             => Task.FromResult<IEnumerable<string>>(Array.Empty<string>());
 
-        public Task<IEnumerable<string>> GenerateGridBoundsAsync(
+        public Task<IEnumerable<string>> FillBoundingBoxAsync(
             double minLat,
             double maxLat,
             double minLng,

@@ -31,7 +31,7 @@ public sealed class CreateDeliveryHandler
 
         if (string.IsNullOrWhiteSpace(districtId))
         {
-            districtId = await h3GridService.GetCellIndexForPointAsync(request.CurrentLocation, request.H3Resolution);
+            districtId = await h3GridService.GetCellAsync(request.CurrentLocation, request.H3Resolution);
         }
 
         var deliveryResult = Delivery.Create(

@@ -29,6 +29,11 @@ jobs:
       - name: Install Taskfile CLI
         run: |
           sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+          
+      - name: Install coverage tools
+        run: |
+          dotnet tool install --global dotnet-coverage
+          dotnet tool install --global dotnet-reportgenerator-globaltool
       
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -41,12 +46,23 @@ jobs:
       - name: Run CI Pipeline
         run: task ci
 
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
-
-      - name: Upload Test Results
+      - name: Post coverage summary
+        if: always()
+        run: |
+            if [ -f ./TestResults/CoverageReport/SummaryGithub.md ]; then
+              cat ./TestResults/CoverageReport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+            fi
+          
+      - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-results
+          name: coverage-report
+          path: ./TestResults/CoverageReport/
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
           path: ./TestResults/

@@ -31,7 +31,7 @@ public sealed class CreateDriverHandler
 
         if (string.IsNullOrWhiteSpace(districtId))
         {
-            districtId = await h3GridService.GetCellIndexForPointAsync(request.Location, request.H3Resolution);
+            districtId = await h3GridService.GetCellAsync(request.Location, request.H3Resolution);
         }
 
         var driverResult = Driver.Create(
