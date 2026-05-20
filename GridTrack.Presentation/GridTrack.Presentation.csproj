@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+
+
+        <PackageReference Include="Asp.Versioning.Http" />
+        <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        
+    </ItemGroup>
+    
+    
+</Project>

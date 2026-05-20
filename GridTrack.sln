@@ -34,6 +34,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Infrastructure", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Infrastructure.UnitTests", "GridTrack.Infrastructure.UnitTests\GridTrack.Infrastructure.UnitTests.csproj", "{2FD19363-7119-4533-B11B-61C80D157D2F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.Presentation", "GridTrack.Presentation\GridTrack.Presentation.csproj", "{E65B962A-BDBB-478D-B7FA-4F705B8BC909}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,6 +50,7 @@ Global
 		{B2826579-BD7D-4156-A705-B6F086104DEA} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
 		{52792B63-C5A4-467E-AC01-09D9670D18BF} = {A0EA4A9B-A384-417A-993D-93A279530C54}
 		{2FD19363-7119-4533-B11B-61C80D157D2F} = {369F163E-A54C-4F73-B88E-DCD1A27D9C2A}
+		{E65B962A-BDBB-478D-B7FA-4F705B8BC909} = {A0EA4A9B-A384-417A-993D-93A279530C54}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{55985C3F-2869-4E53-A087-B27E7BEAA3A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -82,5 +85,9 @@ Global
 		{2FD19363-7119-4533-B11B-61C80D157D2F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2FD19363-7119-4533-B11B-61C80D157D2F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2FD19363-7119-4533-B11B-61C80D157D2F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E65B962A-BDBB-478D-B7FA-4F705B8BC909}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E65B962A-BDBB-478D-B7FA-4F705B8BC909}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E65B962A-BDBB-478D-B7FA-4F705B8BC909}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E65B962A-BDBB-478D-B7FA-4F705B8BC909}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

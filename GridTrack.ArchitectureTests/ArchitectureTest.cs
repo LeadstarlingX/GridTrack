@@ -14,7 +14,7 @@ public class ArchitectureTest
     protected static readonly Assembly DomainAssembly = typeof(Domain.Drivers.Driver).Assembly;
     protected static readonly Assembly ApplicationAssembly = typeof(Application.DependencyInjection).Assembly; 
     protected static readonly Assembly InfrastructureAssembly = typeof(Infrastructure.DependencyInjection).Assembly;
-    // protected static readonly Assembly PresentationAssembly = typeof(Presentation.DependencyInjection).Assembly;
+    protected static readonly Assembly PresentationAssembly = typeof(Presentation.DependencyInjection).Assembly;
     // protected static readonly Assembly ApiAssembly = typeof(Api.DependencyInjection).Assembly;
 
 }
