@@ -1,0 +1,6 @@
+@GridTrack.Api_HostAddress = http://localhost:5098
+
+GET {{GridTrack.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
