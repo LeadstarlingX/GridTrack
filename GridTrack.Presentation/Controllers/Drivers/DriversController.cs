@@ -9,11 +9,8 @@ namespace GridTrack.Presentation.Controllers.Drivers;
     {
         // GET: api/drivers
         [HttpGet]
-        public async Task<ActionResult<PagedResponse<DriverListItemDto>>> GetDrivers(
-            [FromQuery] string? cursor,
-            [FromQuery] string? districtId,
-            [FromQuery] string? status,
-            [FromQuery] int? pageSize)
+        public async Task<ActionResult<PagedResponse<DriverListItemResponse>>> GetDrivers(
+            [FromQuery] GetDriversRequest request)
         {
             // Implementation for paginated list of drivers with filtering
             // This would typically call into your application layer

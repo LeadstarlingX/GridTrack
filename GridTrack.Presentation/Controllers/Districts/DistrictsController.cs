@@ -8,7 +8,7 @@ public class DistrictsController : ControllerBase
 {
     // GET: api/districts
     [HttpGet]
-    public async Task<ActionResult<List<DistrictDto>>> GetDistricts()
+    public async Task<ActionResult<List<DistrictResponse>>> GetDistricts()
     {
         // Implementation for listing all districts with centroid coordinates
         // This would typically call into your application layer
@@ -17,7 +17,7 @@ public class DistrictsController : ControllerBase
 
     // GET: api/districts/boundaries
     [HttpGet("boundaries")]
-    public async Task<ActionResult<GeoJsonFeatureCollection>> GetDistrictBoundaries()
+    public async Task<ActionResult<GeoJsonFeatureCollectionResponse>> GetDistrictBoundaries()
     {
         // Implementation for getting GeoJSON boundaries for districts
         // This would typically call into your application layer
