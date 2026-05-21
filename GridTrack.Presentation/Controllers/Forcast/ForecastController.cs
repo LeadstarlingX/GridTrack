@@ -1,17 +1,21 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.UseCases.Forecast;
+using Microsoft.AspNetCore.Mvc;
+using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Forcast;
 
 [ApiController]
 [Route("api/forecast")]
-public class ForecastController : ControllerBase
+public class ForecastController(IMessageBus bus) : ControllerBase
 {
-    // GET: api/forecast/{districtId}
     [HttpGet("{districtId}")]
-    public async Task<ActionResult<ForecastResponse>> GetForecast(string districtId)
+    public async Task<IActionResult> GetForecast(string districtId, CancellationToken ct)
     {
-        // Implementation for demand forecast and driver staffing recommendation per district
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetForecastResponse?>(
+            new GetForecastQuery(districtId),
+            ct);
+
+        return result is null ? NotFound() : Ok(result);
     }
 }

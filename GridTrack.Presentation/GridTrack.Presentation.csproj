@@ -1,14 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <ItemGroup>
-
-
         <PackageReference Include="Asp.Versioning.Http" />
         <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-        
     </ItemGroup>
-    
-    
+
+    <ItemGroup>
+        <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
+    </ItemGroup>
+
+
 </Project>

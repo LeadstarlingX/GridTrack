@@ -1,37 +1,50 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.UseCases.Analytics;
+using Microsoft.AspNetCore.Mvc;
+using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Analytics;
 
 [ApiController]
 [Route("api/analytics")]
-public class AnalyticsController : ControllerBase
+public class AnalyticsController(IMessageBus bus) : ControllerBase
 {
-    // GET: api/analytics/summary
     [HttpGet("summary")]
-    public async Task<ActionResult<AnalyticsSummaryResponse>> GetSummary()
+    public async Task<IActionResult> GetSummary(CancellationToken ct)
     {
-        // Implementation for real-time summary KPIs
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetAnalyticsSummaryResponse>(
+            new GetAnalyticsSummaryQuery(),
+            ct);
+
+        return Ok(result);
     }
 
-    // GET: api/analytics/trends
     [HttpGet("trends")]
-    public async Task<ActionResult<AnalyticsTrendResponse>> GetTrends(
-        [FromQuery] GetTrendsRequest request)
+    public async Task<IActionResult> GetTrends(
+        [FromQuery] GetTrendsRequest request,
+        CancellationToken ct)
     {
-        // Implementation for time-series trends for deliveries and anomalies
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetTrendsResponse>(
+            new GetTrendsQuery(request.From, request.To, request.Granularity),
+            ct);
+
+        return Ok(result);
     }
 
-    // GET: api/analytics/h3-density
     [HttpGet("h3-density")]
-    public async Task<ActionResult<H3DensityResponse>> GetH3Density(
-        [FromQuery] GetH3DensityRequest request)
+    public async Task<IActionResult> GetH3Density(
+        [FromQuery] GetH3DensityRequest request,
+        CancellationToken ct)
     {
-        // Implementation for H3 hexagonal grid density map for delivery clustering
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetH3DensityResponse>(
+            new GetH3DensityQuery(
+                request.From,
+                request.To,
+                request.Resolution,
+                request.FromHour,
+                request.ToHour),
+            ct);
+
+        return Ok(result);
     }
 }

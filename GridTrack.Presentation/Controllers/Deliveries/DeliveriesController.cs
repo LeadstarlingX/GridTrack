@@ -1,28 +1,42 @@
-﻿using GridTrack.Presentation.Abstractions.Api;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.UseCases.Deliveries;
 using Microsoft.AspNetCore.Mvc;
+using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Deliveries;
 
 [ApiController]
 [Route("api/deliveries")]
-public class DeliveriesController : ControllerBase
+public class DeliveriesController(IMessageBus bus) : ControllerBase
 {
-    // GET: api/deliveries
     [HttpGet]
-    public async Task<ActionResult<PagedResponse<DeliveryListItemResponse>>> GetDeliveries(
-        [FromQuery] GetDeliveriesRequest request)
+    public async Task<IActionResult> GetDeliveries(
+        [FromQuery] GetDeliveriesRequest request,
+        CancellationToken ct)
     {
-        // Implementation for paginated list of deliveries with filtering
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetDeliveriesResponse>(
+            new GetDeliveriesQuery(
+                request.Cursor,
+                request.Status,
+                request.DistrictId,
+                request.From,
+                request.To,
+                request.PageSize ?? 6),
+            ct);
+
+        return Ok(result);
     }
 
-    // GET: api/deliveries/{id}
     [HttpGet("{id}")]
-    public async Task<ActionResult<DeliveryDetailResponse>> GetDelivery(string id)
+    public async Task<IActionResult> GetDelivery(string id, CancellationToken ct)
     {
-        // Implementation for getting detailed delivery including route polyline
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        if (!Guid.TryParse(id, out var deliveryId))
+            return BadRequest();
+
+        var result = await bus.InvokeAsync<GetDeliveryByIdResponse?>(
+            new GetDeliveryByIdQuery(deliveryId),
+            ct);
+
+        return result is null ? NotFound() : Ok(result);
     }
 }

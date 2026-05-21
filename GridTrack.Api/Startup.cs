@@ -2,6 +2,7 @@
 using GridTrack.Api.Extensions;
 using GridTrack.Application;
 using GridTrack.Infrastructure;
+using GridTrack.Infrastructure.Hubs;
 using GridTrack.Presentation;
 
 namespace GridTrack.Api;
@@ -59,7 +60,7 @@ public class Startup
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapControllers();
-            
+            endpoints.MapHub<DashboardHub>("/hubs/dashboard");
         });
     }
 }

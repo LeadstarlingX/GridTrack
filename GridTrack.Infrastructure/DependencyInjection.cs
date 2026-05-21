@@ -10,6 +10,7 @@ using GridTrack.Infrastructure.Clock;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using GridTrack.Infrastructure.H3Service;
+using GridTrack.Infrastructure.Hubs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,9 +28,8 @@ public static class DependencyInjection
         services.AddSingleton<IH3GridService, H3GridService>();
 
         AddPersistence(services, configuration);
-
         AddCaching(services, configuration);
-
+        AddSignalR(services);
         AddApiVersioning(services);
 
         return services;
@@ -69,6 +69,12 @@ public static class DependencyInjection
         services.AddSingleton<ICacheService, CacheService>();
     }
     
+    private static void AddSignalR(IServiceCollection services)
+    {
+        services.AddSignalR();
+        services.AddScoped<IDashboardPushService, DashboardPushService>();
+    }
+
     private static void AddApiVersioning(IServiceCollection services)
     {
         services

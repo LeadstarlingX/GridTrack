@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Saad\\\\source\\\\repos\\\\GridTrack\" -Recurse -Force)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(ConvertTo-Json -Depth 100)",
+      "Bash(Out-String)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Saad\\\\source\\\\repos\\\\GridTrack\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet run *)",
+      "Read(//c/Users/Saad/.claude/projects/C--Users-Saad-source-repos-GridTrack/**)",
+      "Read(//c/Users/Saad/.claude/projects/C--Users-Saad-source-repos-GridTrack/memory/**)",
+      "Bash(ls \"C:\\\\Users\\\\Saad\\\\source\\\\WebStorm\\\\GridTrack.Web\\\\api-contracts\\\\\")"
+    ]
+  }
+}

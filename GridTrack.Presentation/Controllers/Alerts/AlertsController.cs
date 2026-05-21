@@ -1,19 +1,29 @@
-﻿using GridTrack.Presentation.Abstractions.Api;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.UseCases.Alerts;
 using Microsoft.AspNetCore.Mvc;
+using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Alerts;
 
 [ApiController]
 [Route("api/alerts")]
-public class AlertsController : ControllerBase
+public class AlertsController(IMessageBus bus) : ControllerBase
 {
-    // GET: api/alerts
     [HttpGet]
-    public async Task<ActionResult<PagedResponse<AnomalyAlertResponse>>> GetAlerts(
-        [FromQuery] GetAlertsRequest request)
+    public async Task<IActionResult> GetAlerts(
+        [FromQuery] GetAlertsRequest request,
+        CancellationToken ct)
     {
-        // Implementation for paginated anomaly alerts with filtering
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetAlertsResponse>(
+            new GetAlertsQuery(
+                request.Cursor,
+                request.From,
+                request.To,
+                request.DistrictId,
+                request.AnomalyType,
+                request.PageSize ?? 6),
+            ct);
+
+        return Ok(result);
     }
 }

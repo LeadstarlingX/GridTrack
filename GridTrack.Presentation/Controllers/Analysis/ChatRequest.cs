@@ -1,13 +1,5 @@
-﻿namespace GridTrack.Presentation.Controllers.Analysis;
+using GridTrack.Application.Dtos;
 
-public sealed class ChatRequest
-{
-    public required IEnumerable<ChatMessage> Messages { get; init; }
-    public required string CsvData { get; init; }
-}
+namespace GridTrack.Presentation.Controllers.Analysis;
 
-public sealed class ChatMessage
-{
-    public required string Role { get; init; } // "user" | "assistant"
-    public required string Content { get; init; }
-}
+public sealed record ChatRequest(IEnumerable<ChatMessageDto> Messages, string CsvData);

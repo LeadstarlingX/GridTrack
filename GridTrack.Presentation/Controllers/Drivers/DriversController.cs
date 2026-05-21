@@ -1,32 +1,45 @@
-﻿using GridTrack.Presentation.Abstractions.Api;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.UseCases.Drivers;
 using Microsoft.AspNetCore.Mvc;
+using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Drivers;
 
-    [ApiController]
-    [Route("api/drivers")]
-    public class DriversController : ControllerBase
+[ApiController]
+[Route("api/drivers")]
+public class DriversController(IMessageBus bus) : ControllerBase
+{
+    [HttpGet]
+    public async Task<IActionResult> GetDrivers(
+        [FromQuery] GetDriversRequest request,
+        CancellationToken ct)
     {
-        // GET: api/drivers
-        [HttpGet]
-        public async Task<ActionResult<PagedResponse<DriverListItemResponse>>> GetDrivers(
-            [FromQuery] GetDriversRequest request)
-        {
-            // Implementation for paginated list of drivers with filtering
-            // This would typically call into your application layer
-            throw new NotImplementedException();
-        }
+        var result = await bus.InvokeAsync<GetDriversResponse>(
+            new GetDriversQuery(
+                request.Cursor,
+                request.DistrictId,
+                request.Status,
+                request.PageSize ?? 8),
+            ct);
 
-        // PATCH: api/drivers/{id}/availability
-        [HttpPatch("{id}/availability")]
-        public async Task<ActionResult<DriverAvailabilityResponse>> UpdateDriverAvailability(
-            [FromRoute] string id,
-            [FromBody] UpdateDriverAvailabilityRequest request)
-        {
-            // Implementation for updating driver availability status
-            // This would typically call into your application layer
-            throw new NotImplementedException();
-        }
+        return Ok(result);
     }
 
-    
+    [HttpPatch("{id}/availability")]
+    public async Task<IActionResult> UpdateDriverAvailability(
+        [FromRoute] string id,
+        [FromBody] UpdateDriverAvailabilityRequest request,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var driverId))
+            return BadRequest();
+
+        var isActive = request.Status.Equals("available", StringComparison.OrdinalIgnoreCase);
+
+        var result = await bus.InvokeAsync<DriverAvailabilityResponse?>(
+            new ToggleDriverAvailabilityCommand(driverId, isActive),
+            ct);
+
+        return result is null ? NotFound() : Ok(result);
+    }
+}

@@ -1,4 +1,4 @@
-using GridTrack.Application.UseCases.Forecasting;
+using GridTrack.Application.UseCases.Forecast;
 
 namespace GridTrack.Application.EventHandlers;
 

@@ -1,17 +1,29 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.UseCases.Export;
+using Microsoft.AspNetCore.Mvc;
+using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Exports;
 
 [ApiController]
 [Route("api/export")]
-public class ExportController : ControllerBase
+public class ExportController(IMessageBus bus) : ControllerBase
 {
-    // POST: api/export/csv
     [HttpPost("csv")]
-    public async Task<IActionResult> ExportCsv([FromBody] ExportCsvRequest request)
+    public async Task<IActionResult> ExportCsv(
+        [FromBody] ExportCsvRequest request,
+        CancellationToken ct)
     {
-        // Implementation for exporting delivery data as CSV
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<ExportCsvResult>(
+            new ExportCsvCommand(
+                request.Mode,
+                request.From,
+                request.To,
+                request.Days,
+                request.FromHour,
+                request.ToHour),
+            ct);
+
+        return File(result!.CsvStream, "text/csv", result.FileName);
     }
 }

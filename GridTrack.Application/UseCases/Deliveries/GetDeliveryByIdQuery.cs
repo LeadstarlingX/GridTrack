@@ -1,27 +1,32 @@
 using GridTrack.Application.Dtos;
-using GridTrack.Application.Errors;
 using GridTrack.Application.Interfaces;
-using GridTrack.Domain.Abstractions;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
-public sealed record GetDeliveryRequest(Guid DeliveryId);
-
-public sealed record GetDeliveryByIdQuery(GetDeliveryRequest Request);
+public sealed record GetDeliveryByIdQuery(Guid DeliveryId);
 
 public sealed class GetDeliveryByIdHandler
 {
-    public async Task<Result<DeliveryDto>> Handle(
+    public async Task<GetDeliveryByIdResponse?> Handle(
         GetDeliveryByIdQuery query,
         IDeliveryReadService readService,
         CancellationToken ct)
     {
-        var delivery = await readService.GetByIdAsync(query.Request.DeliveryId, ct);
+        var delivery = await readService.GetByIdAsync(query.DeliveryId, ct);
         if (delivery is null)
-        {
-            return Result.Failure<DeliveryDto>(ApplicationErrors.DeliveryNotFound);
-        }
+            return null;
 
-        return Result.Success(delivery);
+        var updatedAt = delivery.DeliveredAt ?? delivery.PickedUpAt ?? delivery.CancelledAt;
+
+        return new GetDeliveryByIdResponse(
+            delivery.DeliveryId.ToString(),
+            delivery.Status.ToString(),
+            delivery.DistrictId,
+            delivery.AssignedDriverId?.ToString(),
+            AssignedDriverName: null,
+            EtaSeconds: null,
+            delivery.CreatedAt,
+            updatedAt,
+            RoutePolyline: Array.Empty<CoordinateResponse>());
     }
 }

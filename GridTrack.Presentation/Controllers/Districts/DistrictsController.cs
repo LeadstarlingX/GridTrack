@@ -1,26 +1,31 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.UseCases.Districts;
+using Microsoft.AspNetCore.Mvc;
+using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Districts;
 
 [ApiController]
 [Route("api/districts")]
-public class DistrictsController : ControllerBase
+public class DistrictsController(IMessageBus bus) : ControllerBase
 {
-    // GET: api/districts
     [HttpGet]
-    public async Task<ActionResult<List<DistrictResponse>>> GetDistricts()
+    public async Task<IActionResult> GetDistricts(CancellationToken ct)
     {
-        // Implementation for listing all districts with centroid coordinates
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetDistrictsResponse>(
+            new GetDistrictsQuery(),
+            ct);
+
+        return Ok(result?.Items);
     }
 
-    // GET: api/districts/boundaries
     [HttpGet("boundaries")]
-    public async Task<ActionResult<GeoJsonFeatureCollectionResponse>> GetDistrictBoundaries()
+    public async Task<IActionResult> GetDistrictBoundaries(CancellationToken ct)
     {
-        // Implementation for getting GeoJSON boundaries for districts
-        // This would typically call into your application layer
-        throw new NotImplementedException();
+        var result = await bus.InvokeAsync<GetDistrictBoundariesResponse>(
+            new GetDistrictBoundariesQuery(),
+            ct);
+
+        return Ok(result);
     }
 }

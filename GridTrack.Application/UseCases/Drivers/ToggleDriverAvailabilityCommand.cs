@@ -1,39 +1,41 @@
-using GridTrack.Application.Errors;
+using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
-using GridTrack.Domain.Abstractions;
-using System.Linq;
 
 namespace GridTrack.Application.UseCases.Drivers;
 
-public sealed record ToggleAvailabilityRequest(Guid DriverId, bool IsActive);
+public sealed record ToggleDriverAvailabilityCommand(Guid DriverId, bool IsActive);
 
-public sealed record ToggleDriverAvailabilityCommand(ToggleAvailabilityRequest Request);
-
+/// <summary>
+/// Returns the availability response plus any domain events to cascade.
+/// Wolverine automatically publishes the events and returns the first tuple element
+/// when the caller uses bus.InvokeAsync&lt;DriverAvailabilityResponse?&gt;.
+/// </summary>
 public sealed class ToggleDriverAvailabilityHandler
 {
-    public async Task<(Result Result, IEnumerable<object> Events)> Handle(
+    public async Task<(DriverAvailabilityResponse? Response, IEnumerable<object> Events)> Handle(
         ToggleDriverAvailabilityCommand command,
         IDriverRepository repository,
         CancellationToken ct)
     {
-        var request = command.Request;
-        var driver = await repository.GetByIdAsync(request.DriverId, ct);
-
+        var driver = await repository.GetByIdAsync(command.DriverId, ct);
         if (driver is null)
-        {
-            return (Result.Failure(ApplicationErrors.DriverNotFound), Array.Empty<object>());
-        }
+            return (null, Array.Empty<object>());
 
-        var result = driver.SetAvailability(request.IsActive);
+        var result = driver.SetAvailability(command.IsActive);
         if (result.IsFailure)
-        {
-            return (result, Array.Empty<object>());
-        }
+            return (null, Array.Empty<object>());
 
         await repository.UpdateAsync(driver, ct);
+
         var events = driver.DomainEvents.Cast<object>().ToList();
         driver.ClearDomainEvents();
 
-        return (Result.Success(), events);
+        var status = driver.IsActive ? "available" : "offline";
+        var response = new DriverAvailabilityResponse(
+            driver.DriverId.ToString(),
+            status,
+            DateTime.UtcNow);
+
+        return (response, events);
     }
 }
