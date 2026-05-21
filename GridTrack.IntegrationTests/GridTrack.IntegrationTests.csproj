@@ -18,6 +18,10 @@
     <ItemGroup>
       <ProjectReference Include="..\GridTrack.Api\GridTrack.Api.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="DeliveryTests\" />
+    </ItemGroup>
     
     
 </Project>
