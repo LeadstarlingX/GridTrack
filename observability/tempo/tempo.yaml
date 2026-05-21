@@ -15,7 +15,9 @@ storage:
     backend: local
     local:
       path: /tmp/tempo/blocks
-    block:
-      block_retention: 24h  # Retention goes here, not under compactor
     wal:
-      path: /tmp/tempo/wa
+      path: /tmp/tempo/wal
+
+compactor:
+  compaction:
+    block_retention: 24h

@@ -29,9 +29,5 @@
       <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
       <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
     </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="CQRS\ReadServices\" />
-    </ItemGroup>
     
 </Project>
