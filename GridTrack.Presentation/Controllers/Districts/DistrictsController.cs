@@ -16,7 +16,7 @@ public class DistrictsController(IMessageBus bus) : ControllerBase
             new GetDistrictsQuery(),
             ct);
 
-        return Ok(result?.Items);
+        return Ok(result.Items);
     }
 
     [HttpGet("boundaries")]

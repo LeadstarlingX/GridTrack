@@ -11,5 +11,9 @@
         <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Abstractions\" />
+    </ItemGroup>
+
 
 </Project>

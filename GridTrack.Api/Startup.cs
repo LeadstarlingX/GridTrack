@@ -1,5 +1,6 @@
 ﻿using Asp.Versioning.ApiExplorer;
 using GridTrack.Api.Extensions;
+using GridTrack.Api.Middlewares;
 using GridTrack.Application;
 using GridTrack.Infrastructure;
 using GridTrack.Infrastructure.Hubs;
@@ -42,7 +43,7 @@ public class Startup
             }
         });
         app.ApplyMigrations();
-        
+        app.UseMiddleware<ExceptionHandlingMiddleware>();
         // app.SeedData();
 
         if (env.IsDevelopment())
