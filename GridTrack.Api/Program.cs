@@ -1,4 +1,6 @@
 
+using Wolverine;
+
 namespace GridTrack.Api;
 
 using GridTrack.Api;
@@ -13,6 +15,11 @@ public class Program
     private static IHostBuilder CreateHostBuilder(string[] args)
     {
         return Host.CreateDefaultBuilder(args)
-            .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); });
+            .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); })
+            .UseWolverine(options =>
+            {
+                
+            })
+            ;
     }
 }

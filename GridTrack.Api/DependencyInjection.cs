@@ -1,5 +1,6 @@
 ﻿using System.Threading.RateLimiting;
 using GridTrack.Api.OpenApi;
+using Wolverine;
 
 namespace GridTrack.Api;
 
@@ -15,7 +16,7 @@ public static class DependencyInjection
 
         return services;
     }
-
+     
 
     private static IServiceCollection AddMyMiddlewares(this IServiceCollection services)
     {

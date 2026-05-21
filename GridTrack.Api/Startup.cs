@@ -63,5 +63,7 @@ public class Startup
             endpoints.MapControllers();
             endpoints.MapHub<DashboardHub>("/hubs/dashboard");
         });
+        
+        
     }
 }
