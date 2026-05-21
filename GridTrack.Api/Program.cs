@@ -18,8 +18,7 @@ public class Program
             .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); })
             .UseWolverine(options =>
             {
-                
-            })
-            ;
+                options.Discovery.IncludeAssembly(typeof(Application.DependencyInjection).Assembly);
+            });
     }
 }
