@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="NetArchTest.Rules" />
+        <PackageReference Include="FluentAssertions" />
+        <PackageReference Include="TUnit" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
+        <PackageReference Include="Bogus"/>
+        <PackageReference Include="Testcontainers.Redis"/>
+        <PackageReference Include="Testcontainers.MsSql"/>
+        <PackageReference Include="NSubstitute"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\GridTrack.Api\GridTrack.Api.csproj" />
+    </ItemGroup>
+    
+    
+</Project>
