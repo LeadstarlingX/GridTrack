@@ -10,6 +10,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\GridTrack.Api\GridTrack.Api.csproj" />
       <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
       <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
       <ProjectReference Include="..\GridTrack.Infrastructure\GridTrack.Infrastructure.csproj" />

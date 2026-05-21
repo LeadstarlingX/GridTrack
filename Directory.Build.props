@@ -6,5 +6,6 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <!-- Enable Central Package Management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <EnablePackagePruning>true</EnablePackagePruning>
   </PropertyGroup>
 </Project>
