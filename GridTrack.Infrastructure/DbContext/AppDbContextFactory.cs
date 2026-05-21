@@ -10,11 +10,12 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
 
         var connectionString = Environment.GetEnvironmentVariable("DefaultConnection")
-                               ?? "Server=localhost;Database=SoftquTestDb;TrustServerCertificate=True;Integrated Security=true;";
+                               ?? "Host=localhost;Port=5433;Database=gridtrack_docker;User Id=postgres;Password=postgres Security=true;";
 
         optionsBuilder.UseNpgsql(connectionString, options =>
         {
             options.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName);
+            options.UseNetTopologySuite();
         });
 
         return new AppDbContext(optionsBuilder.Options);
