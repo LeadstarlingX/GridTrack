@@ -3,6 +3,7 @@ using GridTrack.Application.Errors;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using System.Linq;
+using GridTrack.Application.CQRS.Repositories;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 

@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  
+  # Your API metrics endpoint (if using Prometheus exporter)
+  # - job_name: 'filoshop-api'
+  #   static_configs:
+  #     - targets: ['host.docker.internal:5000']
+  #   metrics_path: '/metrics'
+
+# Enable remote write receiver for OTLP metrics
+remote_write: []

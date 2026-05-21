@@ -1,7 +1,7 @@
 using GridTrack.Application.Dtos;
 using NetTopologySuite.Geometries;
 
-namespace GridTrack.Application.Interfaces;
+namespace GridTrack.Application.CQRS.ReadServices;
 
 public interface IDriverReadService
 {

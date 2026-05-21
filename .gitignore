@@ -2,10 +2,27 @@
 **/bin/
 **/obj/
 **/out/
+**/publish/
 
 #tracker files
 track.md
 progress.md
+
+
+# Runtime data
+observability/**/data/
+observability/**/tmp/
+**/data.parquet
+**/bloom-*
+**/index*
+**/meta.json
+**/*.pb.zst
+
+# Grafana provisioning (if generated, but keep template if hand-written)
+# observability/grafana/provisioning/datasources.yaml
+
+# Docker container data
+.containers/
 
 # Dependencies
 packages/

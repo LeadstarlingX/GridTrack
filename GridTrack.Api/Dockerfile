@@ -10,7 +10,7 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 # ---- copy files required for restore (cacheable) ----
-COPY global.json ./
+COPY GridTrack.Api/global.json ./
 COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY *.sln ./

@@ -3,10 +3,12 @@ using Dapper;
 using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
+using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Caching;
 using GridTrack.Infrastructure.Clock;
+using GridTrack.Infrastructure.CQRS.Respositories;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using GridTrack.Infrastructure.H3Service;
@@ -41,9 +43,12 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection") ??
                                throw new ArgumentNullException(nameof(configuration));
 
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddDbContextFactory<AppDbContext>(options =>
+            options.UseNpgsql(connectionString, o => o.UseNetTopologySuite()));
         
+        
+        services.AddScoped<IDeliveryRepository, DeliveryRepository>();
+        services.AddScoped<IDriverRepository, DriverRepository>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 
@@ -56,7 +61,7 @@ public static class DependencyInjection
     
     private static void AddCaching(IServiceCollection services, IConfiguration configuration)
     {
-        string connectionString = configuration.GetConnectionString("Redis") ??
+        string connectionString = configuration.GetConnectionString("Cache") ??
                                   throw new ArgumentNullException(nameof(configuration));
 
         services.AddStackExchangeRedisCache(options => options.Configuration = connectionString);

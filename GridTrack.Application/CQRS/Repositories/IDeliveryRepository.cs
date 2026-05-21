@@ -1,6 +1,6 @@
 using GridTrack.Domain.Deliveries;
 
-namespace GridTrack.Application.Interfaces;
+namespace GridTrack.Application.CQRS.Repositories;
 
 public interface IDeliveryRepository
 {

@@ -1,6 +1,6 @@
 using GridTrack.Application.Dtos;
 
-namespace GridTrack.Application.Interfaces;
+namespace GridTrack.Application.CQRS.ReadServices;
 
 public interface IAnomalyReadService
 {

@@ -11,6 +11,8 @@
         <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
         <PackageReference Include="Npgsql" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" />
+        <PackageReference Include="NetTopologySuite" />
         <PackageReference Include="Microsoft.Data.SqlClient" />
         <PackageReference Include="pocketken.H3" />
         
@@ -26,6 +28,10 @@
     <ItemGroup>
       <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
       <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="CQRS\ReadServices\" />
     </ItemGroup>
     
 </Project>

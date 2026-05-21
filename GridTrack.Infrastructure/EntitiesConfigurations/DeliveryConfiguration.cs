@@ -15,7 +15,7 @@ public sealed class DeliveryConfiguration : IEntityTypeConfiguration<Delivery>
             .IsRequired();
 
         builder.Property(d => d.CurrentLocation)
-            .HasColumnType("geometry(Point,4326)")
+            // .HasColumnType("geography")
             .IsRequired();
 
         builder.Property(d => d.Status)

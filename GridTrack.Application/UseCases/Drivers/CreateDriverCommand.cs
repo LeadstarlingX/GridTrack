@@ -5,6 +5,7 @@ using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
 using System.Linq;
+using GridTrack.Application.CQRS.Repositories;
 
 namespace GridTrack.Application.UseCases.Drivers;
 

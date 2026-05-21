@@ -135,7 +135,7 @@ public class H3GridServiceTests
     {
         // H3 cell strings are 15-character lowercase hex
         var cell = await _service.GetCellAsync(Damascus, 8);
-        await Assert.That(cell).HasLength().EqualTo(15);
+        await Assert.That(cell).Length().EqualTo(15);
         await Assert.That(cell.All(c => "0123456789abcdef".Contains(c))).IsTrue();
     }
  

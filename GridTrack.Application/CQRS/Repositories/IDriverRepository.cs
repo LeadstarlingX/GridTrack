@@ -1,7 +1,7 @@
 using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
 
-namespace GridTrack.Application.Interfaces;
+namespace GridTrack.Application.CQRS.Repositories;
 
 public interface IDriverRepository
 {

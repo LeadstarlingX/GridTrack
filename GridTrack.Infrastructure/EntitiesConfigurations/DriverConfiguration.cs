@@ -14,7 +14,7 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
             .IsRequired();
 
         builder.Property(d => d.Location)
-            .HasColumnType("geometry(Point,4326)")
+            .HasColumnType("geography (point)")
             .IsRequired();
 
         builder.Property(d => d.IsActive)
