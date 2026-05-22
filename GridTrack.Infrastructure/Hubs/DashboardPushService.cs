@@ -16,8 +16,8 @@ internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDas
             new
             {
                 driverId = payload.DriverId,
-                lat = payload.Location.Y,
-                lng = payload.Location.X,
+                lat = payload.Location.Coordinate.Y,
+                lng = payload.Location.Coordinate.X,
                 districtId = payload.DistrictId
             },
             ct);

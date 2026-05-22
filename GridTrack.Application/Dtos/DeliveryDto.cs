@@ -3,17 +3,19 @@ using NetTopologySuite.Geometries;
 
 namespace GridTrack.Application.Dtos;
 
-public sealed record DeliveryDto(
-    Guid DeliveryId,
-    Point CurrentLocation,
-    DeliveryStatus Status,
-    Guid? AssignedDriverId,
-    DateTime? ExpectedEta,
-    DateTime? ActualEta,
-    string DistrictId,
-    bool AnomalyFlag,
-    DateTime CreatedAt,
-    DateTime? PickedUpAt,
-    DateTime? DeliveredAt,
-    DateTime? CancelledAt,
-    string? AnomalyReason);
+public sealed class DeliveryDto
+{
+    public Guid DeliveryId { get; init; }
+    public Geometry CurrentLocation { get; init; } = null!;
+    public DeliveryStatus Status { get; init; }
+    public Guid? AssignedDriverId { get; init; }
+    public DateTime? ExpectedEta { get; init; }
+    public DateTime? ActualEta { get; init; }
+    public string DistrictId { get; init; } = string.Empty;
+    public bool AnomalyFlag { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public DateTime? PickedUpAt { get; init; }
+    public DateTime? DeliveredAt { get; init; }
+    public DateTime? CancelledAt { get; init; }
+    public string? AnomalyReason { get; init; }
+}

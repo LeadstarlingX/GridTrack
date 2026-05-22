@@ -51,12 +51,14 @@ public sealed class CreateDriverHandler
         var events = driverResult.Value.DomainEvents.Cast<object>().ToList();
         driverResult.Value.ClearDomainEvents();
 
-        var dto = new DriverDto(
-            driverResult.Value.DriverId,
-            driverResult.Value.Location,
-            driverResult.Value.IsActive,
-            driverResult.Value.LastSeen,
-            driverResult.Value.DistrictId);
+        var dto = new DriverDto
+        {
+            DriverId = driverResult.Value.DriverId,
+            Location = driverResult.Value.Location,
+            IsActive = driverResult.Value.IsActive,
+            LastSeen = driverResult.Value.LastSeen,
+            DistrictId = driverResult.Value.DistrictId
+        };
 
         return (Result.Success(dto), events);
     }

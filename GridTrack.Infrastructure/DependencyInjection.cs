@@ -18,6 +18,7 @@ using GridTrack.Infrastructure.Hubs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using StackExchange.Redis;
 
 namespace GridTrack.Infrastructure;
@@ -64,13 +65,15 @@ public static class DependencyInjection
         
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
-
+        
+        var dataSource = new NpgsqlDataSourceBuilder(connectionString)
+            .UseNetTopologySuite()
+            .Build();
         services.AddSingleton<ISqlConnectionFactory>(_ =>
-            new SqlConnectionFactory(connectionString));
+            new SqlConnectionFactory(dataSource));
         
 
         SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
-        SqlMapper.AddTypeHandler(new PointTypeHandler());
 
         return services;
     }

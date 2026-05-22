@@ -136,8 +136,8 @@ public class DriverReadServiceTests : BaseIntegrationTest
             .ToList();
 
         result.Should().HaveCount(1);
-        result[0].Location.X.Should().BeApproximately(36.2765, precision: 0.0001);
-        result[0].Location.Y.Should().BeApproximately(33.5138, precision: 0.0001);
+        result[0].Location.Coordinate.X.Should().BeApproximately(36.2765, precision: 0.0001);
+        result[0].Location.Coordinate.Y.Should().BeApproximately(33.5138, precision: 0.0001);
     }
 
     // ── GetNearestAsync ───────────────────────────────────────────────────

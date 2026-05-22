@@ -32,20 +32,17 @@ public class GetDeliveryByIdHandlerTests
         var createdAt = new DateTime(2026, 5, 1, 10, 0, 0, DateTimeKind.Utc);
         var pickedUpAt = new DateTime(2026, 5, 1, 10, 30, 0, DateTimeKind.Utc);
 
-        var dto = new DeliveryDto(
-            deliveryId,
-            Factory.CreatePoint(new Coordinate(36.2, 33.5)),
-            DeliveryStatus.InTransit,
-            driverId,
-            null,
-            null,
-            "h3-district-1",
-            false,
-            createdAt,
-            pickedUpAt,
-            null,
-            null,
-            null);
+        var dto = new DeliveryDto
+        {
+            DeliveryId = deliveryId,
+            CurrentLocation = Factory.CreatePoint(new Coordinate(36.2, 33.5)),
+            Status = DeliveryStatus.InTransit,
+            AssignedDriverId = driverId,
+            DistrictId = "h3-district-1",
+            AnomalyFlag = false,
+            CreatedAt = createdAt,
+            PickedUpAt = pickedUpAt,
+        };
 
         var handler = new GetDeliveryByIdHandler();
 
@@ -69,20 +66,16 @@ public class GetDeliveryByIdHandlerTests
     {
         var deliveredAt = new DateTime(2026, 5, 1, 11, 30, 0, DateTimeKind.Utc);
 
-        var dto = new DeliveryDto(
-            Guid.NewGuid(),
-            Factory.CreatePoint(new Coordinate(36.2, 33.5)),
-            DeliveryStatus.Delivered,
-            null,
-            null,
-            null,
-            "h3-district-1",
-            false,
-            new DateTime(2026, 5, 1, 10, 0, 0, DateTimeKind.Utc),
-            null,
-            deliveredAt,
-            null,
-            null);
+        var dto = new DeliveryDto
+        {
+            DeliveryId = Guid.NewGuid(),
+            CurrentLocation = Factory.CreatePoint(new Coordinate(36.2, 33.5)),
+            Status = DeliveryStatus.Delivered,
+            DistrictId = "h3-district-1",
+            AnomalyFlag = false,
+            CreatedAt = new DateTime(2026, 5, 1, 10, 0, 0, DateTimeKind.Utc),
+            DeliveredAt = deliveredAt,
+        };
 
         var handler = new GetDeliveryByIdHandler();
 
@@ -97,20 +90,14 @@ public class GetDeliveryByIdHandlerTests
     [Test]
     public async Task Handle_Returns_Null_AssignedDriverId_When_Unassigned()
     {
-        var dto = new DeliveryDto(
-            Guid.NewGuid(),
-            Factory.CreatePoint(new Coordinate(36.2, 33.5)),
-            DeliveryStatus.Created,
-            null,
-            null,
-            null,
-            "h3-district-1",
-            false,
-            DateTime.UtcNow,
-            null,
-            null,
-            null,
-            null);
+        var dto = new DeliveryDto
+        {
+            DeliveryId = Guid.NewGuid(),
+            CurrentLocation = Factory.CreatePoint(new Coordinate(36.2, 33.5)),
+            Status = DeliveryStatus.Created,
+            DistrictId = "h3-district-1",
+            CreatedAt = DateTime.UtcNow
+        };
 
         var handler = new GetDeliveryByIdHandler();
 

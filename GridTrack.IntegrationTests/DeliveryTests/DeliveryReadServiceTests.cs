@@ -88,8 +88,8 @@ public class DeliveryReadServiceTests : BaseIntegrationTest
 
         result.Should().NotBeNull();
         result!.CurrentLocation.Should().NotBeNull();
-        result.CurrentLocation.X.Should().BeApproximately(36.2765, precision: 0.0001);
-        result.CurrentLocation.Y.Should().BeApproximately(33.5138, precision: 0.0001);
+        result.CurrentLocation.Coordinate.X.Should().BeApproximately(36.2765, precision: 0.0001);
+        result.CurrentLocation.Coordinate.Y.Should().BeApproximately(33.5138, precision: 0.0001);
     }
 
     [Test]
