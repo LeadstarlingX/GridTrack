@@ -82,6 +82,9 @@ public class AssignDriverToDeliveryHandlerTests
 
         public Task<Delivery?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
             => Task.FromResult(_delivery);
+
+        public Task<IEnumerable<RouteWaypointDto>> GetRouteAsync(Guid deliveryId, CancellationToken ct)
+            => Task.FromResult<IEnumerable<RouteWaypointDto>>(Array.Empty<RouteWaypointDto>());
     }
 
     private sealed class FakeDeliveryRepository : IDeliveryRepository

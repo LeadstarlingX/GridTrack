@@ -10,7 +10,7 @@ public class DriverTests
     [Test]
     public async Task Create_Should_Return_Success_And_Raise_DomainEvent()
     {
-        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow);
+        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, "Ahmad Hassan", "Ahmad");
 
         await Assert.That(result.IsSuccess).IsTrue();
         await Assert.That(result.Value.DomainEvents.OfType<DriverEnteredDistrictDomainEvent>().Count()).IsEqualTo(1);
@@ -60,7 +60,7 @@ public class DriverTests
     public async Task DeactivateIfStale_Should_Deactivate_When_LastSeen_Expired()
     {
         var lastSeen = DateTime.UtcNow.AddMinutes(-20);
-        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", lastSeen, true);
+        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", lastSeen, "Ahmad Hassan", "Ahmad", true);
         var driver = result.Value;
         driver.ClearDomainEvents();
 
@@ -122,7 +122,7 @@ public class DriverTests
     [Test]
     public async Task Create_Should_Fail_When_DriverId_Is_Empty()
     {
-        var result = Driver.Create(Guid.Empty, Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow);
+        var result = Driver.Create(Guid.Empty, Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, "Ahmad Hassan", "Ahmad");
 
         await Assert.That(result.IsFailure).IsTrue();
         await Assert.That(result.Error).IsEqualTo(DriverErrors.InvalidDriverId);
@@ -131,7 +131,7 @@ public class DriverTests
     [Test]
     public async Task Create_Should_Fail_When_Location_Is_Null()
     {
-        var result = Driver.Create(Guid.NewGuid(), null!, "h3-1", DateTime.UtcNow);
+        var result = Driver.Create(Guid.NewGuid(), null!, "h3-1", DateTime.UtcNow, "Ahmad Hassan", "Ahmad");
 
         await Assert.That(result.IsFailure).IsTrue();
         await Assert.That(result.Error).IsEqualTo(DriverErrors.InvalidLocation);
@@ -140,7 +140,7 @@ public class DriverTests
     [Test]
     public async Task Create_Should_Fail_When_DistrictId_Is_Empty()
     {
-        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "", DateTime.UtcNow);
+        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "", DateTime.UtcNow, "Ahmad Hassan", "Ahmad");
 
         await Assert.That(result.IsFailure).IsTrue();
         await Assert.That(result.Error).IsEqualTo(DriverErrors.InvalidDistrictId);
@@ -243,7 +243,7 @@ public class DriverTests
     
     private static Driver CreateDriver()
     {
-        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, true);
+        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, "Ahmad Hassan", "Ahmad", true);
         return result.Value;
     }
 }

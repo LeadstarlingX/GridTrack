@@ -1,4 +1,6 @@
 ﻿using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GridTrack.Presentation;
@@ -16,8 +18,10 @@ public static class DependencyInjection
 
 
     private static IServiceCollection AddMyControllers(this IServiceCollection services)
-    {   
-        services.AddControllers()
+    {
+        services.AddControllers(o =>
+                o.Filters.Add(new AuthorizeFilter(
+                    new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())))
             .AddApplicationPart(typeof(DependencyInjection).Assembly);
 
         return services;

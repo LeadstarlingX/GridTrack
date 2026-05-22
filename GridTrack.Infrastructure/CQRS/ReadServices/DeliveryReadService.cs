@@ -74,4 +74,18 @@ public sealed class DeliveryReadService : IDeliveryReadService
 
     public async Task<Delivery?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
         => await _context.Set<Delivery>().FirstOrDefaultAsync(d => d.DeliveryId == id, ct);
+
+    public async Task<IEnumerable<RouteWaypointDto>> GetRouteAsync(Guid deliveryId, CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        const string sql = """
+                           SELECT "Lat", "Lng"
+                           FROM delivery_routes
+                           WHERE "DeliveryId" = @DeliveryId
+                           ORDER BY "Sequence"
+                           """;
+
+        return await connection.QueryAsync<RouteWaypointDto>(sql, new { DeliveryId = deliveryId });
+    }
 }

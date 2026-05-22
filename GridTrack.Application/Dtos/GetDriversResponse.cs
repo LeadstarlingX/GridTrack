@@ -1,13 +1,17 @@
 namespace GridTrack.Application.Dtos;
 
 public sealed record DriverListItemResponse(
-    string Id,
+    string DriverId,
     string Name,
-    string Status,
-    string DistrictId,
-    string? DistrictName,
+    string ShortName,
     double Lat,
-    double Lng);
+    double Lng,
+    string DistrictId,
+    string Status,
+    int ActiveDeliveries,
+    int CompletedToday,
+    bool HasAnomaly,
+    string? AnomalyReason);
 
 public sealed record GetDriversResponse(
     IReadOnlyList<DriverListItemResponse> Items,

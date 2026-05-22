@@ -13,8 +13,10 @@ using GridTrack.Infrastructure.CQRS.ReadServices;
 using GridTrack.Infrastructure.CQRS.Respositories;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
+using GridTrack.Infrastructure.ExternalServices;
 using GridTrack.Infrastructure.H3Service;
 using GridTrack.Infrastructure.Hubs;
+using GridTrack.Infrastructure.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,15 +33,14 @@ public static class DependencyInjection
     {
         services.AddTransient<IDateTimeProvider, DateTimeProvider>();
         services.AddSingleton<IH3GridService, H3GridService>();
-    
 
         AddPersistence(services, configuration);
         AddCaching(services, configuration);
         AddMySignalR(services);
         AddApiVersioning(services);
-        
-        
-        
+        AddExternalServices(services, configuration);
+        AddSeeding(services);
+
         return services;
     }
     
@@ -104,6 +105,23 @@ public static class DependencyInjection
         services.AddScoped<IDashboardPushService, DashboardPushService>();
         
 
+        return services;
+    }
+
+    private static IServiceCollection AddExternalServices(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddHttpClient<IOsrmService, OsrmService>(c =>
+            c.BaseAddress = new Uri(
+                configuration["Osrm:BaseUrl"] ?? "http://router.project-osrm.org"));
+
+        return services;
+    }
+
+    private static IServiceCollection AddSeeding(this IServiceCollection services)
+    {
+        services.AddScoped<DataSeeder>();
+        services.AddHostedService<SeedService>();
         return services;
     }
 

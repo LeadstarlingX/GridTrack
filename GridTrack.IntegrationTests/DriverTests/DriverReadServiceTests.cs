@@ -38,6 +38,8 @@ public class DriverReadServiceTests : BaseIntegrationTest
             location ?? Damascus,
             districtId,
             lastSeen ?? DateTime.UtcNow,
+            "Ahmad Hassan",
+            "Ahmad",
             isActive);
 
         result.IsSuccess.Should().BeTrue();

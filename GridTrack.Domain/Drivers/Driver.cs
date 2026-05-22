@@ -9,13 +9,16 @@ public sealed class Driver : BaseEntity
 	{
 	}
 
-	private Driver(Guid driverId, Point location, bool isActive, DateTime lastSeen, string districtId)
+	private Driver(Guid driverId, Point location, bool isActive, DateTime lastSeen, string districtId,
+	               string name, string shortName)
 	{
 		DriverId = driverId;
 		Location = location;
 		IsActive = isActive;
 		LastSeen = lastSeen;
 		DistrictId = districtId;
+		Name = name;
+		ShortName = shortName;
 	}
 
 	public Guid DriverId { get; private set; }
@@ -23,12 +26,16 @@ public sealed class Driver : BaseEntity
 	public bool IsActive { get; private set; }
 	public DateTime LastSeen { get; private set; }
 	public string DistrictId { get; private set; } = string.Empty;
+	public string Name { get; private set; } = string.Empty;
+	public string ShortName { get; private set; } = string.Empty;
 
 	public static Result<Driver> Create(
 		Guid driverId,
 		Point location,
 		string districtId,
 		DateTime lastSeen,
+		string name,
+		string shortName,
 		bool isActive = true)
 	{
 		if (driverId == Guid.Empty)
@@ -46,7 +53,12 @@ public sealed class Driver : BaseEntity
 			return Result.Failure<Driver>(DriverErrors.InvalidDistrictId);
 		}
 
-		var driver = new Driver(driverId, location, isActive, lastSeen, districtId);
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			return Result.Failure<Driver>(DriverErrors.InvalidName);
+		}
+
+		var driver = new Driver(driverId, location, isActive, lastSeen, districtId, name, shortName);
 		driver.RaiseDomainEvent(new DriverEnteredDistrictDomainEvent(driverId, districtId));
 		return Result.Success(driver);
 	}

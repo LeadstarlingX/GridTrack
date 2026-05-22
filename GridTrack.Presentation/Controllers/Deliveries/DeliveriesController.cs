@@ -3,6 +3,7 @@ using GridTrack.Application.UseCases.Deliveries;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
 
+
 namespace GridTrack.Presentation.Controllers.Deliveries;
 
 [ApiController]
@@ -38,5 +39,18 @@ public class DeliveriesController(IMessageBus bus) : ControllerBase
             ct);
 
         return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpGet("{id}/route")]
+    public async Task<IActionResult> GetDeliveryRoute(string id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var deliveryId))
+            return BadRequest();
+
+        var result = await bus.InvokeAsync<IEnumerable<RouteWaypointDto>>(
+            new GetDeliveryRouteQuery(deliveryId),
+            ct);
+
+        return Ok(result);
     }
 }

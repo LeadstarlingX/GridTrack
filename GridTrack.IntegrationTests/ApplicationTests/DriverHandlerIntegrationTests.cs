@@ -29,6 +29,8 @@ public class DriverHandlerIntegrationTests : BaseIntegrationTest
                 Location: Damascus,
                 H3Resolution: 9,
                 DistrictId: null,
+                Name: "Ahmad Hassan",
+                ShortName: "Ahmad",
                 IsActive: true)));
 
         result.IsSuccess.Should().BeTrue();
@@ -72,11 +74,11 @@ public class DriverHandlerIntegrationTests : BaseIntegrationTest
         var driver3Id = Guid.NewGuid();
 
         await InvokeAsync<Result<DriverDto>>(
-            new CreateDriverCommand(new CreateDriverRequest(driver1Id, NearPoint, 9, "h3-near", true)));
+            new CreateDriverCommand(new CreateDriverRequest(driver1Id, NearPoint, 9, "h3-near", "Driver One", "D1", true)));
         await InvokeAsync<Result<DriverDto>>(
-            new CreateDriverCommand(new CreateDriverRequest(driver2Id, Aleppo, 9, "h3-far", true)));
+            new CreateDriverCommand(new CreateDriverRequest(driver2Id, Aleppo, 9, "h3-far", "Driver Two", "D2", true)));
         await InvokeAsync<Result<DriverDto>>(
-            new CreateDriverCommand(new CreateDriverRequest(driver3Id, Damascus, 9, "h3-center", true)));
+            new CreateDriverCommand(new CreateDriverRequest(driver3Id, Damascus, 9, "h3-center", "Driver Three", "D3", true)));
 
         var result = await InvokeAsync<Result<IEnumerable<DriverDto>>>(
             new GetNearestDriversQuery(new NearestDriversRequest(Damascus, 2)));
@@ -96,9 +98,9 @@ public class DriverHandlerIntegrationTests : BaseIntegrationTest
         var district2DriverId = Guid.NewGuid();
 
         await InvokeAsync<Result<DriverDto>>(
-            new CreateDriverCommand(new CreateDriverRequest(district1DriverId, Damascus, 9, "h3-district-1", true)));
+            new CreateDriverCommand(new CreateDriverRequest(district1DriverId, Damascus, 9, "h3-district-1", "Driver One", "D1", true)));
         await InvokeAsync<Result<DriverDto>>(
-            new CreateDriverCommand(new CreateDriverRequest(district2DriverId, Aleppo, 9, "h3-district-2", true)));
+            new CreateDriverCommand(new CreateDriverRequest(district2DriverId, Aleppo, 9, "h3-district-2", "Driver Two", "D2", true)));
 
         var result = await InvokeAsync<Result<IEnumerable<DriverDto>>>(
             new GetDriversByDistrictQuery(new DistrictFilterRequest("h3-district-1")));

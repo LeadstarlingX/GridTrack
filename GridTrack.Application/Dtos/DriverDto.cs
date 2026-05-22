@@ -9,4 +9,6 @@ public sealed class DriverDto
     public bool IsActive { get; init; }
     public DateTime LastSeen { get; init; }
     public string DistrictId { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public string ShortName { get; init; } = string.Empty;
 }

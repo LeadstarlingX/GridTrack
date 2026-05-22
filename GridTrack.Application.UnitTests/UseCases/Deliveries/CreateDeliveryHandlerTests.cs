@@ -62,6 +62,8 @@ public class CreateDeliveryHandlerTests
             Factory.CreatePoint(new Coordinate(1, 1)),
             9,
             "h3-1",
+            "Ahmad Hassan",
+            "Ahmad",
             true);
 
         var (result, events) = await handler.Handle(
@@ -102,6 +104,9 @@ public class CreateDeliveryHandlerTests
 
         public Task<Delivery?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
             => Task.FromResult(_store.GetValueOrDefault(id));
+
+        public Task<IEnumerable<RouteWaypointDto>> GetRouteAsync(Guid deliveryId, CancellationToken ct)
+            => Task.FromResult<IEnumerable<RouteWaypointDto>>(Array.Empty<RouteWaypointDto>());
 
         public void Seed(Delivery delivery) => _store[delivery.DeliveryId] = delivery;
     }

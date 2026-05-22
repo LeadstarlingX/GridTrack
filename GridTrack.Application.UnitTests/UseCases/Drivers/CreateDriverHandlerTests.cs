@@ -30,6 +30,8 @@ public class CreateDriverHandlerTests
             Factory.CreatePoint(new Coordinate(1, 1)),
             9,
             null,
+            "Ahmad Hassan",
+            "Ahmad",
             true);
 
         var (result, events) = await handler.Handle(
@@ -60,6 +62,8 @@ public class CreateDriverHandlerTests
             Factory.CreatePoint(new Coordinate(1, 1)),
             9,
             "h3-1",
+            "Ahmad Hassan",
+            "Ahmad",
             true);
 
         var (result, events) = await handler.Handle(

@@ -26,6 +26,8 @@ public class DriverRepositoryTests : BaseIntegrationTest
             location ?? Damascus,
             districtId,
             DateTime.UtcNow,
+            "Ahmad Hassan",
+            "Ahmad",
             isActive);
 
         result.IsSuccess.Should().BeTrue();

@@ -62,4 +62,77 @@ public sealed class DriverReadService : IDriverReadService
 
     public async Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
         => await _context.Set<Driver>().FirstOrDefaultAsync(d => d.DriverId == id, ct);
+
+    public async Task<GetDriversResponse> GetAllAsync(
+        string? cursor, string? districtId, string? status, int pageSize, CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // Derive status from deliveries:
+        //   IsActive = false              → "offline"
+        //   has anomalous delivery        → "stalled"
+        //   has in-transit delivery       → "in-transit"
+        //   otherwise                     → "available"
+        const string sql = """
+            SELECT
+                d."DriverId",
+                d."Name",
+                d."ShortName",
+                ST_Y(d."Location") AS "Lat",
+                ST_X(d."Location") AS "Lng",
+                d."DistrictId",
+                CASE
+                    WHEN d."IsActive" = false                                  THEN 'offline'
+                    WHEN COUNT(del."DeliveryId") FILTER (WHERE del."AnomalyFlag" = true AND del."Status" NOT IN (4,5)) > 0
+                                                                               THEN 'stalled'
+                    WHEN COUNT(del."DeliveryId") FILTER (WHERE del."Status" = 3) > 0
+                                                                               THEN 'in-transit'
+                    ELSE 'available'
+                END AS "Status",
+                COUNT(del."DeliveryId") FILTER (WHERE del."Status" NOT IN (4,5)) AS "ActiveDeliveries",
+                COUNT(del."DeliveryId") FILTER (
+                    WHERE del."Status" = 4
+                    AND del."DeliveredAt" >= CURRENT_DATE
+                    AND del."DeliveredAt" < CURRENT_DATE + INTERVAL '1 day'
+                ) AS "CompletedToday",
+                BOOL_OR(del."AnomalyFlag" AND del."Status" NOT IN (4,5)) AS "HasAnomaly",
+                MAX(CASE WHEN del."AnomalyFlag" = true AND del."Status" NOT IN (4,5) THEN del."AnomalyReason" END) AS "AnomalyReason"
+            FROM "Drivers" d
+            LEFT JOIN "Deliveries" del ON del."AssignedDriverId" = d."DriverId"
+            WHERE (@DistrictId IS NULL OR d."DistrictId" = @DistrictId)
+              AND (@Cursor IS NULL OR d."DriverId"::text > @Cursor)
+            GROUP BY d."DriverId", d."Name", d."ShortName", d."Location", d."DistrictId", d."IsActive"
+            HAVING (@Status IS NULL
+                OR (
+                    @Status = 'offline'    AND d."IsActive" = false
+                ) OR (
+                    @Status = 'stalled'    AND d."IsActive" = true
+                    AND BOOL_OR(del."AnomalyFlag" AND del."Status" NOT IN (4,5))
+                ) OR (
+                    @Status = 'in-transit' AND d."IsActive" = true
+                    AND COUNT(del."DeliveryId") FILTER (WHERE del."Status" = 3) > 0
+                ) OR (
+                    @Status = 'available'  AND d."IsActive" = true
+                    AND COUNT(del."DeliveryId") FILTER (WHERE del."Status" NOT IN (4,5) AND del."AnomalyFlag" = true) = 0
+                    AND COUNT(del."DeliveryId") FILTER (WHERE del."Status" = 3) = 0
+                )
+            )
+            ORDER BY d."DriverId"
+            LIMIT @PageSize
+            """;
+
+        var rows = (await connection.QueryAsync<DriverListItemResponse>(
+            sql,
+            new { Cursor = cursor, DistrictId = districtId, Status = status, PageSize = pageSize + 1 }))
+            .ToList();
+
+        string? nextCursor = null;
+        if (rows.Count > pageSize)
+        {
+            rows = rows.Take(pageSize).ToList();
+            nextCursor = rows[^1].DriverId;
+        }
+
+        return new GetDriversResponse(rows, nextCursor, null);
+    }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Threading.RateLimiting;
+using GridTrack.Api.Extensions;
 using GridTrack.Api.OpenApi;
 using Wolverine;
 
@@ -13,6 +14,7 @@ public static class DependencyInjection
         services.AddOpenApi();
         services.AddMyMiddlewares();
         services.AddApiSwagger();
+        services.AddClerkAuth(configuration);
 
         return services;
     }
@@ -27,32 +29,30 @@ public static class DependencyInjection
     {
         services.AddSwaggerGen(c =>
         {
-            // // 1. Add this block to define the Bearer token
-            // c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-            // {
-            //     Name = "Authorization",
-            //     Description = "Enter your Bearer token in this format: Bearer {token}",
-            //     In = ParameterLocation.Header,
-            //     Type = SecuritySchemeType.Http,
-            //     Scheme = "Bearer",
-            //     BearerFormat = "JWT"
-            // });
-            //
-            // // 2. Add this block to apply the security to all requests
-            // c.AddSecurityRequirement(new OpenApiSecurityRequirement
-            // {
-            //     {
-            //         new OpenApiSecurityScheme
-            //         {
-            //             Reference = new OpenApiReference
-            //             {
-            //                 Type = ReferenceType.SecurityScheme,
-            //                 Id = "Bearer"
-            //             }
-            //         },
-            //         new string[] { }
-            //     }
-            // });
+            c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Description = "Enter: Bearer {your Clerk JWT}",
+                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+                Scheme = "Bearer",
+                BearerFormat = "JWT"
+            });
+
+            c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+            {
+                {
+                    new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                    {
+                        Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                        {
+                            Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    Array.Empty<string>()
+                }
+            });
         });
 
         return services;

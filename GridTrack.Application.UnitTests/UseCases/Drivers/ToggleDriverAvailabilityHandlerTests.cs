@@ -104,6 +104,8 @@ public class ToggleDriverAvailabilityHandlerTests
             Factory.CreatePoint(new Coordinate(36.2, 33.5)),
             "h3-district-1",
             DateTime.UtcNow,
+            "Ahmad Hassan",
+            "Ahmad",
             isActive);
         result.Value.ClearDomainEvents();
         return result.Value;
@@ -123,6 +125,9 @@ public class ToggleDriverAvailabilityHandlerTests
 
         public Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
             => Task.FromResult(_driver);
+
+        public Task<GetDriversResponse> GetAllAsync(string? cursor, string? districtId, string? status, int pageSize, CancellationToken ct)
+            => Task.FromResult(new GetDriversResponse([], null, 0));
     }
 
     private sealed class FakeDriverRepository : IDriverRepository

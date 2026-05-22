@@ -24,7 +24,7 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
 
     private static Driver CreateDriver(bool isActive = true)
     {
-        var r = Driver.Create(Guid.NewGuid(), Damascus, "h3-analytics", DateTime.UtcNow, isActive);
+        var r = Driver.Create(Guid.NewGuid(), Damascus, "h3-analytics", DateTime.UtcNow, "Ahmad Hassan", "Ahmad", isActive);
         r.IsSuccess.Should().BeTrue();
         r.Value.ClearDomainEvents();
         return r.Value;

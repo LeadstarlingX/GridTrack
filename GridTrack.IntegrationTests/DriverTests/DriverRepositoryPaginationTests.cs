@@ -23,6 +23,8 @@ public class DriverRepositoryPaginationTests : BaseIntegrationTest
             location,
             districtId,
             DateTime.UtcNow,
+            "Ahmad Hassan",
+            "Ahmad",
             isActive);
 
         result.IsSuccess.Should().BeTrue();

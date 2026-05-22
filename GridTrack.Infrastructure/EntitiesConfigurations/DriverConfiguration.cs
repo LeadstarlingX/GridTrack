@@ -28,6 +28,14 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(d => d.Name)
+            .HasMaxLength(100)
+            .IsRequired();
+
+        builder.Property(d => d.ShortName)
+            .HasMaxLength(50)
+            .IsRequired();
+
         builder.HasIndex(d => d.IsActive);
 
         builder.HasIndex(d => d.DistrictId);

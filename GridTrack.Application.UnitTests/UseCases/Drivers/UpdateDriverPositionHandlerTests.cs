@@ -60,7 +60,7 @@ public class UpdateDriverPositionHandlerTests
 
     private static Driver CreateDriver()
     {
-        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow);
+        var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, "Ahmad Hassan", "Ahmad");
         return result.Value;
     }
 
@@ -78,6 +78,9 @@ public class UpdateDriverPositionHandlerTests
 
         public Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
             => Task.FromResult(_driver);
+
+        public Task<GetDriversResponse> GetAllAsync(string? cursor, string? districtId, string? status, int pageSize, CancellationToken ct)
+            => Task.FromResult(new GetDriversResponse([], null, 0));
     }
 
     private sealed class FakeDriverRepository : IDriverRepository

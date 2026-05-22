@@ -14,6 +14,8 @@ public sealed record CreateDriverRequest(
     Point Location,
     int H3Resolution,
     string? DistrictId,
+    string Name,
+    string ShortName,
     bool IsActive);
 
 public sealed record CreateDriverCommand(CreateDriverRequest Request);
@@ -41,6 +43,8 @@ public sealed class CreateDriverHandler
             request.Location,
             districtId,
             dateTimeProvider.UtcNow,
+            request.Name,
+            request.ShortName,
             request.IsActive);
 
         if (driverResult.IsFailure)
@@ -60,7 +64,9 @@ public sealed class CreateDriverHandler
             Location = driverResult.Value.Location,
             IsActive = driverResult.Value.IsActive,
             LastSeen = driverResult.Value.LastSeen,
-            DistrictId = driverResult.Value.DistrictId
+            DistrictId = driverResult.Value.DistrictId,
+            Name = driverResult.Value.Name,
+            ShortName = driverResult.Value.ShortName
         };
 
         return (Result.Success(dto), events);

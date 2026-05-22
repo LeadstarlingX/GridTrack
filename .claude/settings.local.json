@@ -12,7 +12,13 @@
       "Bash(dotnet run *)",
       "Read(//c/Users/Saad/.claude/projects/C--Users-Saad-source-repos-GridTrack/**)",
       "Read(//c/Users/Saad/.claude/projects/C--Users-Saad-source-repos-GridTrack/memory/**)",
-      "Bash(ls \"C:\\\\Users\\\\Saad\\\\source\\\\WebStorm\\\\GridTrack.Web\\\\api-contracts\\\\\")"
+      "Bash(ls \"C:\\\\Users\\\\Saad\\\\source\\\\WebStorm\\\\GridTrack.Web\\\\api-contracts\\\\\")",
+      "Read(//c/Users/Saad/Downloads/**)",
+      "Bash(powershell -Command \"Expand-Archive -Path 'GridTrack-handoff.zip' -DestinationPath 'GridTrack-handoff' -Force\")",
+      "Bash(Select-Object FullName)",
+      "Bash(node -e \"const k='c2FmZS1hbGJhY29yZS03Ny5jbGVyay5hY2NvdW50cy5kZXYk'; console.log\\(Buffer.from\\(k,'base64'\\).toString\\('utf8'\\)\\);\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Saad\\\\source\\\\repos\\\\GridTrack\\\\GridTrack.Infrastructure\\\\ExternalServices\")",
+      "PowerShell(cd \"C:\\\\Users\\\\Saad\\\\source\\\\repos\\\\GridTrack\"; dotnet build GridTrack.sln --no-incremental -v q 2>&1 | Where-Object { $_ -match \"error|Error\" } | Select-Object -First 20)"
     ]
   }
 }
