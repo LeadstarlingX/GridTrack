@@ -85,9 +85,9 @@ public sealed class AnomalyReadService : IAnomalyReadService
 
         var sql = $"""
                    SELECT
-                       d."DeliveryId"::text                               AS "Id",
-                       d."DeliveryId"::text                               AS "DeliveryId",
-                       COALESCE(d."AssignedDriverId"::text, '')           AS "DriverId",
+                       d."DeliveryId"                                     AS "Id",
+                       d."DeliveryId"                                     AS "DeliveryId",
+                       d."AssignedDriverId"                               AS "DriverId",
                        ''                                                 AS "DriverName",
                        'ANOMALY'                                          AS "AnomalyType",
                        COALESCE(d."AnomalyReason", '')                   AS "Reason",

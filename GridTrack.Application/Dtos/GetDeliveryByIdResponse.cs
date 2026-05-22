@@ -1,10 +1,10 @@
 namespace GridTrack.Application.Dtos;
 
 public sealed record GetDeliveryByIdResponse(
-    string Id,
+    Guid Id,
     string Status,
     string DistrictId,
-    string? AssignedDriverId,
+    Guid? AssignedDriverId,
     string? AssignedDriverName,
     int? EtaSeconds,
     DateTime CreatedAt,

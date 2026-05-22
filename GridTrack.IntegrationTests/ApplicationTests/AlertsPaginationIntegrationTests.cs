@@ -55,7 +55,7 @@ public class AlertsPaginationIntegrationTests : BaseIntegrationTest
             new GetAlertsQuery(null, null, null, null, null, PageSize: 10));
 
         result.Items.Should().HaveCount(2);
-        result.Items.Should().OnlyContain(a => !string.IsNullOrEmpty(a.Id));
+        result.Items.Should().OnlyContain(a => a.Id != Guid.Empty);
         result.Items.Should().OnlyContain(a => a.AnomalyType == "ANOMALY");
     }
 

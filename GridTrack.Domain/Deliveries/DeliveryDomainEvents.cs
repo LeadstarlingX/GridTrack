@@ -25,12 +25,16 @@ public sealed record DeliveryLocationUpdatedDomainEvent(
 
 public sealed record DeliveryCompletedDomainEvent(
     Guid DeliveryId,
-    DateTime DeliveredAt) : IDomainEvent;
+    DateTime DeliveredAt,
+    Guid? DriverId,
+    DateTime? PickedUpAt,
+    double ExpectedDurationSeconds) : IDomainEvent;
 
 public sealed record DeliveryFlaggedAnomalousDomainEvent(
     Guid DeliveryId,
     AnomalyType Type,
-    string Reason) : IDomainEvent;
+    string Reason,
+    string DistrictId) : IDomainEvent;
 
 public sealed record DeliveryCancelledDomainEvent(
     Guid DeliveryId,

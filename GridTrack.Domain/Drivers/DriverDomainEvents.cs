@@ -6,7 +6,8 @@ namespace GridTrack.Domain.Drivers;
 public sealed record DriverPositionUpdatedDomainEvent(
     Guid DriverId,
     Point Location,
-    DateTime Timestamp) : IDomainEvent;
+    DateTime Timestamp,
+    string DistrictId) : IDomainEvent;
 
 public sealed record DriverAvailabilityChangedDomainEvent(
     Guid DriverId,

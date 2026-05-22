@@ -13,7 +13,8 @@ public sealed class DeliveryFlaggedAnomalousHandler
         var integrationEvent = new DeliveryFlaggedAnomalousIntegrationEvent(
             domainEvent.DeliveryId,
             domainEvent.Type,
-            domainEvent.Reason);
+            domainEvent.Reason,
+            domainEvent.DistrictId);
 
         return integrationEvent;
     }

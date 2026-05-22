@@ -3,6 +3,7 @@ using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
 using GridTrack.Infrastructure.DbContext;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -66,6 +67,15 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                 return stub;
             });
             
+            // Replace Clerk JWT with a simple test handler so HTTP-level auth tests work
+            // without real Clerk tokens. Wolverine InvokeAsync tests are unaffected.
+            services.AddAuthentication(o =>
+            {
+                o.DefaultAuthenticateScheme = "Test";
+                o.DefaultChallengeScheme    = "Test";
+            })
+            .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
+
             services.Configure<DbContextOptionsBuilder>(options =>
             {
                 var descriptor = services.FirstOrDefault(

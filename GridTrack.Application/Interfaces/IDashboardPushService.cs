@@ -8,4 +8,8 @@ public interface IDashboardPushService
     Task BroadcastDeliveryUpdateAsync(string districtId, DeliveryDto payload, CancellationToken ct);
     Task BroadcastAnomalyAsync(string districtId, AnomalyAlertDto payload, CancellationToken ct);
     Task BroadcastForecastOverlayAsync(string districtId, ForecastDto payload, CancellationToken ct);
+
+    // Called by inbound Python result handlers
+    Task BroadcastUrgencyUpdateAsync(Guid deliveryId, int urgencyScore, string aiNote, CancellationToken ct);
+    Task BroadcastForecastResultAsync(string districtId, int expectedDeliveries, double staffingRatio, string label, string color, CancellationToken ct);
 }

@@ -5,6 +5,7 @@
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
         <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" />
         <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+        <PackageReference Include="WolverineFx.RabbitMQ" />
     </ItemGroup>
 
     <ItemGroup>

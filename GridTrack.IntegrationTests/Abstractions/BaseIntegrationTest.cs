@@ -2,6 +2,7 @@ using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.Drivers;
+using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,7 +35,7 @@ public abstract class BaseIntegrationTest
         using var connection = connectionFactory.CreateConnection();
 
         const string sql = """
-                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District"
+                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District", delivery_routes
                            RESTART IDENTITY CASCADE;
                            """;
 
@@ -65,6 +66,14 @@ public abstract class BaseIntegrationTest
         => SeedAsync(ctx =>
         {
             ctx.Set<Driver>().AddRange(drivers);
+            return Task.CompletedTask;
+        }, ct);
+
+    protected static Task SeedDeliveryRoutesAsync(IEnumerable<DeliveryRoute> routes,
+        CancellationToken ct = default)
+        => SeedAsync(ctx =>
+        {
+            ctx.Set<DeliveryRoute>().AddRange(routes);
             return Task.CompletedTask;
         }, ct);
 }

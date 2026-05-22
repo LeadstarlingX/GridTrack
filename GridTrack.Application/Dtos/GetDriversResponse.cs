@@ -1,15 +1,15 @@
 namespace GridTrack.Application.Dtos;
 
 public sealed record DriverListItemResponse(
-    string DriverId,
+    Guid DriverId,
     string Name,
     string ShortName,
     double Lat,
     double Lng,
     string DistrictId,
     string Status,
-    int ActiveDeliveries,
-    int CompletedToday,
+    long ActiveDeliveries,
+    long CompletedToday,
     bool HasAnomaly,
     string? AnomalyReason);
 

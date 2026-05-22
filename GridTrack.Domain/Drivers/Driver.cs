@@ -72,7 +72,7 @@ public sealed class Driver : BaseEntity
 
 		Location = newLocation;
 		LastSeen = timestamp;
-		RaiseDomainEvent(new DriverPositionUpdatedDomainEvent(DriverId, newLocation, timestamp));
+		RaiseDomainEvent(new DriverPositionUpdatedDomainEvent(DriverId, newLocation, timestamp, DistrictId));
 		return Result.Success();
 	}
 

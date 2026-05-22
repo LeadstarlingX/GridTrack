@@ -5,6 +5,7 @@ using GridTrack.Application.UseCases.Common;
 using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.ValueObjects;
+using GridTrack.Infrastructure.Data;
 using GridTrack.IntegrationTests.Abstractions;
 using NetTopologySuite.Geometries;
 
@@ -201,7 +202,7 @@ public class DeliveryHandlerIntegrationTests : BaseIntegrationTest
         var response = await InvokeAsync<GetDeliveryByIdResponse?>(new GetDeliveryByIdQuery(deliveryId));
 
         response.Should().NotBeNull();
-        response!.Id.Should().Be(deliveryId.ToString());
+        response!.Id.Should().Be(deliveryId);
         response.DistrictId.Should().Be("h3-test-district");
     }
 
@@ -236,5 +237,46 @@ public class DeliveryHandlerIntegrationTests : BaseIntegrationTest
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().HaveCount(1);
         result.Value.First().DeliveryId.Should().Be(delivery1Id);
+    }
+
+    [Test]
+    [NotInParallel(Order = 211)]
+    public async Task GetDeliveryRouteQuery_Returns_Empty_When_No_Waypoints()
+    {
+        await ResetDatabaseAsync();
+
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var result = await InvokeAsync<IEnumerable<RouteWaypointDto>>(
+            new GetDeliveryRouteQuery(deliveryId));
+
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    [NotInParallel(Order = 212)]
+    public async Task GetDeliveryRouteQuery_Returns_Waypoints_When_Route_Seeded()
+    {
+        await ResetDatabaseAsync();
+
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var routes = new[]
+        {
+            new DeliveryRoute { DeliveryId = deliveryId, Sequence = 1, Lat = 33.51, Lng = 36.27 },
+            new DeliveryRoute { DeliveryId = deliveryId, Sequence = 2, Lat = 33.52, Lng = 36.28 },
+        };
+        await SeedDeliveryRoutesAsync(routes);
+
+        var result = (await InvokeAsync<IEnumerable<RouteWaypointDto>>(
+            new GetDeliveryRouteQuery(deliveryId))).ToList();
+
+        result.Should().HaveCount(2);
+        result[0].Lat.Should().BeApproximately(33.51, 0.0001);
+        result[1].Lat.Should().BeApproximately(33.52, 0.0001);
     }
 }

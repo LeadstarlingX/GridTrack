@@ -178,7 +178,11 @@ public sealed class Delivery : BaseEntity
 
 		DeliveredAt = timestamp;
 		ActualEta = timestamp;
-		RaiseDomainEvent(new DeliveryCompletedDomainEvent(DeliveryId, timestamp));
+		var expectedSecs = ExpectedEta.HasValue
+			? (ExpectedEta.Value - CreatedAt).TotalSeconds
+			: 0;
+		RaiseDomainEvent(new DeliveryCompletedDomainEvent(
+			DeliveryId, timestamp, AssignedDriverId, PickedUpAt, expectedSecs));
 		return Result.Success();
 	}
 
@@ -197,7 +201,7 @@ public sealed class Delivery : BaseEntity
 
 		AnomalyFlag = true;
 		AnomalyReason = reason;
-		RaiseDomainEvent(new DeliveryFlaggedAnomalousDomainEvent(DeliveryId, type, reason));
+		RaiseDomainEvent(new DeliveryFlaggedAnomalousDomainEvent(DeliveryId, type, reason, DistrictId));
 		return Result.Success();
 	}
 

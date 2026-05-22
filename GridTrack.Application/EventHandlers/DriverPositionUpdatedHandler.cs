@@ -13,7 +13,8 @@ public sealed class DriverPositionUpdatedHandler
         var integrationEvent = new DriverPositionUpdatedIntegrationEvent(
             domainEvent.DriverId,
             domainEvent.Location,
-            domainEvent.Timestamp);
+            domainEvent.Timestamp,
+            domainEvent.DistrictId);
 
         return integrationEvent;
     }

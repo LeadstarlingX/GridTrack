@@ -17,12 +17,14 @@ public sealed record DeliveryLocationUpdatedIntegrationEvent(
 public sealed record DeliveryFlaggedAnomalousIntegrationEvent(
     Guid DeliveryId,
     AnomalyType Type,
-    string Reason) : IDomainEvent;
+    string Reason,
+    string DistrictId) : IDomainEvent;
 
 public sealed record DriverPositionUpdatedIntegrationEvent(
     Guid DriverId,
     Point Location,
-    DateTime Timestamp) : IDomainEvent;
+    DateTime Timestamp,
+    string DistrictId) : IDomainEvent;
 
 public sealed record DriverAvailabilityChangedIntegrationEvent(
     Guid DriverId,

@@ -1,9 +1,9 @@
 namespace GridTrack.Application.Dtos;
 
 public sealed record AnomalyAlertItemResponse(
-    string Id,
-    string DeliveryId,
-    string DriverId,
+    Guid Id,
+    Guid DeliveryId,
+    Guid? DriverId,
     string DriverName,
     string AnomalyType,
     string Reason,

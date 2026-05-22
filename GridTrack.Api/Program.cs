@@ -1,5 +1,7 @@
 
+using GridTrack.Application.IntegrationEvents;
 using Wolverine;
+using Wolverine.RabbitMQ;
 
 namespace GridTrack.Api;
 
@@ -16,9 +18,34 @@ public partial class Program
     {
         return Host.CreateDefaultBuilder(args)
             .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); })
-            .UseWolverine(options =>
+            .UseWolverine((ctx, opts) =>
             {
-                options.Discovery.IncludeAssembly(typeof(Application.DependencyInjection).Assembly);
+                opts.Discovery.IncludeAssembly(typeof(Application.DependencyInjection).Assembly);
+
+                var rabbit = ctx.Configuration.GetConnectionString("RabbitMq");
+
+                if (!string.IsNullOrWhiteSpace(rabbit))
+                {
+                    opts.UseRabbitMq(new Uri(rabbit))
+                        .AutoProvision();
+
+                    // ── Outbound: .NET → Python ─────────────────────────────
+                    opts.PublishMessage<DeliveryAnomalyIntegrationEvent>()
+                        .ToRabbitExchange("gridtrack.anomaly",
+                            e => e.ExchangeType = ExchangeType.Fanout);
+
+                    opts.PublishMessage<DriverPositionIntegrationEvent>()
+                        .ToRabbitExchange("gridtrack.positions",
+                            e => e.ExchangeType = ExchangeType.Fanout);
+
+                    opts.PublishMessage<DeliveryCompletedIntegrationEvent>()
+                        .ToRabbitExchange("gridtrack.completions",
+                            e => e.ExchangeType = ExchangeType.Fanout);
+
+                    // ── Inbound: Python → .NET ───────────────────────────────
+                    opts.ListenToRabbitQueue("gridtrack.urgency-results");
+                    opts.ListenToRabbitQueue("gridtrack.forecast-results");
+                }
             });
     }
 }

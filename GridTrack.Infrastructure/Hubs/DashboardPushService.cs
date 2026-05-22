@@ -60,4 +60,18 @@ internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDas
                 updatedAt = payload.GeneratedAt
             },
             ct);
+
+    public Task BroadcastUrgencyUpdateAsync(Guid deliveryId, int urgencyScore, string aiNote, CancellationToken ct)
+        => hub.Clients.All.SendAsync(
+            "UrgencyUpdated",
+            new { deliveryId, urgencyScore, aiNote },
+            ct);
+
+    public Task BroadcastForecastResultAsync(
+        string districtId, int expectedDeliveries, double staffingRatio,
+        string label, string color, CancellationToken ct)
+        => hub.Clients.Group(districtId).SendAsync(
+            "ForecastOverlayUpdated",
+            new { districtId, expectedDeliveries, staffingRatio, label, color },
+            ct);
 }

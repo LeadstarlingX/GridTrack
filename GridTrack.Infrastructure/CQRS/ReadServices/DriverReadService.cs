@@ -130,7 +130,7 @@ public sealed class DriverReadService : IDriverReadService
         if (rows.Count > pageSize)
         {
             rows = rows.Take(pageSize).ToList();
-            nextCursor = rows[^1].DriverId;
+            nextCursor = rows[^1].DriverId.ToString();
         }
 
         return new GetDriversResponse(rows, nextCursor, null);

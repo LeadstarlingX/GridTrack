@@ -136,4 +136,31 @@ public class DriverRepositoryTests : BaseIntegrationTest
         retrieved.Location.Y.Should().BeApproximately(NearPoint.Y, precision: 0.0001);
         retrieved.LastSeen.Should().BeCloseTo(updatedAt, precision: TimeSpan.FromSeconds(1));
     }
+
+    [Test]
+    [NotInParallel(Order = 34)]
+    public async Task AddAsync_Should_Persist_Name_And_ShortName()
+    {
+        await ResetDatabaseAsync();
+
+        var driver = Driver.Create(
+            Guid.NewGuid(), Damascus, "h3-district-01",
+            DateTime.UtcNow, "Ahmad Hassan", "Ahmad", true).Value;
+        driver.ClearDomainEvents();
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var repository = sp.GetRequiredService<IDriverRepository>();
+        var unitOfWork  = sp.GetRequiredService<IUnitOfWork>();
+        var readService = sp.GetRequiredService<IDriverReadService>();
+
+        await repository.AddAsync(driver, CancellationToken.None);
+        await unitOfWork.SaveChangesAsync();
+
+        var retrieved = await readService.GetAggregateByIdAsync(driver.DriverId, CancellationToken.None);
+
+        retrieved.Should().NotBeNull();
+        retrieved!.Name.Should().Be("Ahmad Hassan");
+        retrieved.ShortName.Should().Be("Ahmad");
+    }
 }

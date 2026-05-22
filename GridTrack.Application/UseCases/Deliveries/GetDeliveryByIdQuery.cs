@@ -20,10 +20,10 @@ public sealed class GetDeliveryByIdHandler
         var updatedAt = delivery.DeliveredAt ?? delivery.PickedUpAt ?? delivery.CancelledAt;
 
         return new GetDeliveryByIdResponse(
-            delivery.DeliveryId.ToString(),
+            delivery.DeliveryId,
             delivery.Status.ToString(),
             delivery.DistrictId,
-            delivery.AssignedDriverId?.ToString(),
+            delivery.AssignedDriverId,
             AssignedDriverName: null,
             EtaSeconds: null,
             delivery.CreatedAt,

@@ -3,6 +3,9 @@ using GridTrack.Application.Dtos;
 using GridTrack.Application.UseCases.Common;
 using GridTrack.Application.UseCases.Drivers;
 using GridTrack.Domain.Abstractions;
+using GridTrack.Domain.Deliveries;
+using GridTrack.Domain.Drivers;
+using GridTrack.Domain.ValueObjects;
 using GridTrack.IntegrationTests.Abstractions;
 using NetTopologySuite.Geometries;
 
@@ -108,5 +111,55 @@ public class DriverHandlerIntegrationTests : BaseIntegrationTest
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().HaveCount(1);
         result.Value.First().DriverId.Should().Be(district1DriverId);
+    }
+
+    [Test]
+    [NotInParallel(Order = 107)]
+    public async Task GetDriversQuery_Returns_Drivers_With_Status_And_Pagination()
+    {
+        await ResetDatabaseAsync();
+
+        var geoFactory = new GeometryFactory(new PrecisionModel(), 4326);
+        var location = geoFactory.CreatePoint(new Coordinate(36.2765, 33.5138));
+
+        var drivers = Enumerable.Range(1, 4)
+            .Select(i => Driver.Create(Guid.NewGuid(), location, "mezzeh", DateTime.UtcNow, $"Driver {i}", $"D{i}", true).Value)
+            .ToList();
+        foreach (var d in drivers) d.ClearDomainEvents();
+        await SeedDriversAsync(drivers);
+
+        var page1 = await InvokeAsync<GetDriversResponse>(
+            new GetDriversQuery(null, null, null, 3));
+
+        page1.Items.Should().HaveCount(3);
+        page1.NextCursor.Should().NotBeNull();
+
+        var page2 = await InvokeAsync<GetDriversResponse>(
+            new GetDriversQuery(page1.NextCursor, null, null, 3));
+
+        page2.Items.Should().HaveCount(1);
+        page2.NextCursor.Should().BeNull();
+    }
+
+    [Test]
+    [NotInParallel(Order = 108)]
+    public async Task GetDriversQuery_Filters_By_Status()
+    {
+        await ResetDatabaseAsync();
+
+        var geoFactory = new GeometryFactory(new PrecisionModel(), 4326);
+        var location = geoFactory.CreatePoint(new Coordinate(36.2765, 33.5138));
+
+        var active  = Driver.Create(Guid.NewGuid(), location, "mezzeh", DateTime.UtcNow, "Active Driver",  "AD", true).Value;
+        var offline = Driver.Create(Guid.NewGuid(), location, "mezzeh", DateTime.UtcNow, "Offline Driver", "OD", false).Value;
+        active.ClearDomainEvents();
+        offline.ClearDomainEvents();
+        await SeedDriversAsync([active, offline]);
+
+        var result = await InvokeAsync<GetDriversResponse>(
+            new GetDriversQuery(null, null, "offline", 10));
+
+        result.Items.Should().HaveCount(1);
+        result.Items[0].Status.Should().Be("offline");
     }
 }
