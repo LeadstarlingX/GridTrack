@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GridTrack.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260521205123_Initial_Migration")]
+    [Migration("20260521225536_Initial_Migration")]
     partial class Initial_Migration
     {
         /// <inheritdoc />
@@ -56,7 +56,7 @@ namespace GridTrack.Infrastructure.Migrations
 
                     b.Property<Point>("CurrentLocation")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.Property<DateTime?>("DeliveredAt")
                         .HasColumnType("timestamp with time zone");
@@ -107,7 +107,7 @@ namespace GridTrack.Infrastructure.Migrations
 
                     b.Property<Point>("Location")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.HasKey("DriverId");
 
@@ -126,11 +126,11 @@ namespace GridTrack.Infrastructure.Migrations
 
                     b.Property<Polygon>("BoundaryPolygon")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.Property<Point>("CenterPoint")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.Property<int>("Resolution")
                         .HasColumnType("integer");

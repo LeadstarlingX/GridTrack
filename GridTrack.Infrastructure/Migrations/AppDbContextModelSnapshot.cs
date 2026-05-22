@@ -53,7 +53,7 @@ namespace GridTrack.Infrastructure.Migrations
 
                     b.Property<Point>("CurrentLocation")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.Property<DateTime?>("DeliveredAt")
                         .HasColumnType("timestamp with time zone");
@@ -104,7 +104,7 @@ namespace GridTrack.Infrastructure.Migrations
 
                     b.Property<Point>("Location")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.HasKey("DriverId");
 
@@ -123,11 +123,11 @@ namespace GridTrack.Infrastructure.Migrations
 
                     b.Property<Polygon>("BoundaryPolygon")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.Property<Point>("CenterPoint")
                         .IsRequired()
-                        .HasColumnType("geography (point)");
+                        .HasColumnType("geometry (point)");
 
                     b.Property<int>("Resolution")
                         .HasColumnType("integer");

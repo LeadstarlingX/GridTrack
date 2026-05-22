@@ -3,11 +3,13 @@ using Dapper;
 using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
+using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Caching;
 using GridTrack.Infrastructure.Clock;
+using GridTrack.Infrastructure.CQRS.ReadServices;
 using GridTrack.Infrastructure.CQRS.Respositories;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
@@ -28,16 +30,19 @@ public static class DependencyInjection
     {
         services.AddTransient<IDateTimeProvider, DateTimeProvider>();
         services.AddSingleton<IH3GridService, H3GridService>();
+    
 
         AddPersistence(services, configuration);
         AddCaching(services, configuration);
-        AddSignalR(services);
+        AddMySignalR(services);
         AddApiVersioning(services);
-
+        
+        
+        
         return services;
     }
     
-    private static void AddPersistence(IServiceCollection services, IConfiguration configuration)
+    private static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
      
         var connectionString = configuration.GetConnectionString("DefaultConnection") ??
@@ -49,6 +54,14 @@ public static class DependencyInjection
         
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
+        
+        // Register Read Services
+        services.AddScoped<IAnomalyReadService, AnomalyReadService>();
+        services.AddScoped<IDeliveryReadService, DeliveryReadService>();
+        services.AddScoped<IDriverReadService, DriverReadService>();
+        services.AddScoped<IForecastReadService, ForecastReadService>();
+        services.AddScoped<IHeatmapReadService, HeatmapReadService>();
+        
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 
@@ -57,9 +70,12 @@ public static class DependencyInjection
         
 
         SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
+        SqlMapper.AddTypeHandler(new PointTypeHandler());
+
+        return services;
     }
     
-    private static void AddCaching(IServiceCollection services, IConfiguration configuration)
+    private static IServiceCollection AddCaching(this IServiceCollection services, IConfiguration configuration)
     {
         string connectionString = configuration.GetConnectionString("Cache") ??
                                   throw new ArgumentNullException(nameof(configuration));
@@ -72,15 +88,20 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<ICacheService, CacheService>();
+
+        return services;
     }
     
-    private static void AddSignalR(IServiceCollection services)
+    private static IServiceCollection AddMySignalR(this IServiceCollection services)
     {
         services.AddSignalR();
         services.AddScoped<IDashboardPushService, DashboardPushService>();
+        
+
+        return services;
     }
 
-    private static void AddApiVersioning(IServiceCollection services)
+    private static IServiceCollection AddApiVersioning(this IServiceCollection services)
     {
         services
             .AddApiVersioning(options =>
@@ -95,6 +116,8 @@ public static class DependencyInjection
                 options.GroupNameFormat = "'v'V";
                 options.SubstituteApiVersionInUrl = true;
             });
+
+        return services;
     }
     
 }

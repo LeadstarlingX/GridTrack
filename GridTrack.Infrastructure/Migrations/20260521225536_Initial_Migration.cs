@@ -20,7 +20,7 @@ namespace GridTrack.Infrastructure.Migrations
                 columns: table => new
                 {
                     DeliveryId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CurrentLocation = table.Column<Point>(type: "geography (point)", nullable: false),
+                    CurrentLocation = table.Column<Point>(type: "geometry (point)", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     AssignedDriverId = table.Column<Guid>(type: "uuid", nullable: true),
                     ExpectedEta = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -43,7 +43,7 @@ namespace GridTrack.Infrastructure.Migrations
                 columns: table => new
                 {
                     DriverId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Location = table.Column<Point>(type: "geography (point)", nullable: false),
+                    Location = table.Column<Point>(type: "geometry (point)", nullable: false),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     LastSeen = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     DistrictId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false)
@@ -58,8 +58,8 @@ namespace GridTrack.Infrastructure.Migrations
                 columns: table => new
                 {
                     H3Index = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    CenterPoint = table.Column<Point>(type: "geography (point)", nullable: false),
-                    BoundaryPolygon = table.Column<Polygon>(type: "geography (point)", nullable: false),
+                    CenterPoint = table.Column<Point>(type: "geometry (point)", nullable: false),
+                    BoundaryPolygon = table.Column<Polygon>(type: "geometry (point)", nullable: false),
                     Resolution = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>

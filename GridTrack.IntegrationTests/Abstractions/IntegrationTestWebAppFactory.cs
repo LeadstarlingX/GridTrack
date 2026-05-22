@@ -1,12 +1,14 @@
 ﻿using GridTrack.Api;
 using GridTrack.Application.Abstractions.Clock;
+using GridTrack.Infrastructure.DbContext;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
-using Testcontainers.MsSql;
+using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using TUnit.Core.Interfaces;
 
@@ -14,13 +16,11 @@ namespace GridTrack.IntegrationTests.Abstractions;
 
 public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsyncInitializer
 {
-    // Obsolete constructors will be removed in future versions, keep the parameter constructor
-    //  it's enough to pass the image.
     
     public readonly IDateTimeProvider DateTimeProviderMock = Substitute.For<IDateTimeProvider>();
 
-    private readonly MsSqlContainer _dbContainer =
-        new MsSqlBuilder("postgis/postgis:18-3.6")
+    private readonly PostgreSqlContainer _dbContainer =
+        new PostgreSqlBuilder("postgis/postgis:18-3.6")
             .WithPassword("postgres")
             .Build();
 
@@ -35,7 +35,6 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
         await _dbContainer.StartAsync();
         await _redisContainer.StartAsync();
 
-        // Force the host to start and apply migrations before any tests run
         using var _ = CreateClient();
     }
 
@@ -52,6 +51,26 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                 mock.UtcNow.Returns(_ => DateTime.UtcNow);
                 return mock;
             });
+            
+            services.Configure<DbContextOptionsBuilder>(options =>
+            {
+                var descriptor = services.FirstOrDefault(
+                    d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            
+                if (descriptor != null)
+                {
+                    services.Remove(descriptor);
+                }
+            
+                services.AddDbContext<AppDbContext>((sp, opt) =>
+                {
+                    opt.UseNpgsql(
+                        _dbContainer.GetConnectionString(),
+                        x => x.UseNetTopologySuite());
+                    opt.EnableSensitiveDataLogging();
+                });
+            });
+            
         });
         
         Environment.SetEnvironmentVariable("ConnectionStrings:DefaultConnection", _dbContainer.GetConnectionString());

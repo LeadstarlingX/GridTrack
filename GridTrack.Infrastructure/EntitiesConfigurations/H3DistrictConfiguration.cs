@@ -15,11 +15,11 @@ public sealed class H3DistrictConfiguration : IEntityTypeConfiguration<H3Distric
             .IsRequired();
 
         builder.Property(h => h.CenterPoint)
-            .HasColumnType("geography (point)")
+            .HasColumnType("geometry (point)")
             .IsRequired();
 
         builder.Property(h => h.BoundaryPolygon)
-            .HasColumnType("geography (point)")
+            .HasColumnType("geometry (point)")
             .IsRequired();
 
         builder.Property(h => h.Resolution)

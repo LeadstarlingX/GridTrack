@@ -10,17 +10,14 @@
         <PackageReference Include="TUnit" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
         <PackageReference Include="Bogus"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite"/>
         <PackageReference Include="Testcontainers.Redis"/>
-        <PackageReference Include="Testcontainers.MsSql"/>
+        <PackageReference Include="Testcontainers.PostgreSql"/>
         <PackageReference Include="NSubstitute"/>
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\GridTrack.Api\GridTrack.Api.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="DeliveryTests\" />
     </ItemGroup>
     
     
