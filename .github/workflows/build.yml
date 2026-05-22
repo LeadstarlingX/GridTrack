@@ -1,179 +1,67 @@
-version: '3'
+name: .NET CI/CD Pipeline
 
-vars:
-  IMAGE_NAME: gridtrack.api
-  IMAGE_TAG: latest
-  APP_LABEL: gridtrack-api
-  COVERAGE_DIR: ./TestResults/Coverage
-  REPORT_DIR: ./TestResults/CoverageReport
+on:
+  push:
+    branches: [ "master", "development" ]
+  pull_request:
+    branches: [ "master", "development" ]
 
-tasks:
-  # ============================================
-  # BUILD TASKS
-  # ============================================
-  
-  restore:
-    desc: Restore .NET dependencies
-    cmds:
-      - dotnet restore
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-  build:
-    desc: Build .NET application
-    deps: [restore]
-    cmds:
-      - dotnet build --no-restore --configuration Release
+jobs:
+  # ----------------------------------------------------------------
+  # JOB 1: Build & Test (CI - Continuous Integration)
+  # ----------------------------------------------------------------
+  build-and-test:
+    runs-on: ubuntu-latest
 
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
 
-  # ============================================
-  # TEST TASKS (no coverage)
-  # ============================================
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
 
-  test-architecture:
-    desc: Run architecture tests
-    deps: [build]
-    cmds:
-      - dotnet run --project ./GridTrack.ArchitectureTests/GridTrack.ArchitectureTests.csproj --configuration Release -- --report-trx --report-trx-filename architecture-test-results.trx --results-directory ./TestResults/Architecture
+      - name: Install Taskfile CLI
+        run: |
+          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
-  test-domain:
-    desc: Run domain unit tests
-    cmds:
-      - dotnet run --project ./GridTrack.Domain.UnitTests/GridTrack.Domain.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename domain-unit-test-results.trx --results-directory ./TestResults/DomainUnit
-  
-  test-namingconventions:
-    desc: Run naming convention tests
-    cmds:
-      - dotnet run --project ./GridTrack.NamingConventions/GridTrack.NamingConventions.csproj --configuration Release -- --report-trx --report-trx-filename naming-test-results.trx --results-directory ./TestResults/NamingConventions
-  
-  test-application:
-    desc: Run application unit tests
-    cmds:
-      - dotnet run --project ./GridTrack.Application.UnitTests/GridTrack.Application.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename application-unit-test-results.trx --results-directory ./TestResults/ApplicationUnit
-  
-  test-infrastructure-unit:
-    desc: Run infrastructure unit tests
-    cmds:
-      - dotnet run --project ./GridTrack.Infrastructure.UnitTests/GridTrack.Infrastructure.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename infrastructure-unit-test-results.trx --results-directory ./TestResults/InfrastructureUnit
-  
-  test-integration:
-    desc: Run integration  tests
-    cmds:
-      - dotnet run --project ./GridTrack.IntegrationTests/GridTrack.IntegrationTests.csproj --configuration Release -- --report-trx --report-trx-filename integration-test-results.trx --results-directory ./TestResults/Integration
+      - name: Install coverage tools
+        run: |
+          dotnet tool install --global dotnet-coverage
+          dotnet tool install --global dotnet-reportgenerator-globaltool
 
-  test-all:
-    desc: Run all tests
-    deps: [ test-architecture, test-domain, test-namingconventions, test-application, test-infrastructure-unit, test-integration ]
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+      - name: Run CI Pipeline
+        run: task ci
 
-  # ============================================
-  # COVERAGE TASKS
-  # ============================================
-  
-  coverage-domain:
-    desc: Domain unit tests with coverage
-    cmds:
-      - mkdir -p {{.COVERAGE_DIR}}
-      - dotnet-coverage collect
-        "dotnet run --project ./GridTrack.Domain.UnitTests/GridTrack.Domain.UnitTests.csproj --configuration Release --no-build"
-        -f xml -o {{.COVERAGE_DIR}}/domain.xml
-  
-  coverage-application:
-    desc: Application unit tests with coverage
-    cmds:
-      - mkdir -p {{.COVERAGE_DIR}}
-      - dotnet-coverage collect
-        "dotnet run --project ./GridTrack.Application.UnitTests/GridTrack.Application.UnitTests.csproj --configuration Release --no-build"
-        -f xml -o {{.COVERAGE_DIR}}/application.xml
-  
-  coverage-infrastructure:
-    desc: Infrastructure unit tests with coverage
-    cmds:
-      - mkdir -p {{.COVERAGE_DIR}}
-      - dotnet-coverage collect
-        "dotnet run --project ./GridTrack.Infrastructure.UnitTests/GridTrack.Infrastructure.UnitTests.csproj --configuration Release --no-build"
-        -f xml -o {{.COVERAGE_DIR}}/infrastructure.xml
-  
-  
-  coverage-integration:
-    desc: Integration tests with coverage (requires Docker)
-    cmds:
-      - mkdir -p {{.COVERAGE_DIR}}
-      - dotnet-coverage collect
-        "dotnet run --project ./GridTrack.IntegrationTests/GridTrack.IntegrationTests.csproj --configuration Release --no-build"
-        -f xml -o {{.COVERAGE_DIR}}/integration.xml
-        --include "[GridTrack.Api]*,[GridTrack.Application]*,[GridTrack.Infrastructure]*,[GridTrack.Domain]*"
-        --exclude "[xunit*]*,[TUnit*]*,[Testcontainers*]*,[*]IntegrationTests.*"
-  
-  coverage-report:
-    desc: Merge coverage files and generate HTML + summary report
-    cmds:
-      - dotnet-coverage merge {{.COVERAGE_DIR}}/*.xml -f xml -o {{.COVERAGE_DIR}}/merged.xml
-      - reportgenerator
-        -reports:"{{.COVERAGE_DIR}}/merged.xml"
-        -targetdir:"{{.REPORT_DIR}}"
-        -reporttypes:"Html;Cobertura;MarkdownSummaryGithub"
-        -title:"GridTrack Coverage"
-        -assemblyfilters:"+GridTrack.*"
-  
-  coverage:
-    desc: Run all tests with coverage then generate report
-    cmds:
-      - task: coverage-domain
-      - task: coverage-application
-      - task: coverage-infrastructure
-#      - task: coverage-integration
-      - task: coverage-report
+      - name: Post coverage summary
+        if: always()
+        run: |
+          if [ -f ./TestResults/CoverageReport/SummaryGithub.md ]; then
+            cat ./TestResults/CoverageReport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+          fi
 
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./TestResults/CoverageReport/
 
-
-  # ============================================
-  # DOCKER COMPOSE TASKS
-  # ============================================
-
-  compose-up:
-    desc: Start services with Docker Compose
-    cmds:
-      - docker compose up -d --wait
-
-  compose-down:
-    desc: Stop Docker Compose services
-    cmds:
-      - docker compose down -v
-
-  compose-logs:
-    desc: Show Docker Compose logs
-    cmds:
-      - docker compose logs -f
-
-  # ============================================
-  # PIPELINE TASKS (Complete Workflows)
-  # ============================================
-
-  ci:
-    desc: Run CI pipeline (build + tests)
-    cmds:
-      - task: build
-      - task: coverage
-      - task: test-integration
-
-  cd-compose:
-    desc: Deploy with Docker Compose
-    cmds:
-      - task: compose-down
-      - task: compose-up
-      - echo "✅ Services started! API available at http://localhost:8000"
-
-
-  # ============================================
-  # UTILITY TASKS
-  # ============================================
-
-  clean:
-    desc: Clean all resources
-    cmds:
-      - task: compose-down
-      - dotnet clean
-      - rm -rf ./TestResults
-
-  help:
-    desc: Show available tasks
-    cmds:
-      - task --list
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults/
