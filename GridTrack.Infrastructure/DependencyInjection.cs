@@ -58,8 +58,11 @@ public static class DependencyInjection
         
         // Register Read Services
         services.AddScoped<IAnomalyReadService, AnomalyReadService>();
+        services.AddScoped<IAnalyticsReadService, AnalyticsReadService>();
         services.AddScoped<IDeliveryReadService, DeliveryReadService>();
+        services.AddScoped<IDistrictReadService, DistrictReadService>();
         services.AddScoped<IDriverReadService, DriverReadService>();
+        services.AddScoped<IExportReadService, ExportReadService>();
         services.AddScoped<IForecastReadService, ForecastReadService>();
         services.AddScoped<IHeatmapReadService, HeatmapReadService>();
         

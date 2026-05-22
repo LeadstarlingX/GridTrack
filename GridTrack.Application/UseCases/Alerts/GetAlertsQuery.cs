@@ -1,3 +1,4 @@
+using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
 
 namespace GridTrack.Application.UseCases.Alerts;
@@ -12,6 +13,16 @@ public sealed record GetAlertsQuery(
 
 public sealed class GetAlertsHandler
 {
-    public Task<GetAlertsResponse> Handle(GetAlertsQuery query, CancellationToken ct)
-        => throw new NotImplementedException();
+    public Task<GetAlertsResponse> Handle(
+        GetAlertsQuery query,
+        IAnomalyReadService readService,
+        CancellationToken ct)
+        => readService.GetPaginatedAlertsAsync(
+            query.Cursor,
+            query.From,
+            query.To,
+            query.DistrictId,
+            query.AnomalyType,
+            query.PageSize,
+            ct);
 }

@@ -22,7 +22,7 @@ public sealed class ForecastReadService : IForecastReadService
                            SELECT
                                @DistrictId as "DistrictId",
                                @ForecastWindow as "ForecastWindow",
-                               COUNT(*) as "ExpectedDeliveries",
+                               COUNT(*)::int as "ExpectedDeliveries",
                                NOW() as "GeneratedAt"
                            FROM public."Deliveries"
                            WHERE "DistrictId" = @DistrictId
