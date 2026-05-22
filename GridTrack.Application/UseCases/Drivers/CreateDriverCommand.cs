@@ -1,11 +1,11 @@
 using GridTrack.Application.Abstractions.Clock;
+using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
 using System.Linq;
-using GridTrack.Application.CQRS.Repositories;
 
 namespace GridTrack.Application.UseCases.Drivers;
 
@@ -25,6 +25,7 @@ public sealed class CreateDriverHandler
         IDriverRepository repository,
         IH3GridService h3GridService,
         IDateTimeProvider dateTimeProvider,
+        IUnitOfWork unitOfWork,
         CancellationToken ct)
     {
         var request = command.Request;
@@ -48,6 +49,8 @@ public sealed class CreateDriverHandler
         }
 
         await repository.AddAsync(driverResult.Value, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+
         var events = driverResult.Value.DomainEvents.Cast<object>().ToList();
         driverResult.Value.ClearDomainEvents();
 

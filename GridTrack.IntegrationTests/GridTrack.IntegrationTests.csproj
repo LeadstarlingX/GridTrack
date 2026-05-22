@@ -10,6 +10,7 @@
         <PackageReference Include="TUnit" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
         <PackageReference Include="Bogus"/>
+        <PackageReference Include="WolverineFx" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite"/>
         <PackageReference Include="Testcontainers.Redis"/>
         <PackageReference Include="Testcontainers.PostgreSql"/>

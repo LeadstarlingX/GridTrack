@@ -1,17 +1,22 @@
-﻿using Dapper;
+using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
+using GridTrack.Domain.Deliveries;
+using GridTrack.Infrastructure.DbContext;
+using Microsoft.EntityFrameworkCore;
 
 namespace GridTrack.Infrastructure.CQRS.ReadServices;
 
 public sealed class DeliveryReadService : IDeliveryReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
+    private readonly AppDbContext _context;
 
-    public DeliveryReadService(ISqlConnectionFactory sqlConnectionFactory)
+    public DeliveryReadService(ISqlConnectionFactory sqlConnectionFactory, AppDbContext context)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
+        _context = context;
     }
 
     public async Task<DeliveryDto?> GetByIdAsync(Guid id, CancellationToken ct)
@@ -66,4 +71,7 @@ public sealed class DeliveryReadService : IDeliveryReadService
 
         return await connection.QueryAsync<DeliveryDto>(sql, new { DistrictId = districtId });
     }
+
+    public async Task<Delivery?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
+        => await _context.Set<Delivery>().FirstOrDefaultAsync(d => d.DeliveryId == id, ct);
 }

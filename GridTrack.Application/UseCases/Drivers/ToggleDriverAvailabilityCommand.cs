@@ -1,6 +1,7 @@
+using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dtos;
-using GridTrack.Application.Interfaces;
+using GridTrack.Domain.Abstractions;
 
 namespace GridTrack.Application.UseCases.Drivers;
 
@@ -15,10 +16,12 @@ public sealed class ToggleDriverAvailabilityHandler
 {
     public async Task<(DriverAvailabilityResponse? Response, IEnumerable<object> Events)> Handle(
         ToggleDriverAvailabilityCommand command,
+        IDriverReadService readService,
         IDriverRepository repository,
+        IUnitOfWork unitOfWork,
         CancellationToken ct)
     {
-        var driver = await repository.GetByIdAsync(command.DriverId, ct);
+        var driver = await readService.GetAggregateByIdAsync(command.DriverId, ct);
         if (driver is null)
             return (null, Array.Empty<object>());
 
@@ -27,6 +30,7 @@ public sealed class ToggleDriverAvailabilityHandler
             return (null, Array.Empty<object>());
 
         await repository.UpdateAsync(driver, ct);
+        await unitOfWork.SaveChangesAsync(ct);
 
         var events = driver.DomainEvents.Cast<object>().ToList();
         driver.ClearDomainEvents();

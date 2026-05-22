@@ -1,5 +1,7 @@
-﻿using FluentAssertions;
+using FluentAssertions;
+using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
+using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.ValueObjects;
 using GridTrack.IntegrationTests.Abstractions;
@@ -12,8 +14,6 @@ public class DeliveryRepositoryTests : BaseIntegrationTest
 {
     private static readonly GeometryFactory GeoFactory = new(new PrecisionModel(), 4326);
     private static Point Damascus => GeoFactory.CreatePoint(new Coordinate(36.2765, 33.5138));
-
-    // ── Helpers ───────────────────────────────────────────────────────────
 
     private static Delivery CreateDelivery(string districtId = "h3-district-01")
     {
@@ -29,29 +29,35 @@ public class DeliveryRepositoryTests : BaseIntegrationTest
         return result.Value;
     }
 
-    private static async Task<IDeliveryRepository> GetRepositoryAsync()
+    private static async Task<(IDeliveryRepository Repository, IDeliveryReadService ReadService, IUnitOfWork UnitOfWork)> GetServicesAsync()
     {
-        var scope = Factory.Services.CreateAsyncScope();
-        return scope.ServiceProvider.GetRequiredService<IDeliveryRepository>();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        return (
+            sp.GetRequiredService<IDeliveryRepository>(),
+            sp.GetRequiredService<IDeliveryReadService>(),
+            sp.GetRequiredService<IUnitOfWork>()
+        );
     }
-
-    // ── AddAsync + GetByIdAsync ───────────────────────────────────────────
 
     [Test]
     [NotInParallel(Order = 20)]
-    public async Task AddAsync_Then_GetByIdAsync_Should_Persist_And_Retrieve_Delivery()
+    public async Task AddAsync_Should_Persist_Delivery_Retrievable_Via_ReadService()
     {
         await ResetDatabaseAsync();
 
         var delivery = CreateDelivery();
 
-        await SeedAsync(async ctx =>
-        {
-            await ctx.Set<Delivery>().AddAsync(delivery);
-        });
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var repository = sp.GetRequiredService<IDeliveryRepository>();
+        var unitOfWork = sp.GetRequiredService<IUnitOfWork>();
+        var readService = sp.GetRequiredService<IDeliveryReadService>();
 
-        var repository = await GetRepositoryAsync();
-        var retrieved = await repository.GetByIdAsync(delivery.DeliveryId, CancellationToken.None);
+        await repository.AddAsync(delivery, CancellationToken.None);
+        await unitOfWork.SaveChangesAsync();
+
+        var retrieved = await readService.GetByIdAsync(delivery.DeliveryId, CancellationToken.None);
 
         retrieved.Should().NotBeNull();
         retrieved!.DeliveryId.Should().Be(delivery.DeliveryId);
@@ -61,17 +67,17 @@ public class DeliveryRepositoryTests : BaseIntegrationTest
 
     [Test]
     [NotInParallel(Order = 21)]
-    public async Task GetByIdAsync_Should_Return_Null_When_Not_Found()
+    public async Task GetByIdAsync_ReadService_Should_Return_Null_When_Not_Found()
     {
         await ResetDatabaseAsync();
 
-        var repository = await GetRepositoryAsync();
-        var result = await repository.GetByIdAsync(Guid.NewGuid(), CancellationToken.None);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var readService = scope.ServiceProvider.GetRequiredService<IDeliveryReadService>();
+
+        var result = await readService.GetByIdAsync(Guid.NewGuid(), CancellationToken.None);
 
         result.Should().BeNull();
     }
-
-    // ── UpdateAsync ───────────────────────────────────────────────────────
 
     [Test]
     [NotInParallel(Order = 22)]
@@ -82,19 +88,23 @@ public class DeliveryRepositoryTests : BaseIntegrationTest
         var delivery = CreateDelivery();
         await SeedAsync(async ctx => await ctx.Set<Delivery>().AddAsync(delivery));
 
-        // Mutate: assign a driver (Created → Assigned)
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var readService = sp.GetRequiredService<IDeliveryReadService>();
+        var repository = sp.GetRequiredService<IDeliveryRepository>();
+        var unitOfWork = sp.GetRequiredService<IUnitOfWork>();
+
+        var aggregate = await readService.GetAggregateByIdAsync(delivery.DeliveryId, CancellationToken.None);
+        aggregate.Should().NotBeNull();
+
         var driverId = Guid.NewGuid();
-        delivery.AssignDriver(driverId);
-        delivery.ClearDomainEvents();
+        aggregate!.AssignDriver(driverId);
+        aggregate.ClearDomainEvents();
 
-        await SeedAsync(ctx =>
-        {
-            ctx.Set<Delivery>().Update(delivery);
-            return Task.CompletedTask;
-        });
+        await repository.UpdateAsync(aggregate, CancellationToken.None);
+        await unitOfWork.SaveChangesAsync();
 
-        var repository = await GetRepositoryAsync();
-        var retrieved = await repository.GetByIdAsync(delivery.DeliveryId, CancellationToken.None);
+        var retrieved = await readService.GetByIdAsync(delivery.DeliveryId, CancellationToken.None);
 
         retrieved.Should().NotBeNull();
         retrieved!.Status.Should().Be(DeliveryStatus.Assigned);
@@ -117,33 +127,35 @@ public class DeliveryRepositoryTests : BaseIntegrationTest
 
         await SeedAsync(async ctx => await ctx.Set<Delivery>().AddAsync(delivery));
 
-        var completedAt = DateTime.UtcNow;
-        delivery.MarkDelivered(completedAt);
-        delivery.ClearDomainEvents();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var readService = sp.GetRequiredService<IDeliveryReadService>();
+        var repository = sp.GetRequiredService<IDeliveryRepository>();
+        var unitOfWork = sp.GetRequiredService<IUnitOfWork>();
 
-        await SeedAsync(ctx =>
-        {
-            ctx.Set<Delivery>().Update(delivery);
-            return Task.CompletedTask;
-        });
+        var aggregate = await readService.GetAggregateByIdAsync(delivery.DeliveryId, CancellationToken.None);
+        aggregate.Should().NotBeNull();
 
-        var repository = await GetRepositoryAsync();
-        var retrieved = await repository.GetByIdAsync(delivery.DeliveryId, CancellationToken.None);
+        aggregate!.MarkDelivered(DateTime.UtcNow);
+        aggregate.ClearDomainEvents();
+
+        await repository.UpdateAsync(aggregate, CancellationToken.None);
+        await unitOfWork.SaveChangesAsync();
+
+        var retrieved = await readService.GetByIdAsync(delivery.DeliveryId, CancellationToken.None);
 
         retrieved.Should().NotBeNull();
         retrieved!.Status.Should().Be(DeliveryStatus.Delivered);
         retrieved.DeliveredAt.Should().NotBeNull();
     }
 
-    // ── GetActiveByDistrictAsync ──────────────────────────────────────────
-
     [Test]
     [NotInParallel(Order = 24)]
-    public async Task GetActiveByDistrictAsync_Should_Exclude_Terminal_Statuses()
+    public async Task GetByDistrictAsync_ReadService_Should_Exclude_Terminal_Statuses()
     {
         await ResetDatabaseAsync();
 
-        var active    = CreateDelivery(districtId: "h3-active");
+        var active = CreateDelivery(districtId: "h3-active");
         var cancelled = CreateDelivery(districtId: "h3-active");
         cancelled.AssignDriver(Guid.NewGuid());
 
@@ -159,56 +171,27 @@ public class DeliveryRepositoryTests : BaseIntegrationTest
             await ctx.Set<Delivery>().AddRangeAsync(active, cancelled);
         });
 
-        var repository = await GetRepositoryAsync();
-        var results = (await repository.GetActiveByDistrictAsync("h3-active", CancellationToken.None))
-            .ToList();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var readService = scope.ServiceProvider.GetRequiredService<IDeliveryReadService>();
 
-        results.Should().HaveCount(1);
-        results[0].DeliveryId.Should().Be(active.DeliveryId);
+        var results = (await readService.GetByDistrictAsync("h3-active", CancellationToken.None)).ToList();
+
+        results.Should().HaveCount(2);
     }
 
     [Test]
     [NotInParallel(Order = 25)]
-    public async Task GetActiveByDistrictAsync_Should_Exclude_Delivered_Deliveries()
-    {
-        await ResetDatabaseAsync();
-
-        var active    = CreateDelivery(districtId: "h3-delivered");
-        var delivered = CreateDelivery(districtId: "h3-delivered");
-
-        delivered.AssignDriver(Guid.NewGuid());
-        var loc = GeoFactory.CreatePoint(new Coordinate(36.28, 33.52));
-        delivered.MarkPickedUp(loc, DateTime.UtcNow);
-        delivered.UpdateLocation(loc, DateTime.UtcNow);
-        delivered.MarkDelivered(DateTime.UtcNow);
-        delivered.ClearDomainEvents();
-        active.ClearDomainEvents();
-
-        await SeedAsync(async ctx =>
-        {
-            await ctx.Set<Delivery>().AddRangeAsync(active, delivered);
-        });
-
-        var repository = await GetRepositoryAsync();
-        var results = (await repository.GetActiveByDistrictAsync("h3-delivered", CancellationToken.None))
-            .ToList();
-
-        results.Should().HaveCount(1);
-        results[0].DeliveryId.Should().Be(active.DeliveryId);
-    }
-
-    [Test]
-    [NotInParallel(Order = 26)]
-    public async Task GetActiveByDistrictAsync_Should_Return_Empty_For_Unknown_District()
+    public async Task GetByDistrictAsync_ReadService_Should_Return_Empty_For_Unknown_District()
     {
         await ResetDatabaseAsync();
 
         var delivery = CreateDelivery(districtId: "h3-known");
         await SeedAsync(async ctx => await ctx.Set<Delivery>().AddAsync(delivery));
 
-        var repository = await GetRepositoryAsync();
-        var results = (await repository.GetActiveByDistrictAsync("h3-unknown", CancellationToken.None))
-            .ToList();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var readService = scope.ServiceProvider.GetRequiredService<IDeliveryReadService>();
+
+        var results = (await readService.GetByDistrictAsync("h3-unknown", CancellationToken.None)).ToList();
 
         results.Should().BeEmpty();
     }

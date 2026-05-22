@@ -5,6 +5,7 @@ using GridTrack.Application.Interfaces;
 using GridTrack.Application.UnitTests.UseCases.Deliveries;
 using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Application.UseCases.Drivers;
+using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
@@ -21,6 +22,7 @@ public class CreateDriverHandlerTests
         var repository = new FakeDriverRepository();
         var h3GridService = new FakeH3GridService("h3-10");
         var clock = new FakeClock(DateTime.UtcNow);
+        var unitOfWork = new FakeUnitOfWork();
         var handler = new CreateDriverHandler();
 
         var request = new CreateDriverRequest(
@@ -35,11 +37,13 @@ public class CreateDriverHandlerTests
             repository,
             h3GridService,
             clock,
+            unitOfWork,
             CancellationToken.None);
 
         await Assert.That(result.IsSuccess).IsTrue();
         await Assert.That(events.OfType<DriverEnteredDistrictDomainEvent>().Count()).IsEqualTo(1);
         await Assert.That(repository.Added!.DomainEvents.Count).IsEqualTo(0);
+        await Assert.That(unitOfWork.SavedCount).IsEqualTo(1);
     }
 
     [Test]
@@ -48,6 +52,7 @@ public class CreateDriverHandlerTests
         var repository = new FakeDriverRepository();
         var h3GridService = new FakeH3GridService("h3-10");
         var clock = new FakeClock(DateTime.UtcNow);
+        var unitOfWork = new FakeUnitOfWork();
         var handler = new CreateDriverHandler();
 
         var request = new CreateDriverRequest(
@@ -62,6 +67,7 @@ public class CreateDriverHandlerTests
             repository,
             h3GridService,
             clock,
+            unitOfWork,
             CancellationToken.None);
 
         await Assert.That(result.IsFailure).IsTrue();
@@ -73,8 +79,10 @@ public class CreateDriverHandlerTests
     public async Task Handle_Should_Return_Failure_When_Location_Is_Null()
     {
         var repository = new CreateDeliveryHandlerTests.FakeDeliveryRepository();
+        var readService = new CreateDeliveryHandlerTests.FakeDeliveryReadService();
         var h3GridService = new FakeH3GridService("h3-10");
         var clock = new FakeClock(DateTime.UtcNow);
+        var unitOfWork = new FakeUnitOfWork();
         var handler = new CreateDeliveryHandler();
 
         var request = new CreateDeliveryRequest(
@@ -89,6 +97,7 @@ public class CreateDriverHandlerTests
             repository,
             h3GridService,
             clock,
+            unitOfWork,
             CancellationToken.None);
 
         await Assert.That(result.IsFailure).IsTrue();
@@ -101,8 +110,10 @@ public class CreateDriverHandlerTests
     public async Task Handle_Should_Use_Provided_DistrictId_When_Supplied()
     {
         var repository = new CreateDeliveryHandlerTests.FakeDeliveryRepository();
+        var readService = new CreateDeliveryHandlerTests.FakeDeliveryReadService();
         var h3GridService = new FakeH3GridService("h3-computed");
         var clock = new FakeClock(DateTime.UtcNow);
+        var unitOfWork = new FakeUnitOfWork();
         var handler = new CreateDeliveryHandler();
 
         var request = new CreateDeliveryRequest(
@@ -117,6 +128,7 @@ public class CreateDriverHandlerTests
             repository,
             h3GridService,
             clock,
+            unitOfWork,
             CancellationToken.None);
 
         await Assert.That(result.IsSuccess).IsTrue();
@@ -127,8 +139,10 @@ public class CreateDriverHandlerTests
     public async Task Handle_Should_Compute_DistrictId_When_Not_Provided()
     {
         var repository = new CreateDeliveryHandlerTests.FakeDeliveryRepository();
+        var readService = new CreateDeliveryHandlerTests.FakeDeliveryReadService();
         var h3GridService = new FakeH3GridService("h3-computed");
         var clock = new FakeClock(DateTime.UtcNow);
+        var unitOfWork = new FakeUnitOfWork();
         var handler = new CreateDeliveryHandler();
 
         var request = new CreateDeliveryRequest(
@@ -143,25 +157,16 @@ public class CreateDriverHandlerTests
             repository,
             h3GridService,
             clock,
+            unitOfWork,
             CancellationToken.None);
 
         await Assert.That(result.IsSuccess).IsTrue();
         await Assert.That(result.Value.DistrictId).IsEqualTo("h3-computed");
     }
-    
-    
-    
+
     internal sealed class FakeDriverRepository : IDriverRepository
     {
         public Driver? Added { get; private set; }
-
-        public Task<Driver?> GetByIdAsync(Guid id, CancellationToken ct) => Task.FromResult<Driver?>(null);
-
-        public Task<IEnumerable<Driver>> GetActiveByDistrictAsync(string districtId, CancellationToken ct)
-            => Task.FromResult<IEnumerable<Driver>>(Array.Empty<Driver>());
-
-        public Task<IEnumerable<Driver>> GetNearestAsync(Point location, int count, CancellationToken ct)
-            => Task.FromResult<IEnumerable<Driver>>(Array.Empty<Driver>());
 
         public Task AddAsync(Driver driver, CancellationToken ct)
         {
@@ -172,14 +177,22 @@ public class CreateDriverHandlerTests
         public Task UpdateAsync(Driver driver, CancellationToken ct) => Task.CompletedTask;
     }
 
+    internal sealed class FakeUnitOfWork : IUnitOfWork
+    {
+        public int SavedCount { get; private set; }
+
+        public Task<int> SaveChangesAsync(CancellationToken ct = default)
+        {
+            SavedCount++;
+            return Task.FromResult(1);
+        }
+    }
+
     private sealed class FakeH3GridService : IH3GridService
     {
         private readonly string _index;
 
-        public FakeH3GridService(string index)
-        {
-            _index = index;
-        }
+        public FakeH3GridService(string index) => _index = index;
 
         public Task<string> GetCellAsync(Point location, int resolution)
             => Task.FromResult(_index);
@@ -188,21 +201,13 @@ public class CreateDriverHandlerTests
             => Task.FromResult<IEnumerable<string>>(Array.Empty<string>());
 
         public Task<IEnumerable<string>> FillBoundingBoxAsync(
-            double minLat,
-            double maxLat,
-            double minLng,
-            double maxLng,
-            int resolution)
+            double minLat, double maxLat, double minLng, double maxLng, int resolution)
             => Task.FromResult<IEnumerable<string>>(Array.Empty<string>());
     }
 
     private sealed class FakeClock : IDateTimeProvider
     {
-        public FakeClock(DateTime utcNow)
-        {
-            UtcNow = utcNow;
-        }
-
+        public FakeClock(DateTime utcNow) => UtcNow = utcNow;
         public DateTime UtcNow { get; }
     }
 }

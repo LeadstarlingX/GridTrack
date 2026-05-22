@@ -1,7 +1,10 @@
-﻿using Dapper;
+using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
+using GridTrack.Domain.Drivers;
+using GridTrack.Infrastructure.DbContext;
+using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 
 namespace GridTrack.Infrastructure.CQRS.ReadServices;
@@ -9,10 +12,12 @@ namespace GridTrack.Infrastructure.CQRS.ReadServices;
 public sealed class DriverReadService : IDriverReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
+    private readonly AppDbContext _context;
 
-    public DriverReadService(ISqlConnectionFactory sqlConnectionFactory)
+    public DriverReadService(ISqlConnectionFactory sqlConnectionFactory, AppDbContext context)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
+        _context = context;
     }
 
     public async Task<IEnumerable<DriverDto>> GetByDistrictAsync(string districtId, CancellationToken ct)
@@ -54,4 +59,7 @@ public sealed class DriverReadService : IDriverReadService
         var locationWkt = $"POINT({location.X} {location.Y})";
         return await connection.QueryAsync<DriverDto>(sql, new { LocationWkt = locationWkt, Count = count });
     }
+
+    public async Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
+        => await _context.Set<Driver>().FirstOrDefaultAsync(d => d.DriverId == id, ct);
 }

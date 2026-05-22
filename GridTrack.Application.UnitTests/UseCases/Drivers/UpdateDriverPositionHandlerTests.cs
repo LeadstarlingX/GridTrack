@@ -1,7 +1,9 @@
+using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
+using GridTrack.Application.Dtos;
 using GridTrack.Application.Errors;
-using GridTrack.Application.Interfaces;
 using GridTrack.Application.UseCases.Drivers;
+using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
 
@@ -15,35 +17,45 @@ public class UpdateDriverPositionHandlerTests
     public async Task Handle_Should_Return_Event_And_Clear_DomainEvents()
     {
         var driver = CreateDriver();
-        var repository = new FakeDriverRepository(driver);
+        var readService = new FakeDriverReadService(driver);
+        var repository = new FakeDriverRepository();
+        var unitOfWork = new CreateDriverHandlerTests.FakeUnitOfWork();
         var handler = new UpdateDriverPositionHandler();
 
         var request = new UpdatePositionRequest(driver.DriverId, Factory.CreatePoint(new Coordinate(2, 2)), DateTime.UtcNow);
         var (result, events) = await handler.Handle(
             new UpdateDriverPositionCommand(request),
+            readService,
             repository,
+            unitOfWork,
             CancellationToken.None);
 
         await Assert.That(result.IsSuccess).IsTrue();
         await Assert.That(events.OfType<DriverPositionUpdatedDomainEvent>().Count()).IsEqualTo(1);
         await Assert.That(driver.DomainEvents.Count).IsEqualTo(0);
+        await Assert.That(unitOfWork.SavedCount).IsEqualTo(1);
     }
 
     [Test]
     public async Task Handle_Should_Return_Failure_When_Driver_Not_Found()
     {
-        var repository = new FakeDriverRepository(null);
+        var readService = new FakeDriverReadService(null);
+        var repository = new FakeDriverRepository();
+        var unitOfWork = new CreateDriverHandlerTests.FakeUnitOfWork();
         var handler = new UpdateDriverPositionHandler();
 
         var request = new UpdatePositionRequest(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(2, 2)), DateTime.UtcNow);
         var (result, events) = await handler.Handle(
             new UpdateDriverPositionCommand(request),
+            readService,
             repository,
+            unitOfWork,
             CancellationToken.None);
 
         await Assert.That(result.IsFailure).IsTrue();
         await Assert.That(result.Error).IsEqualTo(ApplicationErrors.DriverNotFound);
         await Assert.That(events.Count()).IsEqualTo(0);
+        await Assert.That(unitOfWork.SavedCount).IsEqualTo(0);
     }
 
     private static Driver CreateDriver()
@@ -52,25 +64,25 @@ public class UpdateDriverPositionHandlerTests
         return result.Value;
     }
 
-    private sealed class FakeDriverRepository : IDriverRepository
+    private sealed class FakeDriverReadService : IDriverReadService
     {
         private readonly Driver? _driver;
 
-        public FakeDriverRepository(Driver? driver)
-        {
-            _driver = driver;
-        }
+        public FakeDriverReadService(Driver? driver) => _driver = driver;
 
-        public Task<Driver?> GetByIdAsync(Guid id, CancellationToken ct) => Task.FromResult(_driver);
+        public Task<IEnumerable<DriverDto>> GetByDistrictAsync(string districtId, CancellationToken ct)
+            => Task.FromResult<IEnumerable<DriverDto>>(Array.Empty<DriverDto>());
 
-        public Task<IEnumerable<Driver>> GetActiveByDistrictAsync(string districtId, CancellationToken ct)
-            => Task.FromResult<IEnumerable<Driver>>(Array.Empty<Driver>());
+        public Task<IEnumerable<DriverDto>> GetNearestAsync(Point location, int count, CancellationToken ct)
+            => Task.FromResult<IEnumerable<DriverDto>>(Array.Empty<DriverDto>());
 
-        public Task<IEnumerable<Driver>> GetNearestAsync(Point location, int count, CancellationToken ct)
-            => Task.FromResult<IEnumerable<Driver>>(Array.Empty<Driver>());
+        public Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
+            => Task.FromResult(_driver);
+    }
 
+    private sealed class FakeDriverRepository : IDriverRepository
+    {
         public Task AddAsync(Driver driver, CancellationToken ct) => Task.CompletedTask;
-
         public Task UpdateAsync(Driver driver, CancellationToken ct) => Task.CompletedTask;
     }
 }

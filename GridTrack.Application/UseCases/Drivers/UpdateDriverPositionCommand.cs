@@ -1,9 +1,9 @@
+using GridTrack.Application.CQRS.ReadServices;
+using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Errors;
-using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using NetTopologySuite.Geometries;
 using System.Linq;
-using GridTrack.Application.CQRS.Repositories;
 
 namespace GridTrack.Application.UseCases.Drivers;
 
@@ -15,11 +15,13 @@ public sealed class UpdateDriverPositionHandler
 {
     public async Task<(Result Result, IEnumerable<object> Events)> Handle(
         UpdateDriverPositionCommand command,
+        IDriverReadService readService,
         IDriverRepository repository,
+        IUnitOfWork unitOfWork,
         CancellationToken ct)
     {
         var request = command.Request;
-        var driver = await repository.GetByIdAsync(request.DriverId, ct);
+        var driver = await readService.GetAggregateByIdAsync(request.DriverId, ct);
 
         if (driver is null)
         {
@@ -33,6 +35,8 @@ public sealed class UpdateDriverPositionHandler
         }
 
         await repository.UpdateAsync(driver, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+
         var events = driver.DomainEvents.Cast<object>().ToList();
         driver.ClearDomainEvents();
 

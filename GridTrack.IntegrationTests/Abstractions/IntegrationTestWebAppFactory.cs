@@ -1,5 +1,7 @@
 ﻿using GridTrack.Api;
 using GridTrack.Application.Abstractions.Clock;
+using GridTrack.Application.Dtos;
+using GridTrack.Application.Interfaces;
 using GridTrack.Infrastructure.DbContext;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -11,6 +13,7 @@ using NSubstitute;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using TUnit.Core.Interfaces;
+using Wolverine;
 
 namespace GridTrack.IntegrationTests.Abstractions;
 
@@ -44,12 +47,23 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll(typeof(IDateTimeProvider));
-            
+
             services.AddScoped<IDateTimeProvider>(_ =>
             {
                 var mock = Substitute.For<IDateTimeProvider>();
                 mock.UtcNow.Returns(_ => DateTime.UtcNow);
                 return mock;
+            });
+
+            // Stub unimplemented services so Wolverine can build all handlers
+            services.TryAddSingleton<IForecastingService>(_ =>
+            {
+                var stub = Substitute.For<IForecastingService>();
+                stub.GetDistrictDemandForecastAsync(Arg.Any<string>(), Arg.Any<DateTime>())
+                    .Returns(Task.FromResult<ForecastDto?>(null));
+                stub.GetEtaAnomaliesAsync(Arg.Any<IEnumerable<string>>())
+                    .Returns(Task.FromResult<IEnumerable<AnomalyAlertDto>>(Array.Empty<AnomalyAlertDto>()));
+                return stub;
             });
             
             services.Configure<DbContextOptionsBuilder>(options =>
@@ -70,6 +84,11 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                     opt.EnableSensitiveDataLogging();
                 });
             });
+            
+            // services.AddWolverine(options =>
+            // {
+            //     options.Discovery.IncludeAssembly(typeof(GridTrack.Application.DependencyInjection).Assembly);
+            // });
             
         });
         

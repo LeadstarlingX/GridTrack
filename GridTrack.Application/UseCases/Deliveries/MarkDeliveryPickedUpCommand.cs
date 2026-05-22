@@ -2,19 +2,19 @@ using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Errors;
 using GridTrack.Domain.Abstractions;
-using GridTrack.Domain.ValueObjects;
+using NetTopologySuite.Geometries;
 using System.Linq;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
-public sealed record FlagAnomalyRequest(Guid DeliveryId, AnomalyType Type, string Reason);
+public sealed record PickUpDeliveryRequest(Guid DeliveryId, Point Location, DateTime Timestamp);
 
-public sealed record FlagDeliveryAnomalyCommand(FlagAnomalyRequest Request);
+public sealed record MarkDeliveryPickedUpCommand(PickUpDeliveryRequest Request);
 
-public sealed class FlagDeliveryAnomalyHandler
+public sealed class MarkDeliveryPickedUpHandler
 {
     public async Task<(Result Result, IEnumerable<object> Events)> Handle(
-        FlagDeliveryAnomalyCommand command,
+        MarkDeliveryPickedUpCommand command,
         IDeliveryReadService readService,
         IDeliveryRepository repository,
         IUnitOfWork unitOfWork,
@@ -28,7 +28,7 @@ public sealed class FlagDeliveryAnomalyHandler
             return (Result.Failure(ApplicationErrors.DeliveryNotFound), Array.Empty<object>());
         }
 
-        var result = delivery.FlagAnomaly(request.Type, request.Reason);
+        var result = delivery.MarkPickedUp(request.Location, request.Timestamp);
         if (result.IsFailure)
         {
             return (result, Array.Empty<object>());

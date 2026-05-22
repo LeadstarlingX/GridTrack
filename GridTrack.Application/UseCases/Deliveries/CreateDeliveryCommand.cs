@@ -1,11 +1,11 @@
 using GridTrack.Application.Abstractions.Clock;
+using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Deliveries;
 using NetTopologySuite.Geometries;
 using System.Linq;
-using GridTrack.Application.CQRS.Repositories;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -25,6 +25,7 @@ public sealed class CreateDeliveryHandler
         IDeliveryRepository repository,
         IH3GridService h3GridService,
         IDateTimeProvider dateTimeProvider,
+        IUnitOfWork unitOfWork,
         CancellationToken ct)
     {
         var request = command.Request;
@@ -48,6 +49,8 @@ public sealed class CreateDeliveryHandler
         }
 
         await repository.AddAsync(deliveryResult.Value, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+
         var events = deliveryResult.Value.DomainEvents.Cast<object>().ToList();
         deliveryResult.Value.ClearDomainEvents();
 

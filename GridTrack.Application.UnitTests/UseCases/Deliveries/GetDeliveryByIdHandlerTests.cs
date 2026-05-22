@@ -2,6 +2,7 @@ using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
 using GridTrack.Application.UseCases.Deliveries;
+using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.ValueObjects;
 using NetTopologySuite.Geometries;
 
@@ -118,5 +119,8 @@ public class GetDeliveryByIdHandlerTests
 
         public Task<IEnumerable<DeliveryDto>> GetByDistrictAsync(string districtId, CancellationToken ct)
             => Task.FromResult<IEnumerable<DeliveryDto>>(Array.Empty<DeliveryDto>());
+
+        public Task<Delivery?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
+            => Task.FromResult<Delivery?>(null);
     }
 }

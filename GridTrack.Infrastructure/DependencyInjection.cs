@@ -52,7 +52,7 @@ public static class DependencyInjection
         services.AddDbContextFactory<AppDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.UseNetTopologySuite()));
         
-        
+        // Register Repositories
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
         

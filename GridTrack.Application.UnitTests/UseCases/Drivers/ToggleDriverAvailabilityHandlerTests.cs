@@ -1,7 +1,8 @@
+using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dtos;
-using GridTrack.Application.Interfaces;
 using GridTrack.Application.UseCases.Drivers;
+using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
 
@@ -18,7 +19,9 @@ public class ToggleDriverAvailabilityHandlerTests
 
         var (response, events) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(Guid.NewGuid(), true),
-            new FakeDriverRepository(null),
+            new FakeDriverReadService(null),
+            new FakeDriverRepository(),
+            new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
         await Assert.That(response).IsNull();
@@ -33,7 +36,9 @@ public class ToggleDriverAvailabilityHandlerTests
 
         var (response, _) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(driver.DriverId, true),
-            new FakeDriverRepository(driver),
+            new FakeDriverReadService(driver),
+            new FakeDriverRepository(),
+            new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
         await Assert.That(response).IsNotNull();
@@ -49,7 +54,9 @@ public class ToggleDriverAvailabilityHandlerTests
 
         var (response, _) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(driver.DriverId, false),
-            new FakeDriverRepository(driver),
+            new FakeDriverReadService(driver),
+            new FakeDriverRepository(),
+            new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
         await Assert.That(response).IsNotNull();
@@ -64,7 +71,9 @@ public class ToggleDriverAvailabilityHandlerTests
 
         var (_, events) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(driver.DriverId, true),
-            new FakeDriverRepository(driver),
+            new FakeDriverReadService(driver),
+            new FakeDriverRepository(),
+            new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
         await Assert.That(events).IsNotEmpty();
@@ -73,21 +82,20 @@ public class ToggleDriverAvailabilityHandlerTests
     [Test]
     public async Task Handle_Returns_No_Events_When_Availability_Already_Same()
     {
-        // SetAvailability is a no-op when status matches — no domain event raised
         var driver = CreateDriver(isActive: true);
         var handler = new ToggleDriverAvailabilityHandler();
 
         var (response, events) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(driver.DriverId, true),
-            new FakeDriverRepository(driver),
+            new FakeDriverReadService(driver),
+            new FakeDriverRepository(),
+            new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
         await Assert.That(response).IsNotNull();
         await Assert.That(response!.Status).IsEqualTo("available");
         await Assert.That(events).IsEmpty();
     }
-
-    // ── Helpers ────────────────────────────────────────────────────────────
 
     private static Driver CreateDriver(bool isActive)
     {
@@ -101,27 +109,25 @@ public class ToggleDriverAvailabilityHandlerTests
         return result.Value;
     }
 
-    // ── Fakes ─────────────────────────────────────────────────────────────
-
-    private sealed class FakeDriverRepository(Driver? driver) : IDriverRepository
+    private sealed class FakeDriverReadService : IDriverReadService
     {
-        private Driver? _current = driver;
+        private readonly Driver? _driver;
 
-        public Task<Driver?> GetByIdAsync(Guid id, CancellationToken ct)
-            => Task.FromResult(_current);
+        public FakeDriverReadService(Driver? driver) => _driver = driver;
 
-        public Task<IEnumerable<Driver>> GetActiveByDistrictAsync(string districtId, CancellationToken ct)
-            => Task.FromResult<IEnumerable<Driver>>(Array.Empty<Driver>());
+        public Task<IEnumerable<DriverDto>> GetByDistrictAsync(string districtId, CancellationToken ct)
+            => Task.FromResult<IEnumerable<DriverDto>>(Array.Empty<DriverDto>());
 
-        public Task<IEnumerable<Driver>> GetNearestAsync(Point location, int count, CancellationToken ct)
-            => Task.FromResult<IEnumerable<Driver>>(Array.Empty<Driver>());
+        public Task<IEnumerable<DriverDto>> GetNearestAsync(Point location, int count, CancellationToken ct)
+            => Task.FromResult<IEnumerable<DriverDto>>(Array.Empty<DriverDto>());
 
+        public Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
+            => Task.FromResult(_driver);
+    }
+
+    private sealed class FakeDriverRepository : IDriverRepository
+    {
         public Task AddAsync(Driver driver, CancellationToken ct) => Task.CompletedTask;
-
-        public Task UpdateAsync(Driver driver, CancellationToken ct)
-        {
-            _current = driver;
-            return Task.CompletedTask;
-        }
+        public Task UpdateAsync(Driver driver, CancellationToken ct) => Task.CompletedTask;
     }
 }
