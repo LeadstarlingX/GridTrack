@@ -10,12 +10,11 @@ public static class DependencyInjection
      public static IServiceCollection AddApi(this IServiceCollection services, IConfiguration configuration)
     {
         services.ConfigureOptions<ConfigureSwaggerOptions>();
-
         services.AddOpenApi();
         services.AddMyMiddlewares();
         services.AddApiSwagger();
         services.AddClerkAuth(configuration);
-
+        services.AddRateLimiting();
         return services;
     }
      

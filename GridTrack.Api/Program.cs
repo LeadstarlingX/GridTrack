@@ -15,14 +15,18 @@ public partial class Program
     }
 
     private static IHostBuilder CreateHostBuilder(string[] args)
-    {
+    {   
+        string? rabbit = null;
+        
         return Host.CreateDefaultBuilder(args)
+            .ConfigureServices((ctx, _) =>
+            {
+                rabbit = ctx.Configuration.GetConnectionString("RabbitMq");
+            })
             .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); })
-            .UseWolverine((ctx, opts) =>
+            .UseWolverine((opts) =>
             {
                 opts.Discovery.IncludeAssembly(typeof(Application.DependencyInjection).Assembly);
-
-                var rabbit = ctx.Configuration.GetConnectionString("RabbitMq");
 
                 if (!string.IsNullOrWhiteSpace(rabbit))
                 {

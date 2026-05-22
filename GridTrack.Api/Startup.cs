@@ -65,7 +65,7 @@ public class Startup
         app.UseRouting();
 
         app.UseCors("Frontend");
-
+        app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
 
