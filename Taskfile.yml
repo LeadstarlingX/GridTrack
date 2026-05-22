@@ -61,7 +61,7 @@ tasks:
 
   test-all:
     desc: Run all tests
-    deps: [ test-architecture, test-domain, test-namingconventions, test-application, test-infrastructure-unit ]
+    deps: [ test-architecture, test-domain, test-namingconventions, test-application, test-infrastructure-unit, test-integration ]
 
   # ============================================
   # COVERAGE TASKS
@@ -91,6 +91,17 @@ tasks:
         "dotnet run --project ./GridTrack.Infrastructure.UnitTests/GridTrack.Infrastructure.UnitTests.csproj --configuration Release --no-build"
         -f xml -o {{.COVERAGE_DIR}}/infrastructure.xml
   
+  
+  coverage-integration:
+    desc: Integration tests with coverage (requires Docker)
+    cmds:
+      - mkdir -p {{.COVERAGE_DIR}}
+      - dotnet-coverage collect
+        "dotnet run --project ./GridTrack.IntegrationTests/GridTrack.IntegrationTests.csproj --configuration Release"
+        -f xml -o {{.COVERAGE_DIR}}/integration.xml
+        --include "[GridTrack.Api]*,[GridTrack.Application]*,[GridTrack.Infrastructure]*,[GridTrack.Domain]*"
+        --exclude "[xunit*]*,[TUnit*]*,[Testcontainers*]*,[*]IntegrationTests.*"
+  
   coverage-report:
     desc: Merge coverage files and generate HTML + summary report
     cmds:
@@ -108,6 +119,7 @@ tasks:
       - task: coverage-domain
       - task: coverage-application
       - task: coverage-infrastructure
+      - task: coverage-integration
       - task: coverage-report
 
 
