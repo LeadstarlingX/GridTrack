@@ -6,7 +6,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Districts;
 
 [ApiController]
-[Route("api/districts")]
+[Route("/api/districts")]
 public class DistrictsController(IMessageBus bus) : ControllerBase
 {
     [HttpGet]

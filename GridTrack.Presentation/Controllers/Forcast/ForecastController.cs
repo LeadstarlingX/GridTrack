@@ -6,7 +6,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Forcast;
 
 [ApiController]
-[Route("api/forecast")]
+[Route("/api/forecast")]
 public class ForecastController(IMessageBus bus) : ControllerBase
 {
     [HttpGet("{districtId}")]

@@ -6,7 +6,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Alerts;
 
 [ApiController]
-[Route("api/alerts")]
+[Route("/api/alerts")]
 public class AlertsController(IMessageBus bus) : ControllerBase
 {
     [HttpGet]

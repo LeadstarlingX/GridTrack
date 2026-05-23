@@ -37,7 +37,6 @@ public static class DependencyInjection
         AddPersistence(services, configuration);
         AddCaching(services, configuration);
         AddMySignalR(services);
-        AddApiVersioning(services);
         AddExternalServices(services, configuration);
         AddSeeding(services);
 
@@ -52,6 +51,7 @@ public static class DependencyInjection
 
         services.AddDbContextFactory<AppDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.UseNetTopologySuite()));
+        
         
         // Register Repositories
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
@@ -125,23 +125,6 @@ public static class DependencyInjection
         return services;
     }
 
-    private static IServiceCollection AddApiVersioning(this IServiceCollection services)
-    {
-        services
-            .AddApiVersioning(options =>
-            {
-                options.DefaultApiVersion = new ApiVersion(1);
-                options.ReportApiVersions = true;
-                options.ApiVersionReader = new UrlSegmentApiVersionReader();
-            })
-            .AddMvc()
-            .AddApiExplorer(options =>
-            {
-                options.GroupNameFormat = "'v'V";
-                options.SubstituteApiVersionInUrl = true;
-            });
 
-        return services;
-    }
     
 }

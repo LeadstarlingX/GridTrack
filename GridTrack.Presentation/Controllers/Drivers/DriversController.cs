@@ -6,7 +6,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Drivers;
 
 [ApiController]
-[Route("api/drivers")]
+[Route("/api/drivers")]
 public class DriversController(IMessageBus bus) : ControllerBase
 {
     [HttpGet]

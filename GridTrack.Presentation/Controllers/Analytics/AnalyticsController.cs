@@ -6,7 +6,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Analytics;
 
 [ApiController]
-[Route("api/analytics")]
+[Route("/api/analytics")]
 public class AnalyticsController(IMessageBus bus) : ControllerBase
 {
     [HttpGet("summary")]

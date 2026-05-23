@@ -6,6 +6,8 @@ using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Application.UseCases.Drivers;
 using GridTrack.Domain.Abstractions;
 using GridTrack.IntegrationTests.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 
 namespace GridTrack.IntegrationTests.ApiTests;
@@ -151,4 +153,28 @@ public class EndpointContractTests : BaseIntegrationTest
         var response = await client.GetAsync("/health");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+    
+    
+    
+    [Test]
+    public async Task Debug_Print_All_Routes()
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+    
+        var endpointSources = scope.ServiceProvider
+            .GetRequiredService<IEnumerable<EndpointDataSource>>();
+        
+        var list = new List<string>();
+        foreach (var source in endpointSources)
+        {
+            foreach (var endpoint in source.Endpoints)
+            {
+                var routeEndpoint = endpoint as RouteEndpoint;
+                list.Add($"Route: {routeEndpoint?.RoutePattern?.RawText} | Display: {endpoint.DisplayName}");
+            }
+        }
+        list.Should().NotBeNullOrEmpty();
+        await Assert.That(true).IsTrue();
+    }
+    
 }

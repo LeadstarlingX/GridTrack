@@ -8,6 +8,7 @@ using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using GridTrack.Infrastructure.Seeding;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -61,53 +62,39 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
             {
                 ["ConnectionStrings:DefaultConnection"] = _dbContainer.GetConnectionString(),
                 ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString(),
+                ["Clerk:Authority"]                     = "https://test.clerk.invalid",
             });
         });
         
         builder.ConfigureTestServices(services =>
         {
-            // ── DbContext ───────────────────────────────────────────────
-            var toRemove = services
-                .Where(d => d.ServiceType == typeof(DbContextOptions<AppDbContext>)
-                         || d.ServiceType == typeof(IDbContextFactory<AppDbContext>))
-                .ToList();
-            foreach (var d in toRemove) services.Remove(d);
+            // 2. Disable Clerk JWT backchannel - don't touch scheme registrations
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, o =>
+            {
+                o.Authority = null;
+                o.TokenValidationParameters.ValidateIssuerSigningKey = false;
+                o.TokenValidationParameters.ValidateIssuer           = false;
+                o.TokenValidationParameters.ValidateAudience         = false;
+                o.TokenValidationParameters.ValidateLifetime         = false;
+                o.BackchannelHttpHandler = new NullBackchannelHandler();
+            });
 
-            var connStr = _dbContainer.GetConnectionString();
-            services.AddDbContext<AppDbContext>(opt =>
-                opt.UseNpgsql(connStr, x => x.UseNetTopologySuite()));
-            services.AddDbContextFactory<AppDbContext>(opt =>
-                opt.UseNpgsql(connStr, x => x.UseNetTopologySuite()));
+            // 3. Add test scheme on top of existing auth
+            services.AddAuthentication()
+                .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
 
-            // ── IUnitOfWork ─────────────────────────────────────────────
-            var uow = services.SingleOrDefault(d => d.ServiceType == typeof(IUnitOfWork));
-            if (uow != null) services.Remove(uow);
-            services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
-
-            // ── ISqlConnectionFactory (singleton with prod conn str) ────
-            var sqlFactory = services.SingleOrDefault(d => d.ServiceType == typeof(ISqlConnectionFactory));
-            if (sqlFactory != null) services.Remove(sqlFactory);
-            var dataSource = new NpgsqlDataSourceBuilder(connStr).UseNetTopologySuite().Build();
-            services.AddSingleton<ISqlConnectionFactory>(_ => new SqlConnectionFactory(dataSource));
-
-            // ── IConnectionMultiplexer (Redis) ──────────────────────────
-            var mux = services.SingleOrDefault(d => d.ServiceType == typeof(IConnectionMultiplexer));
-            if (mux != null) services.Remove(mux);
-            services.AddSingleton<IConnectionMultiplexer>(
-                ConnectionMultiplexer.Connect(_redisContainer.GetConnectionString()));
-
-            // ── Disable SeedService ─────────────────────────────────────
-            var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
-            if (seed != null) services.Remove(seed);
-
-            // ── Auth ────────────────────────────────────────────────────
-            services.AddAuthentication(o =>
+            services.PostConfigure<AuthenticationOptions>(o =>
             {
                 o.DefaultAuthenticateScheme = "Test";
                 o.DefaultChallengeScheme    = "Test";
-            }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
+                o.DefaultScheme             = "Test";
+            });
 
-            // ── Stubs ───────────────────────────────────────────────────
+            // 4. Disable SeedService
+            var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
+            if (seed != null) services.Remove(seed);
+
+            // 5. Stub unimplemented services
             services.RemoveAll<IForecastingService>();
             services.AddSingleton<IForecastingService>(_ =>
             {
@@ -118,14 +105,11 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                     .Returns(Task.FromResult<IEnumerable<AnomalyAlertDto>>(Array.Empty<AnomalyAlertDto>()));
                 return stub;
             });
-
-            services.RemoveAll<IDateTimeProvider>();
-            services.AddScoped<IDateTimeProvider>(_ =>
-            {
-                var mock = Substitute.For<IDateTimeProvider>();
-                mock.UtcNow.Returns(_ => DateTime.UtcNow);
-                return mock;
-            });
+            
+            var mvcBuilder = services.FirstOrDefault(d => 
+                d.ServiceType.FullName?.Contains("ApplicationPartManager") == true);
+// set a breakpoint here and check if it's null
+            
         });
         
     }

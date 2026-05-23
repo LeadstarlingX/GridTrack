@@ -6,7 +6,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Exports;
 
 [ApiController]
-[Route("api/export")]
+[Route("/api/export")]
 public class ExportController(IMessageBus bus) : ControllerBase
 {
     [HttpPost("csv")]

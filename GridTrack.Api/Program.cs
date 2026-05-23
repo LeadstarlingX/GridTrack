@@ -1,4 +1,3 @@
-
 using GridTrack.Application.IntegrationEvents;
 using Wolverine;
 using Wolverine.RabbitMQ;
@@ -7,7 +6,7 @@ namespace GridTrack.Api;
 
 using GridTrack.Api;
 
-public partial class Program
+public class Program
 {
     public static void Main(string[] args)
     {
@@ -27,12 +26,13 @@ public partial class Program
             .UseWolverine((opts) =>
             {
                 opts.Discovery.IncludeAssembly(typeof(Application.DependencyInjection).Assembly);
-
+                
+                
                 if (!string.IsNullOrWhiteSpace(rabbit))
                 {
                     opts.UseRabbitMq(new Uri(rabbit))
                         .AutoProvision();
-
+                    
                     // ── Outbound: .NET → Python ─────────────────────────────
                     opts.PublishMessage<DeliveryAnomalyIntegrationEvent>()
                         .ToRabbitExchange("gridtrack.anomaly",

@@ -6,7 +6,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Analysis;
 
 [ApiController]
-[Route("api/analysis")]
+[Route("/api/analysis")]
 public class AnalysisController(IMessageBus bus) : ControllerBase
 {
     [HttpPost("chat")]

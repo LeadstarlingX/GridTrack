@@ -7,7 +7,7 @@ using Wolverine;
 namespace GridTrack.Presentation.Controllers.Deliveries;
 
 [ApiController]
-[Route("api/deliveries")]
+[Route("/api/deliveries")]
 public class DeliveriesController(IMessageBus bus) : ControllerBase
 {
     [HttpGet]
