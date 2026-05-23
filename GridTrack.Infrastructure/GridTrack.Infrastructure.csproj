@@ -30,5 +30,10 @@
       <ProjectReference Include="..\GridTrack.Application\GridTrack.Application.csproj" />
       <ProjectReference Include="..\GridTrack.Domain\GridTrack.Domain.csproj" />
     </ItemGroup>
+
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="GridTrack.IntegrationTests" />
+    </ItemGroup>
     
 </Project>

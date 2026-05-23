@@ -53,10 +53,10 @@ public class GetDeliveryByIdHandlerTests
             CancellationToken.None);
 
         await Assert.That(result).IsNotNull();
-        await Assert.That(result!.Id).IsEqualTo(deliveryId.ToString());
+        await Assert.That(result!.Id).IsEqualTo(deliveryId);
         await Assert.That(result.Status).IsEqualTo("InTransit");
         await Assert.That(result.DistrictId).IsEqualTo("h3-district-1");
-        await Assert.That(result.AssignedDriverId).IsEqualTo(driverId.ToString());
+        await Assert.That(result.AssignedDriverId).IsEqualTo(driverId);
         await Assert.That(result.CreatedAt).IsEqualTo(createdAt);
         await Assert.That(result.UpdatedAt).IsEqualTo(pickedUpAt);
         await Assert.That(result.RoutePolyline).IsEmpty();
