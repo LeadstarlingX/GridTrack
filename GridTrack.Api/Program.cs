@@ -20,7 +20,7 @@ public class Program
         return Host.CreateDefaultBuilder(args)
             .ConfigureServices((ctx, _) =>
             {
-                rabbit = ctx.Configuration.GetConnectionString("RabbitMq");
+                rabbit = ctx.Configuration.GetConnectionString("Queue");
             })
             .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); })
             .UseWolverine((opts) =>

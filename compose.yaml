@@ -61,6 +61,22 @@
       - "6379:6379"
   
   
+  
+  gridtrack.rabbitmq:
+    image: rabbitmq:management-alpine
+    container_name: GridTrack.RabbitMQ
+    volumes:
+      - ./.containers/queue/data:/var/lib/rabbitmq
+      - ./.containers/queue/log:/var/log/rabbitmq
+
+    environment:
+      RABBIT_DEFAULT_USER: "guest"
+      RABBIT_DEFAULT_PASS: "guest"
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    restart: always
+  
   # Telemetry
   
   # Grafana - Visualization & Dashboards
