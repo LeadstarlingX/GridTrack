@@ -18,6 +18,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solutionitems", "solutionit
 		progress.md = progress.md
 		observability\tempo\tempo.yaml = observability\tempo\tempo.yaml
 		observability\loki\loki.yaml = observability\loki\loki.yaml
+		Integration_Plan.md = Integration_Plan.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTrack.ArchitectureTests", "GridTrack.ArchitectureTests\GridTrack.ArchitectureTests.csproj", "{55985C3F-2869-4E53-A087-B27E7BEAA3A3}"

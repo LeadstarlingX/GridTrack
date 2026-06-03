@@ -36,6 +36,7 @@ node_modules/
 *.sln.iml
 *.suo
 *.user
+.claude
 *.userprefs
 *.userosscache
 *.sln.docstates

@@ -241,6 +241,21 @@ public class DriverTests
     }
     
     
+    [Test]
+    public async Task UpdatePosition_Should_Embed_Driver_Identity_In_Event()
+    {
+        var driver = CreateDriver(); // Name="Ahmad Hassan", ShortName="Ahmad", IsActive=true, DistrictId="h3-1"
+        driver.ClearDomainEvents();
+
+        driver.UpdatePosition(Factory.CreatePoint(new Coordinate(36.24, 33.50)), DateTime.UtcNow);
+
+        var e = driver.DomainEvents.OfType<DriverPositionUpdatedDomainEvent>().Single();
+        await Assert.That(e.Name).IsEqualTo("Ahmad Hassan");
+        await Assert.That(e.ShortName).IsEqualTo("Ahmad");
+        await Assert.That(e.IsActive).IsTrue();
+        await Assert.That(e.DistrictId).IsEqualTo("h3-1");
+    }
+
     private static Driver CreateDriver()
     {
         var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, "Ahmad Hassan", "Ahmad", true);

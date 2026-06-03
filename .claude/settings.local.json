@@ -20,7 +20,16 @@
       "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Saad\\\\source\\\\repos\\\\GridTrack\\\\GridTrack.Infrastructure\\\\ExternalServices\")",
       "PowerShell(cd \"C:\\\\Users\\\\Saad\\\\source\\\\repos\\\\GridTrack\"; dotnet build GridTrack.sln --no-incremental -v q 2>&1 | Where-Object { $_ -match \"error|Error\" } | Select-Object -First 20)",
       "Bash(dotnet add *)",
-      "Bash(dotnet package *)"
+      "Bash(dotnet package *)",
+      "Bash(grep -v \"^--$\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Saad\\\\source\\\\repos\\\\GridTrack\\\\GridTrack.Application.UnitTests\\\\CQRS\\\\Handlers\")",
+      "Bash(dotnet test *)",
+      "Bash(wait)",
+      "Bash(Start-Process -NoNewWindow -FilePath \"dotnet\" -ArgumentList \"run --project GridTrack.IntegrationTests --no-build\" -PassThru)",
+      "Bash(Select-Object -ExpandProperty Id)",
+      "Bash(docker info *)",
+      "Bash(kill %1)",
+      "Bash(ls GridTrack.IntegrationTests/TestResults/)"
     ]
   }
 }

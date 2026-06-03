@@ -55,13 +55,18 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {   
         
-        // Inject test connection strings BEFORE services are configured
+        // Inject test connection strings BEFORE services are configured.
+        // ConnectionStrings:Queue must be explicitly nulled so Program.cs sees
+        // a blank rabbit string and Wolverine skips RabbitMQ transport.
+        // Without this, appsettings.Development.json's "amqp://localhost:5672"
+        // leaks through and Wolverine blocks forever trying to connect.
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] = _dbContainer.GetConnectionString(),
                 ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString(),
+                ["ConnectionStrings:Queue"]             = null,   // disable Wolverine RabbitMQ transport
                 ["Clerk:Authority"]                     = "https://test.clerk.invalid",
             });
         });
@@ -114,8 +119,9 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
         
     }
 
-    public new async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
+        await base.DisposeAsync();           // stops the ASP.NET Core test server
         await _dbContainer.StopAsync();
         await _redisContainer.StopAsync();
     }

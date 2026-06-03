@@ -7,7 +7,10 @@ public sealed record DriverPositionUpdatedDomainEvent(
     Guid DriverId,
     Point Location,
     DateTime Timestamp,
-    string DistrictId) : IDomainEvent;
+    string DistrictId,
+    string Name,
+    string ShortName,
+    bool IsActive) : IDomainEvent;
 
 public sealed record DriverAvailabilityChangedDomainEvent(
     Guid DriverId,
