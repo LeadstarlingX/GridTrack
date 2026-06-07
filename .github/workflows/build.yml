@@ -27,7 +27,7 @@ jobs:
           repository: LeadstarlingX/gridtrack-forecasting
           path: gridtrack-forecasting
           # If the repo is private, add a PAT to repo secrets and uncomment:
-          # token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GH_PAT }}
 
       - name: Setup .NET 9
         uses: actions/setup-dotnet@v4
@@ -77,3 +77,35 @@ jobs:
         with:
           name: test-results
           path: ./TestResults/
+          
+  update-readme:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: ./TestResults/CoverageReport
+
+      - name: Install Taskfile CLI
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+      - name: Update README coverage table
+        run: task update-readme-coverage
+
+      - name: Commit README
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet || git commit -m "ci: update coverage table [skip ci]"
+          git push
