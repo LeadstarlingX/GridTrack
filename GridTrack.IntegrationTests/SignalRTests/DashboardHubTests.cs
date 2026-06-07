@@ -65,7 +65,7 @@ public class DashboardHubTests : BaseIntegrationTest
             .GetRequiredService<IHubContext<DashboardHub>>();
 
         await hubContext.Clients.Group("mezzeh")
-            .SendAsync("DriverPositionUpdated", new { driverId = Guid.NewGuid(), lat = 33.5, lng = 36.2 });
+            .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid(), lat = 33.5, lng = 36.2 }]);
 
         await Task.Delay(200); // allow message delivery
 
@@ -93,7 +93,7 @@ public class DashboardHubTests : BaseIntegrationTest
             .GetRequiredService<IHubContext<DashboardHub>>();
 
         await hubContext.Clients.Group("mezzeh")
-            .SendAsync("DriverPositionUpdated", new { driverId = Guid.NewGuid() });
+            .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid() }]);
 
         await Task.Delay(200);
 
@@ -119,7 +119,7 @@ public class DashboardHubTests : BaseIntegrationTest
             .GetRequiredService<IHubContext<DashboardHub>>();
 
         await hubContext.Clients.Group("mezzeh")
-            .SendAsync("DriverPositionUpdated", new { driverId = Guid.NewGuid() });
+            .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid() }]);
 
         await Task.Delay(200);
 

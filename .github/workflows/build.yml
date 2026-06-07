@@ -18,8 +18,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out code
+      - name: Check out .NET repo
         uses: actions/checkout@v4
+
+      - name: Check out Python forecasting repo
+        uses: actions/checkout@v4
+        with:
+          repository: LeadstarlingX/gridtrack-forecasting
+          path: gridtrack-forecasting
+          # If the repo is private, add a PAT to repo secrets and uncomment:
+          # token: ${{ secrets.GH_PAT }}
 
       - name: Setup .NET 9
         uses: actions/setup-dotnet@v4
@@ -42,8 +50,12 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
+
       - name: Run CI Pipeline
         run: task ci
+        env:
+          GRIDTRACK_FORECASTING_PATH: ${{ github.workspace }}/gridtrack-forecasting
+          GRIDTRACK_REBUILD_PYTHON_IMAGE: "true"
 
       - name: Post coverage summary
         if: always()

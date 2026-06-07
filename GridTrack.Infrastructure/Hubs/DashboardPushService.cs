@@ -4,74 +4,68 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace GridTrack.Infrastructure.Hubs;
 
-/// <summary>
-/// Implements <see cref="IDashboardPushService"/> by broadcasting SignalR messages
-/// to district groups on the <see cref="DashboardHub"/>.
-/// </summary>
+
 internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDashboardPushService
 {
     public Task BroadcastDriverPositionAsync(string districtId, DriverDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendAsync(
+        => hub.Clients.Group(districtId).SendCoreAsync(
             "DriverPositionUpdated",
-            new
+            [new
             {
-                driverId = payload.DriverId,
-                lat = payload.Location.Coordinate.Y,
-                lng = payload.Location.Coordinate.X,
-                districtId = payload.DistrictId
-            },
+                driverId   = payload.DriverId,
+                lat        = payload.Location.Coordinate.Y,
+                lng        = payload.Location.Coordinate.X,
+                districtId = payload.DistrictId,
+            }],
             ct);
 
     public Task BroadcastDeliveryUpdateAsync(string districtId, DeliveryDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendAsync(
+        => hub.Clients.Group(districtId).SendCoreAsync(
             "DeliveryUpdated",
-            new
+            [new
             {
-                deliveryId = payload.DeliveryId,
-                status = payload.Status.ToString(),
+                deliveryId       = payload.DeliveryId,
+                status           = payload.Status.ToString(),
                 assignedDriverId = payload.AssignedDriverId,
-                etaSeconds = (int?)null   // populated by richer read model when available
-            },
+                etaSeconds       = (int?)null,
+            }],
             ct);
 
     public Task BroadcastAnomalyAsync(string districtId, AnomalyAlertDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendAsync(
+        => hub.Clients.Group(districtId).SendCoreAsync(
             "AnomalyBroadcast",
-            new
+            [new
             {
-                deliveryId = payload.DeliveryId,
-                driverId = payload.DeliveryId,   // AnomalyAlertDto carries DeliveryId; driverId added when model is richer
+                deliveryId  = payload.DeliveryId,
                 anomalyType = payload.Type.ToString(),
-                reason = payload.Reason,
-                districtId = payload.DistrictId,
-                lat = 0.0,
-                lng = 0.0,
-                timestamp = payload.Timestamp
-            },
+                reason      = payload.Reason,
+                districtId  = payload.DistrictId,
+                timestamp   = payload.Timestamp,
+            }],
             ct);
 
     public Task BroadcastForecastOverlayAsync(string districtId, ForecastDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendAsync(
+        => hub.Clients.Group(districtId).SendCoreAsync(
             "ForecastOverlayUpdated",
-            new
+            [new
             {
-                districtId = payload.DistrictId,
+                districtId       = payload.DistrictId,
                 forecastedDemand = payload.ExpectedDeliveries,
-                updatedAt = payload.GeneratedAt
-            },
+                updatedAt        = payload.GeneratedAt,
+            }],
             ct);
 
     public Task BroadcastUrgencyUpdateAsync(Guid deliveryId, int urgencyScore, string aiNote, CancellationToken ct)
-        => hub.Clients.All.SendAsync(
+        => hub.Clients.All.SendCoreAsync(
             "UrgencyUpdated",
-            new { deliveryId, urgencyScore, aiNote },
+            [new { deliveryId, urgencyScore, aiNote }],
             ct);
 
     public Task BroadcastForecastResultAsync(
         string districtId, int expectedDeliveries, double staffingRatio,
         string label, string color, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendAsync(
+        => hub.Clients.Group(districtId).SendCoreAsync(
             "ForecastOverlayUpdated",
-            new { districtId, expectedDeliveries, staffingRatio, label, color },
+            [new { districtId, expectedDeliveries, staffingRatio, label, color }],
             ct);
 }

@@ -55,9 +55,14 @@ tasks:
       - dotnet run --project ./GridTrack.Infrastructure.UnitTests/GridTrack.Infrastructure.UnitTests.csproj --configuration Release -- --report-trx --report-trx-filename infrastructure-unit-test-results.trx --results-directory ./TestResults/InfrastructureUnit
   
   test-integration:
-    desc: Run integration  tests
+    desc: Run integration tests
     cmds:
       - dotnet run --project ./GridTrack.IntegrationTests/GridTrack.IntegrationTests.csproj --configuration Release -- --report-trx --report-trx-filename integration-test-results.trx --results-directory ./TestResults/Integration
+
+  test-e2e:
+    desc: Run E2E tests (requires Docker + gridtrack-forecasting repo)
+    cmds:
+      - dotnet run --project ./GridTrack.E2ETests/GridTrack.E2ETests.csproj --configuration Release -- --report-trx --report-trx-filename e2e-test-results.trx --results-directory ./TestResults/E2E
 
   test-all:
     desc: Run all tests

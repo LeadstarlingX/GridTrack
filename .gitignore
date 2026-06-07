@@ -44,10 +44,22 @@ node_modules/
 # Test results
 **/TestResults/
 
+# Machine-specific launch settings (contain absolute local paths)
+**/Properties/launchSettings.json
+
 # Environment specific settings
 .env
 .env.local
 *.env.*
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
 
 # NuGet
 **/packages/

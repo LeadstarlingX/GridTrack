@@ -7,11 +7,7 @@ namespace GridTrack.Application.UseCases.Drivers;
 
 public sealed record ToggleDriverAvailabilityCommand(Guid DriverId, bool IsActive);
 
-/// <summary>
-/// Returns the availability response plus any domain events to cascade.
-/// Wolverine automatically publishes the events and returns the first tuple element
-/// when the caller uses bus.InvokeAsync&lt;DriverAvailabilityResponse?&gt;.
-/// </summary>
+
 public sealed class ToggleDriverAvailabilityHandler
 {
     public async Task<(DriverAvailabilityResponse? Response, IEnumerable<object> Events)> Handle(

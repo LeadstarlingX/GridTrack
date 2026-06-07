@@ -1,4 +1,4 @@
-﻿using GridTrack.Api;
+using GridTrack.Api;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.Dtos;
@@ -29,14 +29,12 @@ namespace GridTrack.IntegrationTests.Abstractions;
 
 public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsyncInitializer
 {
-    
     public readonly IDateTimeProvider DateTimeProviderMock = Substitute.For<IDateTimeProvider>();
 
     private readonly PostgreSqlContainer _dbContainer =
         new PostgreSqlBuilder("postgis/postgis:18-3.6")
             .WithPassword("postgres")
             .Build();
-
 
     private readonly RedisContainer _redisContainer =
         new RedisBuilder("redis:8.4.0")
@@ -49,12 +47,10 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
         await _redisContainer.StartAsync();
 
         using var _ = CreateClient();
-        
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {   
-        
+    {
         // Inject test connection strings BEFORE services are configured.
         // ConnectionStrings:Queue must be explicitly nulled so Program.cs sees
         // a blank rabbit string and Wolverine skips RabbitMQ transport.
@@ -66,14 +62,13 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
             {
                 ["ConnectionStrings:DefaultConnection"] = _dbContainer.GetConnectionString(),
                 ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString(),
-                ["ConnectionStrings:Queue"]             = null,   // disable Wolverine RabbitMQ transport
+                ["ConnectionStrings:Queue"]             = null,
                 ["Clerk:Authority"]                     = "https://test.clerk.invalid",
             });
         });
-        
+
         builder.ConfigureTestServices(services =>
         {
-            // 2. Disable Clerk JWT backchannel - don't touch scheme registrations
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, o =>
             {
                 o.Authority = null;
@@ -84,7 +79,6 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                 o.BackchannelHttpHandler = new NullBackchannelHandler();
             });
 
-            // 3. Add test scheme on top of existing auth
             services.AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
 
@@ -95,11 +89,9 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                 o.DefaultScheme             = "Test";
             });
 
-            // 4. Disable SeedService
             var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
             if (seed != null) services.Remove(seed);
 
-            // 5. Stub unimplemented services
             services.RemoveAll<IForecastingService>();
             services.AddSingleton<IForecastingService>(_ =>
             {
@@ -110,18 +102,12 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                     .Returns(Task.FromResult<IEnumerable<AnomalyAlertDto>>(Array.Empty<AnomalyAlertDto>()));
                 return stub;
             });
-            
-            var mvcBuilder = services.FirstOrDefault(d => 
-                d.ServiceType.FullName?.Contains("ApplicationPartManager") == true);
-// set a breakpoint here and check if it's null
-            
         });
-        
     }
 
     public override async ValueTask DisposeAsync()
     {
-        await base.DisposeAsync();           // stops the ASP.NET Core test server
+        await base.DisposeAsync();
         await _dbContainer.StopAsync();
         await _redisContainer.StopAsync();
     }
