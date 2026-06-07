@@ -109,10 +109,10 @@ tasks:
     cmds:
       - mkdir -p {{.COVERAGE_DIR}}
       - dotnet-coverage collect
-        "dotnet run --project ./GridTrack.IntegrationTests/GridTrack.IntegrationTests.csproj --configuration Release"
-        -f xml -o {{.COVERAGE_DIR}}/integration.xml
         --include "[GridTrack.Api]*,[GridTrack.Application]*,[GridTrack.Infrastructure]*,[GridTrack.Domain]*"
         --exclude "[xunit*]*,[TUnit*]*,[Testcontainers*]*,[*]IntegrationTests.*"
+        -f xml -o {{.COVERAGE_DIR}}/integration.xml
+        "dotnet run --project ./GridTrack.IntegrationTests/GridTrack.IntegrationTests.csproj --configuration Release"
   
   coverage-report:
     desc: Merge coverage files and generate HTML + summary report
@@ -131,7 +131,7 @@ tasks:
       - task: coverage-domain
       - task: coverage-application
       - task: coverage-infrastructure
-      - task: coverage-integration
+#      - task: coverage-integration
       - task: coverage-e2e
       - task: coverage-report
 
@@ -173,8 +173,8 @@ tasks:
     cmds:
       - task: build
       - task: coverage
-      - task: update-readme-coverage
       - task: test-integration
+      - task: update-readme-coverage
 
   cd-compose:
     desc: Deploy with Docker Compose
