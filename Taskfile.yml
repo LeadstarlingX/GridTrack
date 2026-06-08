@@ -131,7 +131,7 @@ tasks:
       - task: coverage-domain
       - task: coverage-application
       - task: coverage-infrastructure
-#      - task: coverage-integration
+      - task: coverage-integration
       - task: coverage-e2e
       - task: coverage-report
 
@@ -173,7 +173,6 @@ tasks:
     cmds:
       - task: build
       - task: coverage
-      - task: test-integration
       - task: update-readme-coverage
 
   cd-compose:
