@@ -1,4 +1,4 @@
-﻿import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET
 import re, pathlib, sys
 
 cob = pathlib.Path("./TestResults/CoverageReport/Cobertura.xml")
@@ -15,15 +15,35 @@ TARGET = {
     "GridTrack.Infrastructure": "Infrastructure",
 }
 
-rows = []
+def assembly_label(pkg_name):
+    # Strip .dll suffix and match by assembly prefix (handles namespace-level packages)
+    name = pkg_name.removesuffix(".dll")
+    for prefix, label in TARGET.items():
+        if name == prefix or name.startswith(prefix + "."):
+            return label
+    return None
+
+totals = {label: [0, 0] for label in TARGET.values()}  # [covered_lines, total_lines]
+
 for pkg in root.iter("package"):
-    name = pkg.get("name", "")
-    if name in TARGET:
-        lr = float(pkg.get("line-rate", 0)) * 100
-        rows.append(f"| {TARGET[name]} | {lr:.1f}% |")
+    label = assembly_label(pkg.get("name", ""))
+    if label is None:
+        continue
+    for line_elem in pkg.iter("line"):
+        totals[label][1] += 1
+        if int(line_elem.get("hits", 0)) > 0:
+            totals[label][0] += 1
+
+rows = []
+for prefix, label in TARGET.items():
+    covered, total = totals[label]
+    if total > 0:
+        pct = covered / total * 100
+        rows.append(f"| {label} | {pct:.1f}% |")
 
 if not rows:
-    print("No matching packages found in Cobertura.xml")
+    found = sorted({p.get("name", "") for p in root.iter("package")})[:30]
+    print(f"No matching packages found in Cobertura.xml\nFound packages: {found}")
     sys.exit(1)
 
 table = "| Layer | Line Coverage |\n|-------|---------------|\n" + "\n".join(rows)
