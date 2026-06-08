@@ -62,10 +62,9 @@ internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDas
             ct);
 
     public Task BroadcastForecastResultAsync(
-        string districtId, int expectedDeliveries, double staffingRatio,
-        string label, string color, CancellationToken ct)
+        string districtId, int forecastedDemand, DateTime updatedAt, CancellationToken ct)
         => hub.Clients.Group(districtId).SendCoreAsync(
             "ForecastOverlayUpdated",
-            [new { districtId, expectedDeliveries, staffingRatio, label, color }],
+            [new { districtId, forecastedDemand, updatedAt }],
             ct);
 }

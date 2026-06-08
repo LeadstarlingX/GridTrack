@@ -1,8 +1,6 @@
 using GridTrack.Api;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
-using GridTrack.Application.Dtos;
-using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
@@ -91,17 +89,6 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
 
             var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
             if (seed != null) services.Remove(seed);
-
-            services.RemoveAll<IForecastingService>();
-            services.AddSingleton<IForecastingService>(_ =>
-            {
-                var stub = Substitute.For<IForecastingService>();
-                stub.GetDistrictDemandForecastAsync(Arg.Any<string>(), Arg.Any<DateTime>())
-                    .Returns(Task.FromResult<ForecastDto?>(null));
-                stub.GetEtaAnomaliesAsync(Arg.Any<IEnumerable<string>>())
-                    .Returns(Task.FromResult<IEnumerable<AnomalyAlertDto>>(Array.Empty<AnomalyAlertDto>()));
-                return stub;
-            });
         });
     }
 

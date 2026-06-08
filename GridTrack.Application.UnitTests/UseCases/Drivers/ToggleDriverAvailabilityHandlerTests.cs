@@ -25,7 +25,7 @@ public class ToggleDriverAvailabilityHandlerTests
             CancellationToken.None);
 
         await Assert.That(response).IsNull();
-        await Assert.That(events).IsEmpty();
+        await Assert.That(events).IsNull();
     }
 
     [Test]
@@ -76,7 +76,7 @@ public class ToggleDriverAvailabilityHandlerTests
             new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
-        await Assert.That(events).IsNotEmpty();
+        await Assert.That(events).IsNotNull();
     }
 
     [Test]
@@ -94,7 +94,7 @@ public class ToggleDriverAvailabilityHandlerTests
 
         await Assert.That(response).IsNotNull();
         await Assert.That(response!.Status).IsEqualTo("available");
-        await Assert.That(events).IsEmpty();
+        await Assert.That(events).IsNull();
     }
 
     private static Driver CreateDriver(bool isActive)

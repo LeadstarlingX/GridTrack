@@ -211,7 +211,7 @@ public class DashboardPushServiceTests
         var (svc, hub) = Build();
 
         await svc.BroadcastForecastResultAsync(
-            "kafrsousa", 12, 0.65, "Critical", "#FF4B4B", CancellationToken.None);
+            "kafrsousa", 12, DateTime.UtcNow, CancellationToken.None);
 
         await Assert.That(hub.FakeClients.LastGroupName).IsEqualTo("kafrsousa");
     }
@@ -222,22 +222,23 @@ public class DashboardPushServiceTests
         var (svc, hub) = Build();
 
         await svc.BroadcastForecastResultAsync(
-            "mezzeh", 8, 0.80, "Moderate", "#FFA500", CancellationToken.None);
+            "mezzeh", 8, DateTime.UtcNow, CancellationToken.None);
 
         await Assert.That(hub.FakeClients.GroupProxy.Calls[0].Method).IsEqualTo("ForecastOverlayUpdated");
     }
 
     [Test]
-    public async Task BroadcastForecastResult_Should_Include_Label_And_Ratio_In_Payload()
+    public async Task BroadcastForecastResult_Should_Include_ForecastedDemand_And_UpdatedAt_In_Payload()
     {
         var (svc, hub) = Build();
+        var updatedAt = new DateTime(2026, 6, 8, 14, 0, 0, DateTimeKind.Utc);
 
         await svc.BroadcastForecastResultAsync(
-            "malki", 5, 0.92, "Low demand", "#4CAF50", CancellationToken.None);
+            "malki", 15, updatedAt, CancellationToken.None);
 
         var payload = hub.FakeClients.GroupProxy.Calls[0].Args[0]!;
-        await Assert.That(GetProperty<string>(payload, "label")).IsEqualTo("Low demand");
-        await Assert.That(GetProperty<double>(payload, "staffingRatio")).IsEqualTo(0.92);
+        await Assert.That(GetProperty<int>(payload, "forecastedDemand")).IsEqualTo(15);
+        await Assert.That(GetProperty<DateTime>(payload, "updatedAt")).IsEqualTo(updatedAt);
     }
 
     // ──────────────────────────────────────────────────────────────

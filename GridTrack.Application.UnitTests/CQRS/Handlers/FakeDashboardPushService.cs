@@ -10,7 +10,7 @@ internal sealed class FakeDashboardPushService : IDashboardPushService
     public List<(string DistrictId, AnomalyAlertDto Dto)> AnomalyCalls { get; } = new();
     public List<(string DistrictId, ForecastDto Dto)> ForecastOverlayCalls { get; } = new();
     public List<(Guid DeliveryId, int Score, string Note)> UrgencyCalls { get; } = new();
-    public List<(string DistrictId, int Expected, double Ratio, string Label, string Color)> ForecastResultCalls { get; } = new();
+    public List<(string DistrictId, int ForecastedDemand, DateTime UpdatedAt)> ForecastResultCalls { get; } = new();
 
     public Task BroadcastDriverPositionAsync(string districtId, DriverDto payload, CancellationToken ct)
     {
@@ -42,9 +42,9 @@ internal sealed class FakeDashboardPushService : IDashboardPushService
         return Task.CompletedTask;
     }
 
-    public Task BroadcastForecastResultAsync(string districtId, int expectedDeliveries, double staffingRatio, string label, string color, CancellationToken ct)
+    public Task BroadcastForecastResultAsync(string districtId, int forecastedDemand, DateTime updatedAt, CancellationToken ct)
     {
-        ForecastResultCalls.Add((districtId, expectedDeliveries, staffingRatio, label, color));
+        ForecastResultCalls.Add((districtId, forecastedDemand, updatedAt));
         return Task.CompletedTask;
     }
 }

@@ -34,6 +34,10 @@ public sealed class DeliveryConfiguration : IEntityTypeConfiguration<Delivery>
             .IsRequired();
         
 
+        builder.Property(d => d.AnomalyTypeValue)
+            .HasConversion<int>()
+            .IsRequired(false);
+
         builder.Property(d => d.AnomalyReason)
             .HasMaxLength(500);
 

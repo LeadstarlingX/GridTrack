@@ -89,6 +89,37 @@ public class GetDeliveryByIdHandlerTests
     }
 
     [Test]
+    public async Task Handle_Populates_RoutePolyline_From_ReadService()
+    {
+        var deliveryId = Guid.NewGuid();
+        var dto = new DeliveryDto
+        {
+            DeliveryId = deliveryId,
+            CurrentLocation = Factory.CreatePoint(new Coordinate(36.2, 33.5)),
+            Status = DeliveryStatus.InTransit,
+            DistrictId = "h3-district-1",
+            CreatedAt = DateTime.UtcNow,
+        };
+        var waypoints = new[]
+        {
+            new RouteWaypointDto(33.50, 36.20),
+            new RouteWaypointDto(33.51, 36.21),
+            new RouteWaypointDto(33.52, 36.22),
+        };
+        var handler = new GetDeliveryByIdHandler();
+
+        var result = await handler.Handle(
+            new GetDeliveryByIdQuery(deliveryId),
+            new FakeDeliveryReadService(dto, waypoints),
+            CancellationToken.None);
+
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result!.RoutePolyline.Count).IsEqualTo(3);
+        await Assert.That(result.RoutePolyline[0].Lat).IsEqualTo(33.50);
+        await Assert.That(result.RoutePolyline[0].Lng).IsEqualTo(36.20);
+    }
+
+    [Test]
     public async Task Handle_Returns_Null_AssignedDriverId_When_Unassigned()
     {
         var dto = new DeliveryDto
@@ -112,7 +143,9 @@ public class GetDeliveryByIdHandlerTests
 
     // ── Fakes ─────────────────────────────────────────────────────────────
 
-    private sealed class FakeDeliveryReadService(DeliveryDto? returnValue) : IDeliveryReadService
+    private sealed class FakeDeliveryReadService(
+        DeliveryDto? returnValue,
+        IEnumerable<RouteWaypointDto>? waypoints = null) : IDeliveryReadService
     {
         public Task<DeliveryDto?> GetByIdAsync(Guid id, CancellationToken ct)
             => Task.FromResult(returnValue);
@@ -124,6 +157,6 @@ public class GetDeliveryByIdHandlerTests
             => Task.FromResult<Delivery?>(null);
 
         public Task<IEnumerable<RouteWaypointDto>> GetRouteAsync(Guid deliveryId, CancellationToken ct)
-            => Task.FromResult<IEnumerable<RouteWaypointDto>>(Array.Empty<RouteWaypointDto>());
+            => Task.FromResult(waypoints ?? Enumerable.Empty<RouteWaypointDto>());
     }
 }

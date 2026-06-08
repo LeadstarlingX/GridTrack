@@ -1,12 +1,13 @@
 namespace GridTrack.Application.Dtos;
 
 public sealed record DriverListItemResponse(
-    Guid DriverId,
+    Guid Id,
     string Name,
     string ShortName,
     double Lat,
     double Lng,
     string DistrictId,
+    string DistrictName,
     string Status,
     long ActiveDeliveries,
     long CompletedToday,

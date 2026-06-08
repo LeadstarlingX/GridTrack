@@ -33,6 +33,7 @@ public sealed class Delivery : BaseEntity
 	public DateTime? ActualEta { get; private set; }
 	public string DistrictId { get; private set; } = string.Empty;
 	public bool AnomalyFlag { get; private set; }
+	public AnomalyType? AnomalyTypeValue { get; private set; }
 	public DateTime CreatedAt { get; private set; }
 	public DateTime? PickedUpAt { get; private set; }
 	public DateTime? DeliveredAt { get; private set; }
@@ -200,6 +201,7 @@ public sealed class Delivery : BaseEntity
 		}
 
 		AnomalyFlag = true;
+		AnomalyTypeValue = type;
 		AnomalyReason = reason;
 		RaiseDomainEvent(new DeliveryFlaggedAnomalousDomainEvent(DeliveryId, type, reason, DistrictId));
 		return Result.Success();

@@ -88,8 +88,14 @@ public sealed class AnomalyReadService : IAnomalyReadService
                        d."DeliveryId"                                     AS "Id",
                        d."DeliveryId"                                     AS "DeliveryId",
                        d."AssignedDriverId"                               AS "DriverId",
-                       ''                                                 AS "DriverName",
-                       'ANOMALY'                                          AS "AnomalyType",
+                       COALESCE(dr."Name", '')                           AS "DriverName",
+                       CASE d."AnomalyTypeValue"
+                           WHEN 0 THEN 'Delay'
+                           WHEN 1 THEN 'RouteDeviation'
+                           WHEN 2 THEN 'Stall'
+                           WHEN 3 THEN 'Stall'
+                           ELSE 'Stall'
+                       END                                                AS "AnomalyType",
                        COALESCE(d."AnomalyReason", '')                   AS "Reason",
                        d."DistrictId"                                     AS "DistrictId",
                        d."DistrictId"                                     AS "DistrictName",
@@ -97,6 +103,7 @@ public sealed class AnomalyReadService : IAnomalyReadService
                        ST_X(d."CurrentLocation"::geometry)::float         AS "Lng",
                        d."CreatedAt"                                      AS "Timestamp"
                    FROM public."Deliveries" d
+                   LEFT JOIN public."Drivers" dr ON dr."DriverId" = d."AssignedDriverId"
                    WHERE {string.Join(" AND ", where)}
                    ORDER BY d."CreatedAt" DESC
                    LIMIT @FetchSize

@@ -1,6 +1,5 @@
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
-using GridTrack.Application.Interfaces;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -19,6 +18,11 @@ public sealed class GetDeliveryByIdHandler
 
         var updatedAt = delivery.DeliveredAt ?? delivery.PickedUpAt ?? delivery.CancelledAt;
 
+        var waypoints = await readService.GetRouteAsync(query.DeliveryId, ct);
+        var polyline = waypoints
+            .Select(w => new CoordinateResponse(w.Lat, w.Lng))
+            .ToArray();
+
         return new GetDeliveryByIdResponse(
             delivery.DeliveryId,
             delivery.Status.ToString(),
@@ -28,6 +32,6 @@ public sealed class GetDeliveryByIdHandler
             EtaSeconds: null,
             delivery.CreatedAt,
             updatedAt,
-            RoutePolyline: Array.Empty<CoordinateResponse>());
+            RoutePolyline: polyline);
     }
 }

@@ -14,10 +14,12 @@ public class AnalysisController(IMessageBus bus) : ControllerBase
         [FromBody] ChatRequest request,
         CancellationToken ct)
     {
-        var result = await bus.InvokeAsync<ChatResponse>(
+        var result = await bus.InvokeAsync<ChatResponse?>(
             new AnalysisChatQuery(request.Messages, request.CsvData),
             ct);
 
-        return Ok(result);
+        return result is null
+            ? StatusCode(503, new { code = "AI_UNAVAILABLE", message = "AI service is temporarily unavailable." })
+            : Ok(result);
     }
 }

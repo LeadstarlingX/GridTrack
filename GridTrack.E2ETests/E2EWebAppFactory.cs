@@ -2,8 +2,6 @@ using System.Diagnostics;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
-using GridTrack.Application.Dtos;
-using GridTrack.Application.Interfaces;
 using GridTrack.Infrastructure.Seeding;
 using GridTrack.E2ETests.Abstractions;
 using GridTrack.Api;
@@ -15,7 +13,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using NSubstitute;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Testcontainers.Redis;
@@ -153,6 +150,8 @@ public class E2EWebAppFactory : WebApplicationFactory<Program>, IAsyncInitialize
                 ["ConnectionStrings:Cache"]             = _redis.GetConnectionString(),
                 ["ConnectionStrings:Queue"]             = _rabbitUrl,
                 ["Clerk:Authority"]                     = "https://test.clerk.invalid",
+                ["Python:BaseUrl"]                      = _python is null ? null
+                    : $"http://localhost:{_python.GetMappedPublicPort(8000)}",
             });
         });
 
@@ -180,17 +179,6 @@ public class E2EWebAppFactory : WebApplicationFactory<Program>, IAsyncInitialize
 
             var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
             if (seed != null) services.Remove(seed);
-
-            services.RemoveAll<IForecastingService>();
-            services.AddSingleton<IForecastingService>(_ =>
-            {
-                var stub = Substitute.For<IForecastingService>();
-                stub.GetDistrictDemandForecastAsync(Arg.Any<string>(), Arg.Any<DateTime>())
-                    .Returns(Task.FromResult<ForecastDto?>(null));
-                stub.GetEtaAnomaliesAsync(Arg.Any<IEnumerable<string>>())
-                    .Returns(Task.FromResult<IEnumerable<AnomalyAlertDto>>(Array.Empty<AnomalyAlertDto>()));
-                return stub;
-            });
         });
     }
 

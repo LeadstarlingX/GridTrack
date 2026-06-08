@@ -11,5 +11,5 @@ public interface IDashboardPushService
 
     // Called by inbound Python result handlers
     Task BroadcastUrgencyUpdateAsync(Guid deliveryId, int urgencyScore, string aiNote, CancellationToken ct);
-    Task BroadcastForecastResultAsync(string districtId, int expectedDeliveries, double staffingRatio, string label, string color, CancellationToken ct);
+    Task BroadcastForecastResultAsync(string districtId, int forecastedDemand, DateTime updatedAt, CancellationToken ct);
 }

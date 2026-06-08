@@ -18,9 +18,7 @@ public static class ForecastResultHandler
         await push.BroadcastForecastResultAsync(
             msg.DistrictId,
             msg.ExpectedDeliveries,
-            msg.StaffingRatio,
-            msg.Label,
-            msg.Color,
+            msg.GeneratedAt,
             ct);
     }
 }

@@ -49,7 +49,7 @@ public class ForecastQueryIntegrationTests : BaseIntegrationTest
 
         result.Should().NotBeNull();
         result!.DistrictId.Should().Be("h3-demand");
-        result.Horizon.Should().Be("24h");
+        result.Horizon.Should().Be("next-hour");
         result.ForecastedDemand.Should().Be(20);
         result.DriverRecommendation.Should().Be(2); // ceil(20 / 10)
         result.StaffingRatio.Should().BeApproximately(0.1, precision: 0.001); // 2 / 20

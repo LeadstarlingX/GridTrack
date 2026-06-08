@@ -35,23 +35,22 @@ public class ForecastResultHandlerTests
     {
         var cache = new FakeCacheService();
         var push = new FakeDashboardPushService();
+        var generatedAt = DateTime.UtcNow;
         var msg = new ForecastResultMessage(
             DistrictId: "babtouma",
             ExpectedDeliveries: 12,
             StaffingRatio: 0.65,
             Label: "Critical",
             Color: "#FF4B4B",
-            GeneratedAt: DateTime.UtcNow);
+            GeneratedAt: generatedAt);
 
         await ForecastResultHandler.Handle(msg, cache, push, CancellationToken.None);
 
         await Assert.That(push.ForecastResultCalls).Count().IsEqualTo(1);
         var call = push.ForecastResultCalls[0];
         await Assert.That(call.DistrictId).IsEqualTo("babtouma");
-        await Assert.That(call.Expected).IsEqualTo(12);
-        await Assert.That(call.Ratio).IsEqualTo(0.65);
-        await Assert.That(call.Label).IsEqualTo("Critical");
-        await Assert.That(call.Color).IsEqualTo("#FF4B4B");
+        await Assert.That(call.ForecastedDemand).IsEqualTo(12);
+        await Assert.That(call.UpdatedAt).IsEqualTo(generatedAt);
     }
 
     [Test]

@@ -75,12 +75,13 @@ public sealed class DriverReadService : IDriverReadService
         //   otherwise                     → "available"
         const string sql = """
             SELECT
-                d."DriverId",
+                d."DriverId"                                       AS "Id",
                 d."Name",
                 d."ShortName",
-                ST_Y(d."Location") AS "Lat",
-                ST_X(d."Location") AS "Lng",
+                ST_Y(d."Location")                                 AS "Lat",
+                ST_X(d."Location")                                 AS "Lng",
                 d."DistrictId",
+                d."DistrictId"                                     AS "DistrictName",
                 CASE
                     WHEN d."IsActive" = false                                  THEN 'offline'
                     WHEN COUNT(del."DeliveryId") FILTER (WHERE del."AnomalyFlag" = true AND del."Status" NOT IN (4,5)) > 0
@@ -130,7 +131,7 @@ public sealed class DriverReadService : IDriverReadService
         if (rows.Count > pageSize)
         {
             rows = rows.Take(pageSize).ToList();
-            nextCursor = rows[^1].DriverId.ToString();
+            nextCursor = rows[^1].Id.ToString();
         }
 
         return new GetDriversResponse(rows, nextCursor, null);

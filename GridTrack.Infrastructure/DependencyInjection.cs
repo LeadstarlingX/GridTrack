@@ -115,6 +115,10 @@ public static class DependencyInjection
             c.BaseAddress = new Uri(
                 configuration["Osrm:BaseUrl"] ?? "http://router.project-osrm.org"));
 
+        services.AddHttpClient<IAnalysisChatService, PythonAnalysisChatService>(c =>
+            c.BaseAddress = new Uri(
+                configuration["Python:BaseUrl"] ?? "http://localhost:8000"));
+
         return services;
     }
 
