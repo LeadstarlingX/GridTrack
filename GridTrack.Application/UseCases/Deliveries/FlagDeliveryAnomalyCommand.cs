@@ -2,8 +2,8 @@ using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Errors;
 using GridTrack.Domain.Abstractions;
+using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.ValueObjects;
-using System.Linq;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -13,7 +13,7 @@ public sealed record FlagDeliveryAnomalyCommand(FlagAnomalyRequest Request);
 
 public sealed class FlagDeliveryAnomalyHandler
 {
-    public async Task<(Result Result, IEnumerable<object> Events)> Handle(
+    public async Task<(Result Result, DeliveryFlaggedAnomalousDomainEvent? Event)> Handle(
         FlagDeliveryAnomalyCommand command,
         IDeliveryReadService readService,
         IDeliveryRepository repository,
@@ -24,22 +24,20 @@ public sealed class FlagDeliveryAnomalyHandler
         var delivery = await readService.GetAggregateByIdAsync(request.DeliveryId, ct);
 
         if (delivery is null)
-        {
-            return (Result.Failure(ApplicationErrors.DeliveryNotFound), Array.Empty<object>());
-        }
+            return (Result.Failure(ApplicationErrors.DeliveryNotFound), null);
 
         var result = delivery.FlagAnomaly(request.Type, request.Reason);
         if (result.IsFailure)
-        {
-            return (result, Array.Empty<object>());
-        }
+            return (result, null);
 
         await repository.UpdateAsync(delivery, ct);
         await unitOfWork.SaveChangesAsync(ct);
 
-        var events = delivery.DomainEvents.Cast<object>().ToList();
+        var domainEvent = delivery.DomainEvents
+            .OfType<DeliveryFlaggedAnomalousDomainEvent>()
+            .FirstOrDefault();
         delivery.ClearDomainEvents();
 
-        return (Result.Success(), events);
+        return (Result.Success(), domainEvent);
     }
 }

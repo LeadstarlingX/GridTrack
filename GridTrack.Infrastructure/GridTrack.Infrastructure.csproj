@@ -34,6 +34,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="GridTrack.IntegrationTests" />
+        <InternalsVisibleTo Include="GridTrack.Infrastructure.UnitTests" />
     </ItemGroup>
     
 </Project>

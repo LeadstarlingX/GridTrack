@@ -4,6 +4,9 @@
 **/out/
 **/publish/
 
+# Wolverine auto-generated handler wiring (JasperFx code generation — not source code)
+GridTrack.Api/Internal/
+
 #tracker files
 track.md
 progress.md
