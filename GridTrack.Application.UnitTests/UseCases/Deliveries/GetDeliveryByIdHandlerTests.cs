@@ -158,5 +158,10 @@ public class GetDeliveryByIdHandlerTests
 
         public Task<IEnumerable<RouteWaypointDto>> GetRouteAsync(Guid deliveryId, CancellationToken ct)
             => Task.FromResult(waypoints ?? Enumerable.Empty<RouteWaypointDto>());
+
+        public Task<GetDeliveriesResponse> GetAllPaginatedAsync(
+            string? cursor, string? status, string? districtId,
+            DateTime? from, DateTime? to, int pageSize, CancellationToken ct)
+            => Task.FromResult(new GetDeliveriesResponse([], null, null));
     }
 }

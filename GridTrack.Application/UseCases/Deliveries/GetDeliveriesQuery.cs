@@ -13,6 +13,11 @@ public sealed record GetDeliveriesQuery(
 
 public sealed class GetDeliveriesHandler
 {
-    public Task<GetDeliveriesResponse> Handle(GetDeliveriesQuery query, IDriverReadService _,CancellationToken ct)
-        => Task.FromResult(new GetDeliveriesResponse([], null, null));
+    public Task<GetDeliveriesResponse> Handle(
+        GetDeliveriesQuery query,
+        IDeliveryReadService readService,
+        CancellationToken ct)
+        => readService.GetAllPaginatedAsync(
+            query.Cursor, query.Status, query.DistrictId,
+            query.From, query.To, query.PageSize, ct);
 }
