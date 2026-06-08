@@ -113,11 +113,10 @@ tasks:
         -f xml -o {{.COVERAGE_DIR}}/integration.xml
   
   coverage-report:
-    desc: Merge coverage files and generate HTML + summary report
+    desc: Generate HTML + summary report from all coverage files
     cmds:
-      - dotnet-coverage merge {{.COVERAGE_DIR}}/*.xml -f xml -o {{.COVERAGE_DIR}}/merged.xml
       - reportgenerator
-        -reports:"{{.COVERAGE_DIR}}/merged.xml"
+        -reports:"{{.COVERAGE_DIR}}/*.xml"
         -targetdir:"{{.REPORT_DIR}}"
         -reporttypes:"Html;Cobertura;MarkdownSummaryGithub"
         -title:"GridTrack Coverage"
