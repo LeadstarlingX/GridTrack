@@ -22,7 +22,12 @@ public static class DependencyInjection
         services.AddControllers(o =>
                 o.Filters.Add(new AuthorizeFilter(
                     new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())))
-            .AddApplicationPart(typeof(DependencyInjection).Assembly);
+            .AddApplicationPart(typeof(DependencyInjection).Assembly)
+            // Serialize enums (AnomalyType, DeliveryStatus) as strings so REST payloads
+            // match the frontend's string unions instead of emitting integers.
+            .AddJsonOptions(o =>
+                o.JsonSerializerOptions.Converters.Add(
+                    new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
         return services;
     }

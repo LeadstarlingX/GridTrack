@@ -223,6 +223,21 @@ public sealed class Delivery : BaseEntity
 		CancelledAt = timestamp;
 		AnomalyReason = reason;
 		RaiseDomainEvent(new DeliveryCancelledDomainEvent(DeliveryId, timestamp, reason));
+
+		// A delivery cancelled at or after its promised ETA is a service anomaly:
+		// flag it so it surfaces on the dashboard and gets an AI dispatcher note via
+		// the anomaly pipeline. Status stays Cancelled (terminal) — we do not move to
+		// Anomalous; the flag + the raised event carry the anomaly signal.
+		if (ExpectedEta.HasValue && timestamp >= ExpectedEta.Value)
+		{
+			var anomalyReason = $"Cancelled after ETA — {reason}";
+			AnomalyFlag = true;
+			AnomalyTypeValue = AnomalyType.EtaExceeded;
+			AnomalyReason = anomalyReason;
+			RaiseDomainEvent(new DeliveryFlaggedAnomalousDomainEvent(
+				DeliveryId, AnomalyType.EtaExceeded, anomalyReason, DistrictId));
+		}
+
 		return Result.Success();
 	}
 

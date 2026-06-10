@@ -100,6 +100,55 @@ public class DeliveryTests
     }
 
     [Test]
+    public async Task MarkCancelled_At_Or_After_Eta_Should_Flag_Anomaly()
+    {
+        var createdAt = DateTime.UtcNow.AddHours(-1);
+        var expectedEta = createdAt.AddMinutes(20);
+        var delivery = Delivery.Create(
+            Guid.NewGuid(),
+            Factory.CreatePoint(new Coordinate(10, 10)),
+            "mezzeh",
+            createdAt,
+            expectedEta).Value;
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.ClearDomainEvents();
+
+        // Cancel after the promised ETA.
+        var result = delivery.MarkCancelled(expectedEta.AddMinutes(5), "client unreachable");
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(delivery.Status).IsEqualTo(DeliveryStatus.Cancelled);
+        await Assert.That(delivery.AnomalyFlag).IsTrue();
+        await Assert.That(delivery.AnomalyTypeValue).IsEqualTo(AnomalyType.EtaExceeded);
+        await Assert.That(delivery.AnomalyReason!).Contains("client unreachable");
+        await Assert.That(delivery.DomainEvents.OfType<DeliveryCancelledDomainEvent>().Count()).IsEqualTo(1);
+        await Assert.That(delivery.DomainEvents.OfType<DeliveryFlaggedAnomalousDomainEvent>().Count()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task MarkCancelled_Before_Eta_Should_Not_Flag_Anomaly()
+    {
+        var createdAt = DateTime.UtcNow;
+        var expectedEta = createdAt.AddMinutes(30);
+        var delivery = Delivery.Create(
+            Guid.NewGuid(),
+            Factory.CreatePoint(new Coordinate(10, 10)),
+            "mezzeh",
+            createdAt,
+            expectedEta).Value;
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.ClearDomainEvents();
+
+        // Cancel well before the promised ETA.
+        var result = delivery.MarkCancelled(createdAt.AddMinutes(5), "client request");
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(delivery.Status).IsEqualTo(DeliveryStatus.Cancelled);
+        await Assert.That(delivery.AnomalyFlag).IsFalse();
+        await Assert.That(delivery.DomainEvents.OfType<DeliveryFlaggedAnomalousDomainEvent>().Count()).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task FlagAnomaly_Should_Set_Status_And_Flag()
     {
         var delivery = CreateDelivery();

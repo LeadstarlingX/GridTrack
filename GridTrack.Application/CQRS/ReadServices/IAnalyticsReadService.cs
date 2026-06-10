@@ -19,4 +19,14 @@ public interface IAnalyticsReadService
         DateTime to,
         string granularity,
         CancellationToken ct);
+
+    Task<GetDistrictVolumeResponse> GetDistrictVolumeAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct);
+
+    Task<GetCancellationAnalyticsResponse> GetCancellationAnalyticsAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct);
 }

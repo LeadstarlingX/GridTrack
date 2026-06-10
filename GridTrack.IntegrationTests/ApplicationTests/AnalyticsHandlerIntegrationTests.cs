@@ -30,6 +30,17 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         return r.Value;
     }
 
+    private static Delivery CreateCancelledDelivery(string districtId, bool late, string reason)
+    {
+        var createdAt = DateTime.UtcNow.AddHours(-1);
+        var expectedEta = late ? createdAt.AddMinutes(20) : createdAt.AddHours(3);
+        var cancelAt = late ? expectedEta.AddMinutes(10) : createdAt.AddMinutes(5);
+        var d = Delivery.Create(Guid.NewGuid(), Damascus, districtId, createdAt, expectedEta).Value;
+        d.MarkCancelled(cancelAt, reason).IsSuccess.Should().BeTrue();
+        d.ClearDomainEvents();
+        return d;
+    }
+
     // ── GetAnalyticsSummaryQuery ──────────────────────────────────────────
 
     [Test]
@@ -204,5 +215,70 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
 
         result.DeliveryTrend[0].Value.Should().Be(2.0);
         result.AnomalyTrend[0].Value.Should().Be(1.0);
+    }
+
+    // ── GetDistrictVolumeQuery ────────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 530)]
+    public async Task GetDistrictVolumeQuery_Should_Group_And_Order_By_Count_Desc()
+    {
+        await ResetDatabaseAsync();
+
+        await SeedDeliveriesAsync([
+            CreateDelivery("mezzeh"),
+            CreateDelivery("mezzeh"),
+            CreateDelivery("mezzeh"),
+            CreateDelivery("kafrsousa"),
+            CreateDelivery("kafrsousa"),
+        ]);
+
+        var result = await InvokeAsync<GetDistrictVolumeResponse>(new GetDistrictVolumeQuery(null, null));
+
+        result.Items.Should().HaveCount(2);
+        result.Items[0].DistrictId.Should().Be("mezzeh");
+        result.Items[0].Deliveries.Should().Be(3);
+        result.Items[1].DistrictId.Should().Be("kafrsousa");
+        result.Items[1].Deliveries.Should().Be(2);
+    }
+
+    // ── GetCancellationAnalyticsQuery ─────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 540)]
+    public async Task GetCancellationAnalyticsQuery_Should_Count_Cancellations_And_Late_Ones()
+    {
+        await ResetDatabaseAsync();
+
+        await SeedDeliveriesAsync([
+            CreateDelivery("mezzeh"),                                                   // not cancelled
+            CreateDelivery("mezzeh"),                                                   // not cancelled
+            CreateCancelledDelivery("mezzeh", late: true,  reason: "client unreachable"),
+            CreateCancelledDelivery("kafrsousa", late: false, reason: "client request"),
+        ]);
+
+        var result = await InvokeAsync<GetCancellationAnalyticsResponse>(
+            new GetCancellationAnalyticsQuery(null, null));
+
+        result.TotalCancelled.Should().Be(2);
+        result.LateCancellations.Should().Be(1);
+        result.CancellationRate.Should().BeApproximately(0.5, precision: 0.001);
+        result.Reasons.Should().HaveCount(2);
+        result.Reasons.Sum(r => r.Count).Should().Be(2);
+    }
+
+    [Test]
+    [NotInParallel(Order = 541)]
+    public async Task GetCancellationAnalyticsQuery_Should_Return_Zeroes_For_Empty_Database()
+    {
+        await ResetDatabaseAsync();
+
+        var result = await InvokeAsync<GetCancellationAnalyticsResponse>(
+            new GetCancellationAnalyticsQuery(null, null));
+
+        result.TotalCancelled.Should().Be(0);
+        result.LateCancellations.Should().Be(0);
+        result.CancellationRate.Should().Be(0.0);
+        result.Reasons.Should().BeEmpty();
     }
 }

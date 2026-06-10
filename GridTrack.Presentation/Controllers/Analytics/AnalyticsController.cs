@@ -47,4 +47,28 @@ public class AnalyticsController(IMessageBus bus) : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("district-volume")]
+    public async Task<IActionResult> GetDistrictVolume(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetDistrictVolumeResponse>(
+            new GetDistrictVolumeQuery(request.From, request.To),
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpGet("cancellations")]
+    public async Task<IActionResult> GetCancellationAnalytics(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetCancellationAnalyticsResponse>(
+            new GetCancellationAnalyticsQuery(request.From, request.To),
+            ct);
+
+        return Ok(result);
+    }
 }

@@ -1,6 +1,7 @@
 using GridTrack.Api;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
+using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
@@ -28,6 +29,10 @@ namespace GridTrack.IntegrationTests.Abstractions;
 public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsyncInitializer
 {
     public readonly IDateTimeProvider DateTimeProviderMock = Substitute.For<IDateTimeProvider>();
+
+    // Spy on the SignalR push service so tests can assert that domain events raised by
+    // command handlers actually dispatch through Wolverine's cascade to the broadcast handlers.
+    public readonly IDashboardPushService DashboardPushMock = Substitute.For<IDashboardPushService>();
 
     private readonly PostgreSqlContainer _dbContainer =
         new PostgreSqlBuilder("postgis/postgis:18-3.6")
@@ -89,6 +94,9 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
 
             var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
             if (seed != null) services.Remove(seed);
+
+            services.RemoveAll<IDashboardPushService>();
+            services.AddSingleton(DashboardPushMock);
         });
     }
 

@@ -101,7 +101,12 @@ public static class DependencyInjection
     
     private static IServiceCollection AddMySignalR(this IServiceCollection services)
     {
-        services.AddSignalR();
+        // Serialize enums (AnomalyType, DeliveryStatus) as strings so SignalR payloads
+        // match the frontend's string unions instead of emitting integers.
+        services.AddSignalR()
+            .AddJsonProtocol(o =>
+                o.PayloadSerializerOptions.Converters.Add(
+                    new System.Text.Json.Serialization.JsonStringEnumConverter()));
         services.AddScoped<IDashboardPushService, DashboardPushService>();
         
 
