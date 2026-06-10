@@ -22,6 +22,13 @@ public abstract class BaseIntegrationTest
         return await bus.InvokeAsync<T>(message, ct);
     }
 
+    protected static async Task InvokeAsync(object message, CancellationToken ct = default)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+        await bus.InvokeAsync(message, ct);
+    }
+
     protected static async Task<TResult> ResolveAsync<TService, TResult>(
         Func<TService, Task<TResult>> action) where TService : notnull
     {
