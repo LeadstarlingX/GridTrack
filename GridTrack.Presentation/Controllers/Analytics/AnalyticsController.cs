@@ -71,4 +71,40 @@ public class AnalyticsController(IMessageBus bus) : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("delivery-performance")]
+    public async Task<IActionResult> GetDeliveryPerformance(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetDeliveryPerformanceResponse>(
+            new GetDeliveryPerformanceQuery(request.From, request.To),
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpGet("driver-utilization")]
+    public async Task<IActionResult> GetDriverUtilization(
+        [FromQuery] int top,
+        CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetDriverUtilizationResponse>(
+            new GetDriverUtilizationQuery(top <= 0 ? 10 : Math.Min(top, 50)),
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpGet("anomaly-breakdown")]
+    public async Task<IActionResult> GetAnomalyBreakdown(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetAnomalyBreakdownResponse>(
+            new GetAnomalyBreakdownQuery(request.From, request.To),
+            ct);
+
+        return Ok(result);
+    }
 }

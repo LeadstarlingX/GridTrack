@@ -195,4 +195,139 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
     }
 
     private sealed record CancellationCounts(int TotalCancelled, int LateCancellations, double CancellationRate);
+
+    public async Task<GetDeliveryPerformanceResponse> GetDeliveryPerformanceAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // Status 4 = Delivered. Actual duration = DeliveredAt − PickedUpAt;
+        // expected duration = ExpectedEta − CreatedAt; on-time = DeliveredAt <= ExpectedEta.
+        const string sql = """
+                           SELECT
+                               "DistrictId"                                                                          AS "DistrictId",
+                               COUNT(*)::int                                                                         AS "DeliveredCount",
+                               COALESCE(AVG(EXTRACT(EPOCH FROM ("DeliveredAt" - "PickedUpAt"))), 0)::float           AS "AvgActualDurationSeconds",
+                               COALESCE(AVG(EXTRACT(EPOCH FROM ("ExpectedEta" - "CreatedAt")))
+                                        FILTER (WHERE "ExpectedEta" IS NOT NULL), 0)::float                          AS "AvgExpectedDurationSeconds",
+                               COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL AND "DeliveredAt" <= "ExpectedEta")::int AS "OnTimeCount"
+                           FROM public."Deliveries"
+                           WHERE "Status" = 4 AND "DeliveredAt" IS NOT NULL AND "PickedUpAt" IS NOT NULL
+                             AND (@From::timestamptz IS NULL OR "CreatedAt" >= @From::timestamptz)
+                             AND (@To::timestamptz   IS NULL OR "CreatedAt" <= @To::timestamptz)
+                           GROUP BY "DistrictId"
+                           ORDER BY "DeliveredCount" DESC
+                           """;
+
+        var rows = (await connection.QueryAsync<PerformanceRow>(sql, new { From = from, To = to })).ToList();
+
+        var districts = rows
+            .Select(r => new DistrictPerformanceItemResponse(
+                r.DistrictId,
+                r.DeliveredCount,
+                r.AvgActualDurationSeconds,
+                r.AvgExpectedDurationSeconds,
+                r.DeliveredCount == 0 ? 0 : (double)r.OnTimeCount / r.DeliveredCount))
+            .ToList();
+
+        var totalDelivered = rows.Sum(r => r.DeliveredCount);
+        var overallOnTime = totalDelivered == 0 ? 0 : (double)rows.Sum(r => r.OnTimeCount) / totalDelivered;
+        var overallAvgDuration = totalDelivered == 0
+            ? 0
+            : rows.Sum(r => r.AvgActualDurationSeconds * r.DeliveredCount) / totalDelivered;
+
+        return new GetDeliveryPerformanceResponse(totalDelivered, overallOnTime, overallAvgDuration, districts);
+    }
+
+    public async Task<GetDriverUtilizationResponse> GetDriverUtilizationAsync(int topCount, CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // Active delivery = Status NOT IN (4 Delivered, 5 Cancelled); completed today = Status 4 delivered today.
+        const string sql = """
+                           SELECT
+                               d."DriverId"  AS "DriverId",
+                               d."Name"      AS "Name",
+                               d."IsActive"  AS "IsActive",
+                               COUNT(del."DeliveryId") FILTER (
+                                   WHERE del."Status" = 4
+                                     AND del."DeliveredAt" >= CURRENT_DATE
+                                     AND del."DeliveredAt" <  CURRENT_DATE + INTERVAL '1 day'
+                               )::int AS "CompletedToday",
+                               COUNT(del."DeliveryId") FILTER (WHERE del."Status" NOT IN (4, 5))::int AS "ActiveDeliveries"
+                           FROM public."Drivers" d
+                           LEFT JOIN public."Deliveries" del ON del."AssignedDriverId" = d."DriverId"
+                           GROUP BY d."DriverId", d."Name", d."IsActive"
+                           ORDER BY "CompletedToday" DESC, "ActiveDeliveries" DESC
+                           """;
+
+        var rows = (await connection.QueryAsync<DriverThroughputRow>(sql)).ToList();
+
+        var activeDrivers = rows.Count(r => r.IsActive);
+        var inactiveDrivers = rows.Count(r => !r.IsActive);
+        var avgActive = activeDrivers == 0
+            ? 0
+            : (double)rows.Where(r => r.IsActive).Sum(r => r.ActiveDeliveries) / activeDrivers;
+
+        var top = rows
+            .Take(topCount)
+            .Select(r => new DriverThroughputItemResponse(r.DriverId, r.Name, r.CompletedToday, r.ActiveDeliveries))
+            .ToList();
+
+        return new GetDriverUtilizationResponse(activeDrivers, inactiveDrivers, avgActive, top);
+    }
+
+    public async Task<GetAnomalyBreakdownResponse> GetAnomalyBreakdownAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        const string byTypeSql = """
+                           SELECT
+                               "AnomalyTypeValue" AS "AnomalyType",
+                               COUNT(*)::int      AS "Count"
+                           FROM public."Deliveries"
+                           WHERE "AnomalyFlag" = true AND "AnomalyTypeValue" IS NOT NULL
+                             AND (@From::timestamptz IS NULL OR "CreatedAt" >= @From::timestamptz)
+                             AND (@To::timestamptz   IS NULL OR "CreatedAt" <= @To::timestamptz)
+                           GROUP BY "AnomalyTypeValue"
+                           ORDER BY "Count" DESC
+                           """;
+
+        const string byDistrictSql = """
+                           SELECT
+                               "DistrictId"  AS "DistrictId",
+                               COUNT(*)::int AS "Count"
+                           FROM public."Deliveries"
+                           WHERE "AnomalyFlag" = true
+                             AND (@From::timestamptz IS NULL OR "CreatedAt" >= @From::timestamptz)
+                             AND (@To::timestamptz   IS NULL OR "CreatedAt" <= @To::timestamptz)
+                           GROUP BY "DistrictId"
+                           ORDER BY "Count" DESC
+                           """;
+
+        var param = new { From = from, To = to };
+        var byType = (await connection.QueryAsync<AnomalyTypeCountResponse>(byTypeSql, param)).ToList();
+        var byDistrict = (await connection.QueryAsync<AnomalyDistrictCountResponse>(byDistrictSql, param)).ToList();
+
+        return new GetAnomalyBreakdownResponse(byType, byDistrict);
+    }
+
+    private sealed record PerformanceRow(
+        string DistrictId,
+        int DeliveredCount,
+        double AvgActualDurationSeconds,
+        double AvgExpectedDurationSeconds,
+        int OnTimeCount);
+
+    private sealed record DriverThroughputRow(
+        Guid DriverId,
+        string Name,
+        bool IsActive,
+        int CompletedToday,
+        int ActiveDeliveries);
 }

@@ -41,6 +41,42 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         return d;
     }
 
+    private static Delivery CreateDeliveredDelivery(string districtId, Guid driverId, DateTime pickedUpAt, DateTime deliveredAt, DateTime expectedEta)
+    {
+        var d = Delivery.Create(Guid.NewGuid(), Damascus, districtId, pickedUpAt.AddMinutes(-5), expectedEta).Value;
+        d.AssignDriver(driverId);
+        d.MarkPickedUp(Damascus, pickedUpAt);
+        d.MarkDelivered(deliveredAt);
+        d.ClearDomainEvents();
+        return d;
+    }
+
+    private static Delivery CreateInTransitDelivery(string districtId, Guid driverId)
+    {
+        var d = Delivery.Create(Guid.NewGuid(), Damascus, districtId, DateTime.UtcNow.AddMinutes(-30), null).Value;
+        d.AssignDriver(driverId);
+        d.MarkPickedUp(Damascus, DateTime.UtcNow.AddMinutes(-20));
+        d.UpdateLocation(Damascus, DateTime.UtcNow.AddMinutes(-10)); // → InTransit
+        d.ClearDomainEvents();
+        return d;
+    }
+
+    private static Delivery CreateAnomalousDelivery(string districtId, AnomalyType type)
+    {
+        var d = Delivery.Create(Guid.NewGuid(), Damascus, districtId, DateTime.UtcNow, null).Value;
+        d.FlagAnomaly(type, $"{type} detected").IsSuccess.Should().BeTrue();
+        d.ClearDomainEvents();
+        return d;
+    }
+
+    private static Driver CreateDriverWithId(Guid id, bool isActive)
+    {
+        var r = Driver.Create(id, Damascus, "h3-analytics", DateTime.UtcNow, "Ahmad Hassan", "Ahmad", isActive);
+        r.IsSuccess.Should().BeTrue();
+        r.Value.ClearDomainEvents();
+        return r.Value;
+    }
+
     // ── GetAnalyticsSummaryQuery ──────────────────────────────────────────
 
     [Test]
@@ -280,5 +316,83 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         result.LateCancellations.Should().Be(0);
         result.CancellationRate.Should().Be(0.0);
         result.Reasons.Should().BeEmpty();
+    }
+
+    // ── GetDeliveryPerformanceQuery ───────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 550)]
+    public async Task GetDeliveryPerformanceQuery_Should_Compute_Duration_And_OnTime_Rate()
+    {
+        await ResetDatabaseAsync();
+
+        var now = DateTime.UtcNow;
+        // On-time: delivered before ETA; actual duration 30 min.
+        var onTime = CreateDeliveredDelivery("mezzeh", Guid.NewGuid(),
+            pickedUpAt: now.AddMinutes(-50), deliveredAt: now.AddMinutes(-20), expectedEta: now.AddMinutes(-10));
+        // Late: delivered after ETA; actual duration 40 min.
+        var late = CreateDeliveredDelivery("mezzeh", Guid.NewGuid(),
+            pickedUpAt: now.AddMinutes(-50), deliveredAt: now.AddMinutes(-10), expectedEta: now.AddMinutes(-30));
+        await SeedDeliveriesAsync([onTime, late]);
+
+        var result = await InvokeAsync<GetDeliveryPerformanceResponse>(
+            new GetDeliveryPerformanceQuery(null, null));
+
+        result.DeliveredCount.Should().Be(2);
+        result.OverallOnTimeRate.Should().BeApproximately(0.5, precision: 0.001);
+        result.OverallAvgDurationSeconds.Should().BeGreaterThan(0);
+        result.Districts.Should().ContainSingle(d => d.DistrictId == "mezzeh");
+        result.Districts[0].DeliveredCount.Should().Be(2);
+        result.Districts[0].OnTimeRate.Should().BeApproximately(0.5, precision: 0.001);
+    }
+
+    // ── GetDriverUtilizationQuery ─────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 560)]
+    public async Task GetDriverUtilizationQuery_Should_Count_Drivers_And_Throughput()
+    {
+        await ResetDatabaseAsync();
+
+        var activeId = Guid.NewGuid();
+        var inactiveId = Guid.NewGuid();
+        await SeedDriversAsync([CreateDriverWithId(activeId, true), CreateDriverWithId(inactiveId, false)]);
+
+        var now = DateTime.UtcNow;
+        await SeedDeliveriesAsync([
+            CreateDeliveredDelivery("h3-analytics", activeId, now.AddMinutes(-40), now.AddMinutes(-10), now.AddMinutes(-5)),
+            CreateInTransitDelivery("h3-analytics", activeId),
+        ]);
+
+        var result = await InvokeAsync<GetDriverUtilizationResponse>(new GetDriverUtilizationQuery(10));
+
+        result.ActiveDrivers.Should().Be(1);
+        result.InactiveDrivers.Should().Be(1);
+        result.AvgActiveDeliveriesPerActiveDriver.Should().BeApproximately(1.0, precision: 0.001);
+        var topActive = result.TopDrivers.First(d => d.DriverId == activeId);
+        topActive.CompletedToday.Should().Be(1);
+        topActive.ActiveDeliveries.Should().Be(1);
+    }
+
+    // ── GetAnomalyBreakdownQuery ──────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 570)]
+    public async Task GetAnomalyBreakdownQuery_Should_Group_By_Type_And_District()
+    {
+        await ResetDatabaseAsync();
+
+        await SeedDeliveriesAsync([
+            CreateAnomalousDelivery("mezzeh", AnomalyType.EtaExceeded),
+            CreateAnomalousDelivery("mezzeh", AnomalyType.EtaExceeded),
+            CreateAnomalousDelivery("kafrsousa", AnomalyType.RouteDeviation),
+        ]);
+
+        var result = await InvokeAsync<GetAnomalyBreakdownResponse>(new GetAnomalyBreakdownQuery(null, null));
+
+        result.ByType.First(t => t.AnomalyType == AnomalyType.EtaExceeded).Count.Should().Be(2);
+        result.ByType.First(t => t.AnomalyType == AnomalyType.RouteDeviation).Count.Should().Be(1);
+        result.ByDistrict.First(d => d.DistrictId == "mezzeh").Count.Should().Be(2);
+        result.ByDistrict.First(d => d.DistrictId == "kafrsousa").Count.Should().Be(1);
     }
 }

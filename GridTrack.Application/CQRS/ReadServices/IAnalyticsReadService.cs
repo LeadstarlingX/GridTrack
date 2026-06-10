@@ -29,4 +29,18 @@ public interface IAnalyticsReadService
         DateTime? from,
         DateTime? to,
         CancellationToken ct);
+
+    Task<GetDeliveryPerformanceResponse> GetDeliveryPerformanceAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct);
+
+    Task<GetDriverUtilizationResponse> GetDriverUtilizationAsync(
+        int topCount,
+        CancellationToken ct);
+
+    Task<GetAnomalyBreakdownResponse> GetAnomalyBreakdownAsync(
+        DateTime? from,
+        DateTime? to,
+        CancellationToken ct);
 }
