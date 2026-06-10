@@ -468,4 +468,33 @@ public class PythonPipelineE2ETests
         forecast!.Label.Should().BeOneOf("Critical", "Moderate", "Low demand");
         forecast.Color.Should().BeOneOf("#f87171", "#fbbf24", "#34d399");
     }
+
+    [Test]
+    [NotInParallel]
+    public async Task RouteDeviation_InKafrsousa_Should_Produce_Score6()
+    {
+        // RouteDeviation (4) + kafrsousa district boost (2) = 6.
+        // Pins the exact score for RouteDeviation (the other matrix entries —
+        // StalePosition, EtaExceeded, UnexpectedStop, unknown — are already pinned;
+        // RouteDeviation was previously only asserted as a range).
+        await ResetAsync();
+
+        var deliveryId = Guid.NewGuid();
+
+        await PublishAsync(new DeliveryAnomalyIntegrationEvent(
+            deliveryId,
+            "kafrsousa",
+            "RouteDeviation",
+            "Driver 1.2 km off the planned route",
+            DriverLat: 33.510,
+            DriverLng: 36.280,
+            DateTime.UtcNow));
+
+        var urgency = await WaitForCacheAsync<UrgencyResultMessage>(
+            $"urgency:{deliveryId}", TimeSpan.FromSeconds(30));
+
+        urgency.Should().NotBeNull();
+        urgency!.UrgencyScore.Should().Be(6, "RouteDeviation (4) + kafrsousa district boost (2) = 6");
+        urgency.AiNote.Should().NotBeNullOrWhiteSpace();
+    }
 }
