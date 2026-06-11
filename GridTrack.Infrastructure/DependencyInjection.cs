@@ -86,14 +86,23 @@ public static class DependencyInjection
     
     private static IServiceCollection AddCaching(this IServiceCollection services, IConfiguration configuration)
     {
-        string connectionString = configuration.GetConnectionString("Cache") ??
-                                  throw new ArgumentNullException(nameof(configuration));
+        var rawCs = configuration.GetConnectionString("Cache") ??
+                    throw new ArgumentNullException(nameof(configuration));
+
+        // Render (and some other providers) supply a redis:// URI.
+        // StackExchange.Redis expects plain "host:port[,password=...]" — strip the scheme.
+        var connectionString = rawCs.StartsWith("redis://", StringComparison.OrdinalIgnoreCase)
+            ? rawCs["redis://".Length..]
+            : rawCs;
 
         services.AddStackExchangeRedisCache(options => options.Configuration = connectionString);
-        
-        services.AddSingleton<IConnectionMultiplexer>(sp =>
+
+        services.AddSingleton<IConnectionMultiplexer>(_ =>
         {
-            return ConnectionMultiplexer.Connect(connectionString);
+            var opts = ConfigurationOptions.Parse(connectionString);
+            // Don't throw during startup if Redis is momentarily unavailable — retry in background.
+            opts.AbortOnConnectFail = false;
+            return ConnectionMultiplexer.Connect(opts);
         });
 
         services.AddSingleton<ICacheService, CacheService>();
