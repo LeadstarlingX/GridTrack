@@ -39,3 +39,4 @@ services:
     name: gridtrack-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []   # internal-only; no public access
