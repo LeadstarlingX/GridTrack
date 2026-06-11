@@ -9,12 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace GridTrack.Infrastructure.Simulation;
 
-/// <summary>
-/// Simulates driver positions by replaying OSRM-routed waypoints (ping-pong) for each
-/// active driver. Falls back to a circular path if OSRM is unavailable.
-/// Broadcasts DriverPositionUpdated to all connected SignalR clients.
-/// Driven by Simulation:PositionUpdateIntervalMs.
-/// </summary>
+/// <summary>Replays OSRM-routed waypoints (ping-pong) per driver; falls back to circular path; broadcasts DriverPositionUpdated.</summary>
 public sealed class PositionSimulatorService(
     ISqlConnectionFactory sqlFactory,
     IHubContext<DashboardHub> hub,

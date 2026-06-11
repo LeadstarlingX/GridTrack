@@ -2,20 +2,12 @@
 using System.Text.Json;
 using GridTrack.Application.Abstractions.Cache;
 using Microsoft.Extensions.Caching.Distributed;
-using StackExchange.Redis;
 
 namespace GridTrack.Infrastructure.Caching;
 
-internal sealed class CacheService : ICacheService
+internal sealed class CacheService(IDistributedCache cache) : ICacheService
 {
-    private readonly IDistributedCache _cache;
-    private readonly IConnectionMultiplexer _connectionMultiplexer;
-
-    public CacheService(IDistributedCache cache, IConnectionMultiplexer connectionMultiplexer)
-    {
-        _cache = cache;
-        _connectionMultiplexer = connectionMultiplexer;
-    }
+    private readonly IDistributedCache _cache = cache;
 
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
     {
@@ -37,27 +29,6 @@ internal sealed class CacheService : ICacheService
 
     public Task RemoveAsync(string key, CancellationToken cancellationToken = default) =>
         _cache.RemoveAsync(key, cancellationToken);
-
-    public async Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default)
-    {
-        var db = _connectionMultiplexer.GetDatabase();
-
-        // Convert the pattern to Redis pattern format (replace * with *)
-        var redisPattern = pattern.Replace("*", "*");
-
-        var endpoints = _connectionMultiplexer.GetEndPoints();
-
-        foreach (var endpoint in endpoints)
-        {
-            var server = _connectionMultiplexer.GetServer(endpoint);
-            var keys = server.Keys(pattern: redisPattern).ToArray();
-
-            if (keys.Length > 0)
-            {
-                await db.KeyDeleteAsync(keys, CommandFlags.FireAndForget);
-            }
-        }
-    }
 
     private static T Deserialize<T>(byte[] bytes)
     {

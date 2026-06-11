@@ -122,7 +122,24 @@ public class Startup
                     await client.GetAsync($"{pythonBase}/health", ct);
                 });
 
-                return Results.Ok(new LatencyResponse(postgres, redis, python));
+                var osrmBase = config["Osrm:BaseUrl"] ?? "http://router.project-osrm.org";
+                var osrm = await Measure(async () =>
+                {
+                    var client = httpFactory.CreateClient();
+                    client.Timeout = TimeSpan.FromSeconds(8);
+                    await client.GetAsync($"{osrmBase}/route/v1/driving/36.2765,33.5138;36.2766,33.5139?overview=false", ct);
+                });
+
+                var rabbit = await Measure(async () =>
+                {
+                    var queueCs = config.GetConnectionString("Queue") ?? "";
+                    var uri = new Uri(queueCs);
+                    var port = uri.Port > 0 ? uri.Port : (uri.Scheme == "amqps" ? 5671 : 5672);
+                    using var tcp = new System.Net.Sockets.TcpClient();
+                    await tcp.ConnectAsync(uri.Host, port, ct);
+                });
+
+                return Results.Ok(new LatencyResponse(postgres, redis, python, osrm, rabbit));
             }).AllowAnonymous();
 
             endpoints.MapControllers();
@@ -133,4 +150,4 @@ public class Startup
 
 // lowercase names → minimal-API STJ serializes as-is (no CamelCase policy by default)
 file record LatencyResult(bool ok, long ms, string? error);
-file record LatencyResponse(LatencyResult postgres, LatencyResult redis, LatencyResult python);
+file record LatencyResponse(LatencyResult postgres, LatencyResult redis, LatencyResult python, LatencyResult osrm, LatencyResult rabbit);

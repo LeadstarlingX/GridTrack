@@ -23,8 +23,7 @@ public static class DependencyInjection
                 o.Filters.Add(new AuthorizeFilter(
                     new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())))
             .AddApplicationPart(typeof(DependencyInjection).Assembly)
-            // Serialize enums (AnomalyType, DeliveryStatus) as strings so REST payloads
-            // match the frontend's string unions instead of emitting integers.
+            // Serialize enums as strings to match frontend string unions.
             .AddJsonOptions(o =>
                 o.JsonSerializerOptions.Converters.Add(
                     new System.Text.Json.Serialization.JsonStringEnumConverter()));
@@ -33,13 +32,7 @@ public static class DependencyInjection
     }
 
 
-    private static IServiceCollection AddMappers(this IServiceCollection services)
-    {
-        // services.AddScoped<Mapper>();
-
-
-        return services;
-    }
+    private static IServiceCollection AddMappers(this IServiceCollection services) => services;
     
     private static IServiceCollection AddMyApiVersioning(this IServiceCollection services)
     {
