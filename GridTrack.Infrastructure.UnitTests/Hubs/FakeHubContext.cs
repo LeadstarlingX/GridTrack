@@ -3,9 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace GridTrack.Infrastructure.UnitTests.Hubs;
 
-/// <summary>
-/// Fake IClientProxy that records every SendCoreAsync call for assertion.
-/// </summary>
+/// <summary>Records every SendCoreAsync call for test assertion.</summary>
 internal sealed class FakeClientProxy : IClientProxy
 {
     public List<(string Method, object?[] Args)> Calls { get; } = new();
@@ -17,13 +15,9 @@ internal sealed class FakeClientProxy : IClientProxy
     }
 }
 
-/// <summary>
-/// Fake IHubClients that captures the group name on each Group() call.
-/// Uses a single GroupProxy so tests can assert on the last targeted group.
-/// </summary>
+/// <summary>Captures the group name on each Group() call; uses a single GroupProxy for assertions.</summary>
 internal sealed class FakeHubClients : IHubClients
 {
-    /// <summary>Name passed to the most recent Group() call.</summary>
     public string? LastGroupName { get; private set; }
 
     public FakeClientProxy GroupProxy { get; } = new();
@@ -50,9 +44,7 @@ internal sealed class FakeHubClients : IHubClients
     public IClientProxy Caller => throw new NotImplementedException();
 }
 
-/// <summary>
-/// Fake IHubContext&lt;DashboardHub&gt; wiring FakeHubClients in.
-/// </summary>
+/// <summary>Wires FakeHubClients into IHubContext&lt;DashboardHub&gt;.</summary>
 internal sealed class FakeHubContext : IHubContext<DashboardHub>
 {
     public FakeHubClients FakeClients { get; } = new();

@@ -10,12 +10,7 @@ using NetTopologySuite.Geometries;
 
 namespace GridTrack.IntegrationTests.ApplicationTests;
 
-/// <summary>
-/// Verifies that domain events raised inside command handlers actually dispatch through
-/// Wolverine's cascade to the broadcast handlers (A1). These tests are the regression
-/// guard against the "IEnumerable&lt;object&gt; cascade is silently dropped" hypothesis:
-/// if the cascade were dropped, the push service spy would never be called.
-/// </summary>
+/// <summary>Regression guard: domain events from command handlers must reach broadcast handlers via Wolverine cascade.</summary>
 public class CascadeDispatchTests : BaseIntegrationTest
 {
     private static readonly GeometryFactory GeoFactory = new(new PrecisionModel(), 4326);

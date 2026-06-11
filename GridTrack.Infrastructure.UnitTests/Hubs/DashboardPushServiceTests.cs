@@ -251,9 +251,7 @@ public class DashboardPushServiceTests
         return (new DashboardPushService(hub), hub);
     }
 
-    /// <summary>
-    /// Reads a named property from an anonymous object using reflection.
-    /// </summary>
+    /// <summary>Reads a named property from an anonymous object via reflection.</summary>
     private static T GetProperty<T>(object obj, string name)
     {
         var value = obj.GetType().GetProperty(name)!.GetValue(obj);
