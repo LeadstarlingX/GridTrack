@@ -2,10 +2,7 @@ using GridTrack.Application.Abstractions.Cache;
 
 namespace GridTrack.Application.UnitTests.CQRS.Handlers;
 
-/// <summary>
-/// In-memory fake ICacheService that records all Set calls so tests can assert
-/// on key, value, and expiration without a real Redis instance.
-/// </summary>
+/// <summary>In-memory ICacheService fake; records Set calls for assertion without Redis.</summary>
 internal sealed class FakeCacheService : ICacheService
 {
     private readonly Dictionary<string, (object Value, TimeSpan? Expiration)> _store = new();
@@ -31,7 +28,4 @@ internal sealed class FakeCacheService : ICacheService
         _store.Remove(key);
         return Task.CompletedTask;
     }
-
-    public Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
 }

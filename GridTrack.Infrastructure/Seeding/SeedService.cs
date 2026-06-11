@@ -1,5 +1,6 @@
 using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.Drivers;
+using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,12 +21,27 @@ public sealed class SeedService(
         await using var scope = factory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var hasDrivers = await db.Set<Driver>().AnyAsync(ct);
-        var hasDeliveries = await db.Set<Delivery>().AnyAsync(ct);
-        if (hasDrivers && hasDeliveries)
+        var forceReseed = string.Equals(
+            Environment.GetEnvironmentVariable("FORCE_RESEED"), "true",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (forceReseed)
         {
-            logger.LogInformation("Seed skipped — data already exists");
-            return;
+            logger.LogWarning("FORCE_RESEED=true — clearing all seed data before re-seeding");
+            db.Set<DeliveryRoute>().RemoveRange(db.Set<DeliveryRoute>());
+            db.Set<Delivery>().RemoveRange(db.Set<Delivery>());
+            db.Set<Driver>().RemoveRange(db.Set<Driver>());
+            await db.SaveChangesAsync(ct);
+        }
+        else
+        {
+            var hasDrivers = await db.Set<Driver>().AnyAsync(ct);
+            var hasDeliveries = await db.Set<Delivery>().AnyAsync(ct);
+            if (hasDrivers && hasDeliveries)
+            {
+                logger.LogInformation("Seed skipped — data already exists");
+                return;
+            }
         }
 
         logger.LogInformation("Starting seed…");

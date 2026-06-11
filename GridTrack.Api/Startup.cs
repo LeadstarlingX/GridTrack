@@ -7,6 +7,7 @@ using GridTrack.Application.Abstractions.Data;
 using GridTrack.Infrastructure;
 using GridTrack.Infrastructure.Hubs;
 using GridTrack.Presentation;
+using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 
 namespace GridTrack.Api;
@@ -53,7 +54,6 @@ public class Startup
         });
         app.ApplyMigrations();
         app.UseMiddleware<ExceptionHandlingMiddleware>();
-        // app.SeedData();
 
         if (env.IsDevelopment())
         {
@@ -142,6 +142,27 @@ public class Startup
                 return Results.Ok(new LatencyResponse(postgres, redis, python, osrm, rabbit));
             }).AllowAnonymous();
 
+            endpoints.MapPost("/api/telemetry/positions", async (
+                PositionBatchRequest req,
+                IHubContext<DashboardHub> hub,
+                IConfiguration cfg,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                var key = cfg["Telemetry:ApiKey"];
+                if (!string.IsNullOrEmpty(key) &&
+                    (!ctx.Request.Headers.TryGetValue("X-Telemetry-Key", out var provided) || provided != key))
+                    return Results.Unauthorized();
+
+                var tasks = req.Events.Select(e =>
+                    hub.Clients.All.SendCoreAsync(
+                        "DriverPositionUpdated",
+                        [new { driverId = e.DriverId, lat = e.Lat, lng = e.Lng, districtId = e.DistrictId }],
+                        ct));
+                await Task.WhenAll(tasks);
+                return Results.Ok(new { accepted = req.Events.Count });
+            }).AllowAnonymous();
+
             endpoints.MapControllers();
             endpoints.MapHub<DashboardHub>("/hubs/dashboard").RequireAuthorization();
         });
@@ -151,3 +172,5 @@ public class Startup
 // lowercase names → minimal-API STJ serializes as-is (no CamelCase policy by default)
 file record LatencyResult(bool ok, long ms, string? error);
 file record LatencyResponse(LatencyResult postgres, LatencyResult redis, LatencyResult python, LatencyResult osrm, LatencyResult rabbit);
+file record PositionEvent(string DriverId, double Lat, double Lng, string DistrictId);
+file record PositionBatchRequest(IReadOnlyList<PositionEvent> Events);

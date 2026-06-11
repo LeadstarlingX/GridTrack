@@ -6,11 +6,7 @@ using NSubstitute;
 
 namespace GridTrack.IntegrationTests.ApplicationTests;
 
-/// <summary>
-/// Covers the inbound Python → .NET result handlers (UrgencyResultHandler / ForecastResultHandler)
-/// without RabbitMQ or the Python service: invoking the message in-process must cache the result
-/// and broadcast it via the dashboard push service.
-/// </summary>
+/// <summary>Tests UrgencyResultHandler / ForecastResultHandler in-process — no RabbitMQ or Python required.</summary>
 public class InboundResultHandlerIntegrationTests : BaseIntegrationTest
 {
     [Test]

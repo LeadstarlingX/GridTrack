@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace GridTrack.Infrastructure.Simulation;
 
-/// <summary>Replays OSRM-routed waypoints (ping-pong) per driver; falls back to circular path; broadcasts DriverPositionUpdated.</summary>
+/// <summary>Replays OSRM-routed waypoints (ping-pong) per driver; falls back to circular path; broadcasts DriverPositionUpdated and StallDetected.</summary>
 public sealed class PositionSimulatorService(
     ISqlConnectionFactory sqlFactory,
     IHubContext<DashboardHub> hub,
@@ -25,7 +25,10 @@ public sealed class PositionSimulatorService(
         bool IsActive,
         IReadOnlyList<(double Lat, double Lng)> Waypoints,
         int WaypointIndex,
-        int Direction); // +1 forward, -1 backward
+        int Direction,            // +1 forward, -1 backward
+        DateTime LastBroadcastAt,
+        DateTime? PausedUntil,    // non-null while simulating a stall
+        bool StallBroadcastSent); // true after StallDetected fires; cleared on resume
 
     // Destination offsets used to create unique A→B routes for each driver (~500 m).
     private static readonly (double DLat, double DLng)[] DestOffsets =
@@ -62,8 +65,8 @@ public sealed class PositionSimulatorService(
         }
 
         logger.LogInformation(
-            "PositionSimulator started — {Count} drivers, interval {Ms} ms",
-            _drivers.Count, opts.PositionUpdateIntervalMs);
+            "PositionSimulator started — {Count} drivers, interval {Ms} ms, stall threshold {Stall} s",
+            _drivers.Count, opts.PositionUpdateIntervalMs, opts.StallThresholdSeconds);
 
         while (!ct.IsCancellationRequested)
         {
@@ -99,7 +102,10 @@ public sealed class PositionSimulatorService(
                     r.Id, r.Name, r.ShortName, r.DistrictId, r.IsActive,
                     Waypoints: waypoints,
                     WaypointIndex: startIndex,
-                    Direction: 1));
+                    Direction: 1,
+                    LastBroadcastAt: DateTime.UtcNow,
+                    PausedUntil: null,
+                    StallBroadcastSent: false));
             }
 
             _drivers = drivers;
@@ -165,6 +171,8 @@ public sealed class PositionSimulatorService(
 
     private async Task TickAsync(CancellationToken ct)
     {
+        var now = DateTime.UtcNow;
+        var opts = options.Value;
         var tasks = new List<Task>(_drivers.Count);
 
         for (var i = 0; i < _drivers.Count; i++)
@@ -172,15 +180,40 @@ public sealed class PositionSimulatorService(
             var d = _drivers[i];
             if (d.Waypoints.Count == 0) continue;
 
+            // Driver is paused — check for stall threshold crossing
+            if (d.PausedUntil.HasValue && d.PausedUntil.Value > now)
+            {
+                if (!d.StallBroadcastSent &&
+                    (now - d.LastBroadcastAt).TotalSeconds > opts.StallThresholdSeconds)
+                {
+                    _drivers[i] = d with { StallBroadcastSent = true };
+                    tasks.Add(hub.Clients.All.SendCoreAsync(
+                        "StallDetected",
+                        [new { driverId = d.Id, driverName = d.Name, districtId = d.DistrictId, stalledSince = d.LastBroadcastAt }],
+                        ct));
+                }
+                continue;
+            }
+
+            // Pause expired — clear stall state before next roll
+            d = d with { PausedUntil = null, StallBroadcastSent = false };
+
+            // Randomly pause this driver to simulate a stall
+            if (Random.Shared.Next(100) < opts.StallPauseProbabilityPct)
+            {
+                _drivers[i] = d with { PausedUntil = now.AddSeconds(opts.StallPauseDurationSeconds) };
+                continue;
+            }
+
             var (lat, lng) = d.Waypoints[d.WaypointIndex];
 
-            // Advance index with ping-pong at boundaries
+            // Advance waypoint index with ping-pong at boundaries
             var nextIndex = d.WaypointIndex + d.Direction;
             var nextDir = d.Direction;
             if (nextIndex >= d.Waypoints.Count) { nextIndex = d.Waypoints.Count - 2; nextDir = -1; }
             else if (nextIndex < 0) { nextIndex = 1; nextDir = 1; }
 
-            _drivers[i] = d with { WaypointIndex = nextIndex, Direction = nextDir };
+            _drivers[i] = d with { WaypointIndex = nextIndex, Direction = nextDir, LastBroadcastAt = now };
 
             tasks.Add(hub.Clients.All.SendCoreAsync(
                 "DriverPositionUpdated",
