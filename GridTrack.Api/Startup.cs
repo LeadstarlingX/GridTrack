@@ -101,8 +101,7 @@ public class Startup
 
                 var postgres = await Measure(async () =>
                 {
-                    using var conn = sqlFactory.CreateConnection();
-                    conn.Open();
+                    using var conn = sqlFactory.CreateConnection(); // factory already opens
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = "SELECT 1";
                     cmd.ExecuteScalar();
