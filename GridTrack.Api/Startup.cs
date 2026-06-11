@@ -1,10 +1,13 @@
-﻿using Asp.Versioning.ApiExplorer;
+﻿using System.Diagnostics;
+using Asp.Versioning.ApiExplorer;
 using GridTrack.Api.Extensions;
 using GridTrack.Api.Middlewares;
 using GridTrack.Application;
+using GridTrack.Application.Abstractions.Data;
 using GridTrack.Infrastructure;
 using GridTrack.Infrastructure.Hubs;
 using GridTrack.Presentation;
+using StackExchange.Redis;
 
 namespace GridTrack.Api;
 
@@ -72,6 +75,47 @@ public class Startup
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapGet("/health", () => Results.Ok("ok")).AllowAnonymous();
+
+            endpoints.MapGet("/api/diagnostics/latency", async (
+                ISqlConnectionFactory sqlFactory,
+                IConnectionMultiplexer redisConn,
+                IHttpClientFactory httpFactory,
+                IConfiguration config,
+                CancellationToken ct) =>
+            {
+                static async Task<object> Measure(Func<Task> fn)
+                {
+                    var sw = Stopwatch.StartNew();
+                    try { await fn(); sw.Stop(); return new { ok = true, ms = sw.ElapsedMilliseconds }; }
+                    catch (Exception ex) { sw.Stop(); return new { ok = false, ms = sw.ElapsedMilliseconds, error = ex.Message }; }
+                }
+
+                var postgres = await Measure(async () =>
+                {
+                    using var conn = (System.Data.Common.DbConnection)sqlFactory.CreateConnection();
+                    await conn.OpenAsync(ct);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT 1";
+                    await cmd.ExecuteScalarAsync(ct);
+                });
+
+                var redis = await Measure(async () =>
+                {
+                    var db = redisConn.GetDatabase();
+                    await db.PingAsync();
+                });
+
+                var pythonBase = config["Python:BaseUrl"] ?? "http://localhost:8000";
+                var python = await Measure(async () =>
+                {
+                    var client = httpFactory.CreateClient();
+                    client.Timeout = TimeSpan.FromSeconds(5);
+                    await client.GetAsync($"{pythonBase}/health", ct);
+                });
+
+                return Results.Ok(new { postgres, redis, python });
+            }).AllowAnonymous();
+
             endpoints.MapControllers();
             endpoints.MapHub<DashboardHub>("/hubs/dashboard").RequireAuthorization();
         });
