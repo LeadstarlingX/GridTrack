@@ -1,3 +1,4 @@
+using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.Drivers;
 using GridTrack.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +20,9 @@ public sealed class SeedService(
         await using var scope = factory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        if (await db.Set<Driver>().AnyAsync(ct))
+        var hasDrivers = await db.Set<Driver>().AnyAsync(ct);
+        var hasDeliveries = await db.Set<Delivery>().AnyAsync(ct);
+        if (hasDrivers && hasDeliveries)
         {
             logger.LogInformation("Seed skipped — data already exists");
             return;
