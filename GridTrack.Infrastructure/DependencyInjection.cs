@@ -117,8 +117,10 @@ public static class DependencyInjection
         this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHttpClient<IOsrmService, OsrmService>(c =>
-            c.BaseAddress = new Uri(
-                configuration["Osrm:BaseUrl"] ?? "http://router.project-osrm.org"));
+        {
+            c.BaseAddress = new Uri(configuration["Osrm:BaseUrl"] ?? "http://router.project-osrm.org");
+            c.Timeout = TimeSpan.FromSeconds(4);
+        });
 
         services.AddHttpClient<IAnalysisChatService, PythonAnalysisChatService>(c =>
             c.BaseAddress = new Uri(

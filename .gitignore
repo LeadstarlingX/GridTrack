@@ -11,7 +11,7 @@ GridTrack.Api/Internal/
 track.md
 progress.md
 Integration_Plan.md
-
+DEPLOYMENT.md
 
 # Runtime data
 observability/**/data/
