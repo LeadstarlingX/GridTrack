@@ -115,5 +115,5 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git diff --cached --quiet || git commit -m "ci: update coverage table [skip ci]"
+          git diff --cached --quiet || git commit -m "ci: update coverage table [without ci]"
           git push
