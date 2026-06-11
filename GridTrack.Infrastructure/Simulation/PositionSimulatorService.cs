@@ -1,5 +1,6 @@
 using Dapper;
 using GridTrack.Application.Abstractions.Data;
+using GridTrack.Application.Interfaces;
 using GridTrack.Infrastructure.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Hosting;
@@ -9,13 +10,15 @@ using Microsoft.Extensions.Options;
 namespace GridTrack.Infrastructure.Simulation;
 
 /// <summary>
-/// Simulates driver positions by moving each active driver in a circular patrol
-/// around their seeded district center. Broadcasts DriverPositionUpdated to all
-/// connected SignalR clients. Driven by Simulation:PositionUpdateIntervalMs.
+/// Simulates driver positions by replaying OSRM-routed waypoints (ping-pong) for each
+/// active driver. Falls back to a circular path if OSRM is unavailable.
+/// Broadcasts DriverPositionUpdated to all connected SignalR clients.
+/// Driven by Simulation:PositionUpdateIntervalMs.
 /// </summary>
 public sealed class PositionSimulatorService(
     ISqlConnectionFactory sqlFactory,
     IHubContext<DashboardHub> hub,
+    IOsrmService osrm,
     IOptions<SimulatorOptions> options,
     ILogger<PositionSimulatorService> logger) : BackgroundService
 {
@@ -24,16 +27,23 @@ public sealed class PositionSimulatorService(
         string Name,
         string ShortName,
         string DistrictId,
-        double CenterLat,
-        double CenterLng,
-        double Angle,
-        bool IsActive);
+        bool IsActive,
+        IReadOnlyList<(double Lat, double Lng)> Waypoints,
+        int WaypointIndex,
+        int Direction); // +1 forward, -1 backward
 
-    // Drivers keep a circle of this radius (degrees). ~0.002° ≈ 220 m.
-    private const double RadiusDeg = 0.002;
-
-    // Each driver completes one full circle every CirclePeriodMs milliseconds.
-    private const double CirclePeriodMs = 120_000; // 2 minutes
+    // Destination offsets used to create unique A→B routes for each driver (~500 m).
+    private static readonly (double DLat, double DLng)[] DestOffsets =
+    [
+        ( 0.005,  0.000),
+        ( 0.000,  0.005),
+        (-0.005,  0.000),
+        ( 0.000, -0.005),
+        ( 0.003,  0.004),
+        (-0.004,  0.003),
+        ( 0.004, -0.003),
+        (-0.003, -0.004),
+    ];
 
     private List<SimDriver> _drivers = [];
 
@@ -63,7 +73,7 @@ public sealed class PositionSimulatorService(
         while (!ct.IsCancellationRequested)
         {
             await Task.Delay(opts.PositionUpdateIntervalMs, ct);
-            await TickAsync(opts.PositionUpdateIntervalMs, ct);
+            await TickAsync(ct);
         }
     }
 
@@ -81,13 +91,23 @@ public sealed class PositionSimulatorService(
                 WHERE "IsActive" = true
                 """;
 
-            var rows = await conn.QueryAsync<DriverRow>(sql);
-            _drivers = rows.Select((r, i) => new SimDriver(
-                r.Id, r.Name, r.ShortName, r.DistrictId,
-                r.CenterLat, r.CenterLng,
-                // Spread starting angles so drivers don't all move in sync
-                Angle: 2 * Math.PI * i / Math.Max(1, rows.Count()),
-                r.IsActive)).ToList();
+            var rows = (await conn.QueryAsync<DriverRow>(sql)).ToList();
+
+            var drivers = new List<SimDriver>(rows.Count);
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var r = rows[i];
+                var waypoints = await FetchRouteWaypointsAsync(r, i, ct);
+                // Spread starting positions so drivers aren't all at waypoint 0
+                var startIndex = waypoints.Count > 1 ? i % waypoints.Count : 0;
+                drivers.Add(new SimDriver(
+                    r.Id, r.Name, r.ShortName, r.DistrictId, r.IsActive,
+                    Waypoints: waypoints,
+                    WaypointIndex: startIndex,
+                    Direction: 1));
+            }
+
+            _drivers = drivers;
         }
         catch (Exception ex)
         {
@@ -95,44 +115,88 @@ public sealed class PositionSimulatorService(
         }
     }
 
-    private async Task TickAsync(int intervalMs, CancellationToken ct)
+    private async Task<IReadOnlyList<(double Lat, double Lng)>> FetchRouteWaypointsAsync(
+        DriverRow driver, int index, CancellationToken ct)
     {
-        // How many radians to advance per tick to complete one circle in CirclePeriodMs
-        var angleStep = 2 * Math.PI * intervalMs / CirclePeriodMs;
+        var (dLat, dLng) = DestOffsets[index % DestOffsets.Length];
 
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(10));
+
+            var route = await osrm.GetRouteAsync(
+                driver.CenterLat, driver.CenterLng,
+                driver.CenterLat + dLat, driver.CenterLng + dLng,
+                cts.Token);
+
+            if (route?.Waypoints is { Count: > 1 } pts)
+            {
+                // Build ping-pong path: A→B then B→A (skip duplicate endpoint on reversal)
+                var forward = pts.ToList();
+                var reverse = forward.AsEnumerable().Reverse().Skip(1).ToList();
+                var combined = new List<(double, double)>(forward.Count + reverse.Count);
+                combined.AddRange(forward);
+                combined.AddRange(reverse);
+                logger.LogDebug(
+                    "PositionSimulator: driver {Id} route has {N} waypoints",
+                    driver.Id, combined.Count);
+                return combined;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "PositionSimulator: OSRM route fetch failed for driver {Id}, using circular fallback",
+                driver.Id);
+        }
+
+        return BuildCircularFallback(driver.CenterLat, driver.CenterLng);
+    }
+
+    private static IReadOnlyList<(double Lat, double Lng)> BuildCircularFallback(
+        double centerLat, double centerLng)
+    {
+        const double radius = 0.002;
+        const int steps = 60;
+        var pts = new List<(double, double)>(steps);
+        for (var i = 0; i < steps; i++)
+        {
+            var angle = 2 * Math.PI * i / steps;
+            pts.Add((centerLat + radius * Math.Sin(angle), centerLng + radius * Math.Cos(angle)));
+        }
+        return pts;
+    }
+
+    private async Task TickAsync(CancellationToken ct)
+    {
         var tasks = new List<Task>(_drivers.Count);
 
         for (var i = 0; i < _drivers.Count; i++)
         {
             var d = _drivers[i];
-            var newAngle = d.Angle + angleStep;
-            var lat = d.CenterLat + RadiusDeg * Math.Sin(newAngle);
-            var lng = d.CenterLng + RadiusDeg * Math.Cos(newAngle);
-            _drivers[i] = d with { Angle = newAngle };
+            if (d.Waypoints.Count == 0) continue;
+
+            var (lat, lng) = d.Waypoints[d.WaypointIndex];
+
+            // Advance index with ping-pong at boundaries
+            var nextIndex = d.WaypointIndex + d.Direction;
+            var nextDir = d.Direction;
+            if (nextIndex >= d.Waypoints.Count) { nextIndex = d.Waypoints.Count - 2; nextDir = -1; }
+            else if (nextIndex < 0) { nextIndex = 1; nextDir = 1; }
+
+            _drivers[i] = d with { WaypointIndex = nextIndex, Direction = nextDir };
 
             tasks.Add(hub.Clients.All.SendCoreAsync(
                 "DriverPositionUpdated",
-                [new
-                {
-                    driverId   = d.Id,
-                    lat,
-                    lng,
-                    districtId = d.DistrictId,
-                }],
+                [new { driverId = d.Id, lat, lng, districtId = d.DistrictId }],
                 ct));
         }
 
-        try
-        {
-            await Task.WhenAll(tasks);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "PositionSimulator: broadcast error on tick");
-        }
+        try { await Task.WhenAll(tasks); }
+        catch (Exception ex) { logger.LogWarning(ex, "PositionSimulator: broadcast error on tick"); }
     }
 
-    // Dapper projection row
     private sealed class DriverRow
     {
         public Guid Id { get; set; }

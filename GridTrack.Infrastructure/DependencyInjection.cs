@@ -105,7 +105,15 @@ public static class DependencyInjection
     {
         // Serialize enums (AnomalyType, DeliveryStatus) as strings so SignalR payloads
         // match the frontend's string unions instead of emitting integers.
-        services.AddSignalR()
+        services.AddSignalR(o =>
+            {
+                // Default ClientTimeoutInterval is 30s — too short when a browser tab is
+                // temporarily frozen by the browser's background-tab throttling. 60s gives
+                // the client time to unfreeze and respond to the server keep-alive ping
+                // before the server considers the connection dead.
+                o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+                o.KeepAliveInterval     = TimeSpan.FromSeconds(15);
+            })
             .AddJsonProtocol(o =>
                 o.PayloadSerializerOptions.Converters.Add(
                     new System.Text.Json.Serialization.JsonStringEnumConverter()));
