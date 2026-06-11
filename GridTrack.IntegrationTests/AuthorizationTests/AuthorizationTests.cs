@@ -79,14 +79,14 @@ public class AuthorizationTests : BaseIntegrationTest
         var client = Factory.CreateClient();
 
         var request = new HttpRequestMessage(HttpMethod.Options, "/api/drivers");
-        request.Headers.Add("Origin", "http://localhost:5500");
+        request.Headers.Add("Origin", "http://localhost:5173");
         request.Headers.Add("Access-Control-Request-Method", "GET");
         request.Headers.Add("Access-Control-Request-Headers", "Authorization");
 
         var response = await client.SendAsync(request);
 
         response.Headers.TryGetValues("Access-Control-Allow-Origin", out var origins).Should().BeTrue();
-        origins!.Should().Contain("http://localhost:5500");
+        origins!.Should().Contain("http://localhost:5173");
     }
 
     [Test]
@@ -110,7 +110,7 @@ public class AuthorizationTests : BaseIntegrationTest
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", $"Bearer {TestAuthHandler.ValidToken}");
-        client.DefaultRequestHeaders.Add("Origin", "http://localhost:5500");
+        client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
 
         var response = await client.GetAsync("/api/drivers");
 
