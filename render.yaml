@@ -1,0 +1,41 @@
+services:
+  # ── .NET API ────────────────────────────────────────────────────────────────
+  - type: web
+    name: gridtrack-api
+    runtime: docker
+    dockerfilePath: GridTrack.Api/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # Neon Postgres — paste from Neon dashboard  (Settings → Connection string)
+      # Format: Host=<host>;Port=5432;Database=<db>;User Id=<user>;Password=<pass>;SSLMode=Require
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      # Render Redis internal connection string (auto-filled from the redis service below)
+      - key: ConnectionStrings__Cache
+        fromService:
+          name: gridtrack-redis
+          type: redis
+          property: connectionString
+      # CloudAMQP AMQP URL — paste from CloudAMQP dashboard
+      # Format: amqps://user:pass@host/vhost
+      - key: ConnectionStrings__Queue
+        sync: false
+      # Clerk authority — e.g. https://your-instance.clerk.accounts.dev
+      - key: Clerk__Authority
+        sync: false
+      # Vercel frontend URL — e.g. https://gridtrack.vercel.app
+      - key: Cors__AllowedOrigin
+        sync: false
+      # Python forecasting service URL on Render — e.g. https://gridtrack-forecasting.onrender.com
+      - key: Python__BaseUrl
+        sync: false
+
+  # ── Render Redis (free tier, 25 MB) ─────────────────────────────────────────
+  - type: redis
+    name: gridtrack-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
