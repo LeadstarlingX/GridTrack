@@ -4,39 +4,41 @@ using GridTrack.Domain.Drivers;
 
 namespace GridTrack.Application.CQRS.Handlers;
 
-public static class AnomalyIntegrationPublisher
+public static class AnomalyIntegrationHandler
 {
-    public static DeliveryAnomalyIntegrationEvent Handle(
-        DeliveryFlaggedAnomalousDomainEvent e)
+    public static DeliveryAnomalyIntegrationEvent Map(DeliveryFlaggedAnomalousDomainEvent e)
         => new(
             e.DeliveryId,
             e.DistrictId,
             e.Type.ToString(),
             e.Reason,
-            DriverLat: 0,   // driver location not carried on delivery aggregate
+            DriverLat: 0,
             DriverLng: 0,
             DateTime.UtcNow);
+
+    public static DeliveryAnomalyIntegrationEvent Handle(DeliveryFlaggedAnomalousDomainEvent e)
+        => Map(e);
 }
 
-public static class PositionIntegrationPublisher
+public static class PositionIntegrationHandler
 {
-    public static DriverPositionIntegrationEvent Handle(
-        DriverPositionUpdatedDomainEvent e)
+    public static DriverPositionIntegrationEvent Map(DriverPositionUpdatedDomainEvent e)
         => new(
             e.DriverId,
             e.DistrictId,
             Lat: e.Location.Y,
             Lng: e.Location.X,
-            DeliveryStatus: "InTransit",  // delivery status not carried on driver aggregate
+            DeliveryStatus: "InTransit",
             e.Timestamp);
+
+    public static DriverPositionIntegrationEvent Handle(DriverPositionUpdatedDomainEvent e)
+        => Map(e);
 }
 
-public static class CompletedIntegrationPublisher
+public static class CompletedIntegrationHandler
 {
-    public static DeliveryCompletedIntegrationEvent? Handle(
-        DeliveryCompletedDomainEvent e)
+    public static DeliveryCompletedIntegrationEvent? Map(DeliveryCompletedDomainEvent e)
     {
-        // Skip if the delivery had no assigned driver (shouldn't happen in practice)
         if (e.DriverId is null || e.PickedUpAt is null)
             return null;
 
@@ -45,10 +47,13 @@ public static class CompletedIntegrationPublisher
         return new DeliveryCompletedIntegrationEvent(
             e.DeliveryId,
             e.DriverId.Value,
-            DistrictId: string.Empty,  // not on DeliveryCompletedDomainEvent; enrichable if needed
+            DistrictId: string.Empty,
             e.PickedUpAt.Value,
             e.DeliveredAt,
             actual,
             e.ExpectedDurationSeconds);
     }
+
+    public static DeliveryCompletedIntegrationEvent? Handle(DeliveryCompletedDomainEvent e)
+        => Map(e);
 }

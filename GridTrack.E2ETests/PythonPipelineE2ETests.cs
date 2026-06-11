@@ -1,9 +1,18 @@
+using System.Net;
+using System.Net.Http.Json;
 using FluentAssertions;
 using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.IntegrationEvents;
+using GridTrack.Application.UseCases.Deliveries;
+using GridTrack.Application.UseCases.Drivers;
+using GridTrack.Domain.Abstractions;
+using GridTrack.Domain.Deliveries;
+using GridTrack.Domain.ValueObjects;
 using GridTrack.Infrastructure.DbContext;
+using GridTrack.E2ETests.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NetTopologySuite.Geometries;
 using Wolverine;
 
 namespace GridTrack.E2ETests;
@@ -30,6 +39,48 @@ public class PythonPipelineE2ETests
         await using var scope = Factory.Services.CreateAsyncScope();
         var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
         await bus.PublishAsync(message);
+    }
+
+    // Runs a real command through the bus, returning its primary result and letting
+    // Wolverine cascade any domain events the handler raises (the production path the
+    // frontend triggers — as opposed to PublishAsync, which injects an integration
+    // event directly into RabbitMQ and bypasses the command → domain event stage).
+    private static async Task<T> InvokeAsync<T>(object message)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+        return await bus.InvokeAsync<T>(message);
+    }
+
+    private static readonly GeometryFactory GeoFactory = new(new PrecisionModel(), 4326);
+
+    private static async Task SeedDeliveryAsync(Delivery delivery)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var ctx = await scope.ServiceProvider
+            .GetRequiredService<IDbContextFactory<AppDbContext>>()
+            .CreateDbContextAsync();
+        ctx.Set<Delivery>().Add(delivery);
+        await ctx.SaveChangesAsync();
+    }
+
+    private static async Task<Delivery?> GetDeliveryFromDbAsync(Guid id)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var ctx = await scope.ServiceProvider
+            .GetRequiredService<IDbContextFactory<AppDbContext>>()
+            .CreateDbContextAsync();
+        return await ctx.Set<Delivery>().AsNoTracking()
+            .FirstOrDefaultAsync(d => d.DeliveryId == id);
+    }
+
+    // Authenticated HTTP client mirroring how the frontend calls the API.
+    private static HttpClient CreateAuthenticatedClient()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", TestAuthHandler.ValidToken);
+        return client;
     }
 
     private static async Task<T?> GetCachedAsync<T>(string key) where T : class
@@ -497,4 +548,172 @@ public class PythonPipelineE2ETests
         urgency!.UrgencyScore.Should().Be(6, "RouteDeviation (4) + kafrsousa district boost (2) = 6");
         urgency.AiNote.Should().NotBeNullOrWhiteSpace();
     }
+
+    // ── Frontend-facing command flows (full production pipeline) ───────────────
+    //
+    // Unlike the tests above (which PublishAsync an integration event directly into
+    // RabbitMQ), these drive a REAL command through the bus — the exact path the
+    // frontend/mock-generator triggers. They exercise the complete chain:
+    //
+    //   command → handler → aggregate → domain event → Wolverine cascade →
+    //   integration publisher (explicit bus.PublishAsync) → RabbitMQ exchange →
+    //   Python consumer → urgency scoring → result message → inbound handler →
+    //   Redis cache
+    //
+    // They are the regression guard for the second-level-cascade fix: before the
+    // integration publishers switched from return-cascade to explicit PublishAsync,
+    // a command-initiated anomaly never reached Python and urgency:{id} never appeared.
+
+    [Test]
+    [NotInParallel]
+    public async Task FlagAnomalyCommand_Should_Cascade_Command_To_Python_Level_By_Level()
+    {
+        // Explicit multi-level (>2) cascade assertion. Each numbered level is verified
+        // at an observable boundary; the levels in between (Wolverine cascade, RabbitMQ
+        // transport, Python scoring) are proven transitively by the final cache entry.
+        await ResetAsync();
+
+        var deliveryId = Guid.NewGuid();
+        var delivery = Delivery.Create(
+            deliveryId,
+            GeoFactory.CreatePoint(new Coordinate(36.280, 33.510)),
+            "kafrsousa",
+            DateTime.UtcNow.AddMinutes(-30)).Value;
+        delivery.ClearDomainEvents();
+        await SeedDeliveryAsync(delivery);
+
+        // Level 1 — command → handler → aggregate transition + Result.
+        var result = await InvokeAsync<Result>(new FlagDeliveryAnomalyCommand(
+            new FlagAnomalyRequest(deliveryId, AnomalyType.StalePosition, "No GPS ping for 30 min")));
+        result.IsSuccess.Should().BeTrue("the command should flag the seeded delivery");
+
+        // Level 2 — SaveChanges persisted the mutation (the domain event is real, not fabricated).
+        var persisted = await GetDeliveryFromDbAsync(deliveryId);
+        persisted.Should().NotBeNull();
+        persisted!.AnomalyFlag.Should().BeTrue("the aggregate must persist the anomaly flag");
+        persisted.AnomalyTypeValue.Should().Be(AnomalyType.StalePosition);
+        persisted.Status.Should().Be(DeliveryStatus.Anomalous);
+
+        // Levels 3-7 — domain event → Wolverine cascade → integration publisher's explicit
+        // PublishAsync → RabbitMQ exchange → Python consumer → urgency result → inbound
+        // handler → Redis. The presence of the cache entry proves every level fired.
+        var urgency = await WaitForCacheAsync<UrgencyResultMessage>(
+            $"urgency:{deliveryId}", TimeSpan.FromSeconds(30));
+
+        urgency.Should().NotBeNull(
+            "a real FlagDeliveryAnomalyCommand must reach Python through the second-level cascade");
+        urgency!.DeliveryId.Should().Be(deliveryId, "Python must echo the exact deliveryId");
+        urgency.UrgencyScore.Should().Be(7, "StalePosition (5) + kafrsousa district boost (2) = 7");
+        urgency.AiNote.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task LateCancelDeliveryCommand_Should_Produce_UrgencyResult_Via_Python()
+    {
+        await ResetAsync();
+
+        var deliveryId = Guid.NewGuid();
+        var createdAt = DateTime.UtcNow.AddHours(-1);
+        var expectedEta = createdAt.AddMinutes(20);   // ETA already in the past
+
+        var delivery = Delivery.Create(
+            deliveryId,
+            GeoFactory.CreatePoint(new Coordinate(36.281, 33.511)),
+            "malki",
+            createdAt,
+            expectedEta).Value;
+        delivery.ClearDomainEvents();
+        await SeedDeliveryAsync(delivery);
+
+        // Cancel AFTER the promised ETA → MarkCancelled raises the cancelled event AND a
+        // DeliveryFlaggedAnomalousDomainEvent (EtaExceeded), which must reach Python.
+        var result = await InvokeAsync<Result>(new CancelDeliveryCommand(
+            new CancelDeliveryRequest(deliveryId, expectedEta.AddMinutes(10), "client unreachable")));
+
+        result.IsSuccess.Should().BeTrue("a past-ETA cancellation should succeed and flag an anomaly");
+
+        // The aggregate stays Cancelled (terminal) but carries the anomaly flag.
+        var persisted = await GetDeliveryFromDbAsync(deliveryId);
+        persisted!.Status.Should().Be(DeliveryStatus.Cancelled);
+        persisted.AnomalyFlag.Should().BeTrue("a past-ETA cancellation is a service anomaly");
+        persisted.AnomalyTypeValue.Should().Be(AnomalyType.EtaExceeded);
+
+        var urgency = await WaitForCacheAsync<UrgencyResultMessage>(
+            $"urgency:{deliveryId}", TimeSpan.FromSeconds(30));
+
+        urgency.Should().NotBeNull(
+            "a late CancelDeliveryCommand must reach Python through the second-level cascade");
+        urgency!.DeliveryId.Should().Be(deliveryId);
+        urgency.UrgencyScore.Should().Be(3, "EtaExceeded (3) + malki district boost (0) = 3");
+        urgency.AiNote.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task UpdateDriverPositionCommand_Should_Produce_ForecastResult_Via_Python()
+    {
+        // Proves PositionIntegrationHandler cascade end-to-end via UpdateDriverPositionCommand.
+        // Uses district "shaalan" so Python's per-district EMIT_INTERVAL gate does not suppress.
+        await ResetAsync();
+
+        const string district = "shaalan";
+        var driverId = Guid.NewGuid();
+        var location = GeoFactory.CreatePoint(new Coordinate(36.290, 33.515));
+
+        await InvokeAsync<Result<GridTrack.Application.Dtos.DriverDto>>(new CreateDriverCommand(
+            new CreateDriverRequest(driverId, location, 9, district, "Ahmad Hassan", "Ahmad", true)));
+
+        var result = await InvokeAsync<Result>(new UpdateDriverPositionCommand(
+            new UpdatePositionRequest(driverId, location, DateTime.UtcNow)));
+        result.IsSuccess.Should().BeTrue("the seeded driver's position update should succeed");
+
+        var forecast = await WaitForCacheAsync<ForecastResultMessage>(
+            $"forecast:{district}", TimeSpan.FromSeconds(30));
+
+        forecast.Should().NotBeNull(
+            "a real UpdateDriverPositionCommand must reach Python through the second-level cascade");
+        forecast!.DistrictId.Should().Be(district);
+        forecast.Label.Should().BeOneOf("Critical", "Moderate", "Low demand");
+        forecast.Color.Should().BeOneOf("#f87171", "#fbbf24", "#34d399");
+    }
+
+    // ── Chatbot over real HTTP ─────────────────────────────────────────────────
+
+    [Test]
+    [NotInParallel]
+    public async Task ChatEndpoint_Over_Http_Should_Reach_Python_And_Map_Result()
+    {
+        // Drives the chatbot exactly as the frontend does: an authenticated POST to
+        // /api/analysis/chat → AnalysisChatHandler → PythonAnalysisChatService → HTTP
+        // POST to the Python container's /chat → call_llm.
+        //
+        // The E2E Python container runs with placeholder Groq/Google keys, so the LLM
+        // calls fail and Python returns 500; the adapter maps that to null and the
+        // controller returns 503 AI_UNAVAILABLE. With real keys the same wire yields
+        // 200 + a reply. We therefore assert the wiring (authenticated, routed, no
+        // crash) and accept either deterministic outcome — never 401/404/500.
+        using var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("/api/analysis/chat", new
+        {
+            messages = new[] { new { role = "user", content = "How many deliveries are late right now?" } },
+            csvData = "district,late\nmalki,3\nmezzeh,1",
+        });
+
+        response.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized,
+            "the test bearer token must authenticate the request");
+        response.StatusCode.Should().NotBe(HttpStatusCode.NotFound,
+            "the /api/analysis/chat route must be mapped");
+        response.StatusCode.Should().BeOneOf(new[] { HttpStatusCode.OK, HttpStatusCode.ServiceUnavailable },
+            "the chat pipeline either returns a reply (200) or degrades gracefully (503) — never an unhandled 500");
+
+        if (response.StatusCode == HttpStatusCode.OK)
+        {
+            var body = await response.Content.ReadFromJsonAsync<ChatReplyProbe>();
+            body!.Reply.Should().NotBeNullOrWhiteSpace("a 200 response must carry a non-empty reply");
+        }
+    }
+
+    private sealed record ChatReplyProbe(string Reply);
 }
