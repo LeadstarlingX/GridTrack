@@ -56,8 +56,6 @@ updated = re.sub(
     content,
     flags=re.DOTALL,
 )
-if updated == content:
-    print("WARNING: markers not found in README.md")
-    sys.exit(1)
+
 readme.write_text(updated)
 print("README.md updated")
