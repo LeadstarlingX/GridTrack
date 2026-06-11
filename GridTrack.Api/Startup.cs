@@ -83,20 +83,29 @@ public class Startup
                 IConfiguration config,
                 CancellationToken ct) =>
             {
-                static async Task<object> Measure(Func<Task> fn)
+                static async Task<LatencyResult> Measure(Func<Task> fn)
                 {
                     var sw = Stopwatch.StartNew();
-                    try { await fn(); sw.Stop(); return new { ok = true, ms = sw.ElapsedMilliseconds }; }
-                    catch (Exception ex) { sw.Stop(); return new { ok = false, ms = sw.ElapsedMilliseconds, error = ex.Message }; }
+                    try
+                    {
+                        await fn();
+                        sw.Stop();
+                        return new LatencyResult(true, sw.ElapsedMilliseconds, null);
+                    }
+                    catch (Exception ex)
+                    {
+                        sw.Stop();
+                        return new LatencyResult(false, sw.ElapsedMilliseconds, ex.Message);
+                    }
                 }
 
                 var postgres = await Measure(async () =>
                 {
-                    using var conn = (System.Data.Common.DbConnection)sqlFactory.CreateConnection();
-                    await conn.OpenAsync(ct);
+                    using var conn = sqlFactory.CreateConnection();
+                    conn.Open();
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = "SELECT 1";
-                    await cmd.ExecuteScalarAsync(ct);
+                    cmd.ExecuteScalar();
                 });
 
                 var redis = await Measure(async () =>
@@ -113,13 +122,15 @@ public class Startup
                     await client.GetAsync($"{pythonBase}/health", ct);
                 });
 
-                return Results.Ok(new { postgres, redis, python });
+                return Results.Ok(new LatencyResponse(postgres, redis, python));
             }).AllowAnonymous();
 
             endpoints.MapControllers();
             endpoints.MapHub<DashboardHub>("/hubs/dashboard").RequireAuthorization();
         });
-        
-        
     }
 }
+
+// lowercase names → minimal-API STJ serializes as-is (no CamelCase policy by default)
+file record LatencyResult(bool ok, long ms, string? error);
+file record LatencyResponse(LatencyResult postgres, LatencyResult redis, LatencyResult python);

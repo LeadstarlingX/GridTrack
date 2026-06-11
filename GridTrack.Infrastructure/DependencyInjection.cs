@@ -17,6 +17,7 @@ using GridTrack.Infrastructure.ExternalServices;
 using GridTrack.Infrastructure.H3Service;
 using GridTrack.Infrastructure.Hubs;
 using GridTrack.Infrastructure.Seeding;
+using GridTrack.Infrastructure.Simulation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,6 +40,7 @@ public static class DependencyInjection
         AddMySignalR(services);
         AddExternalServices(services, configuration);
         AddSeeding(services);
+        AddSimulation(services, configuration);
 
         return services;
     }
@@ -133,6 +135,14 @@ public static class DependencyInjection
     {
         services.AddScoped<DataSeeder>();
         services.AddHostedService<SeedService>();
+        return services;
+    }
+
+    private static IServiceCollection AddSimulation(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<SimulatorOptions>(configuration.GetSection("Simulation"));
+        services.AddHostedService<PositionSimulatorService>();
         return services;
     }
 
