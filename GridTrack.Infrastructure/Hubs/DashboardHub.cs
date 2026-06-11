@@ -13,6 +13,9 @@ public sealed class DashboardHub : Hub
     public async Task LeaveDistrict(string districtId)
         => await Groups.RemoveFromGroupAsync(Context.ConnectionId, districtId);
 
+    // Returns server UTC timestamp; client computes round-trip by diffing with send time.
+    public Task<long> Ping(long clientSentMs) => Task.FromResult(clientSentMs);
+
     public override async Task OnConnectedAsync()
     {
         await base.OnConnectedAsync();
