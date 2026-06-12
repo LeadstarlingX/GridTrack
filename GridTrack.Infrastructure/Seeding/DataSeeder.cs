@@ -175,6 +175,23 @@ public sealed class DataSeeder(
 
         db.Set<DeliveryRoute>().AddRange(deliveryRoutes);
         await db.SaveChangesAsync(ct);
+
+        // ── Pending (Created) deliveries for the simulator to pick up ─────
+        var pendingDeliveries = new List<Delivery>();
+        for (var i = 0; i < 30; i++)
+        {
+            var district = Districts[i % Districts.Length];
+            var origin = Jitter(district.Lat, district.Lng, district.Jitter);
+            var deliveryId = Guid.NewGuid();
+            var createdAt = now.AddMinutes(-Rng.Next(1, 10));
+            var eta = createdAt.AddMinutes(Rng.Next(20, 60));
+            var result = Delivery.Create(deliveryId, origin, district.Id, createdAt, eta);
+            if (result.IsFailure) continue;
+            result.Value.ClearDomainEvents();
+            pendingDeliveries.Add(result.Value);
+        }
+        db.Set<Delivery>().AddRange(pendingDeliveries);
+        await db.SaveChangesAsync(ct);
     }
 
     private static Guid DeterministicGuid(string seed)

@@ -7,17 +7,27 @@ namespace GridTrack.Application.CQRS.Handlers;
 
 public static class DeliveryUpdateBroadcastHandler
 {
-    public static async Task Handle(
-        DeliveryLocationUpdatedDomainEvent e,
-        IDeliveryReadService readService,
-        IDashboardPushService push,
-        CancellationToken ct)
-    {
-        var delivery = await readService.GetAggregateByIdAsync(e.DeliveryId, ct);
-        if (delivery is null)
-            return;
+    public static Task Handle(DeliveryAssignedDomainEvent e, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
+        => BroadcastAsync(e.DeliveryId, r, p, ct);
 
-        await push.BroadcastDeliveryUpdateAsync(
+    public static Task Handle(DeliveryPickedUpDomainEvent e, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
+        => BroadcastAsync(e.DeliveryId, r, p, ct);
+
+    public static Task Handle(DeliveryLocationUpdatedDomainEvent e, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
+        => BroadcastAsync(e.DeliveryId, r, p, ct);
+
+    public static Task Handle(DeliveryCompletedDomainEvent e, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
+        => BroadcastAsync(e.DeliveryId, r, p, ct);
+
+    public static Task Handle(DeliveryCancelledDomainEvent e, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
+        => BroadcastAsync(e.DeliveryId, r, p, ct);
+
+    private static async Task BroadcastAsync(Guid deliveryId, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
+    {
+        var delivery = await r.GetAggregateByIdAsync(deliveryId, ct);
+        if (delivery is null) return;
+
+        await p.BroadcastDeliveryUpdateAsync(
             delivery.DistrictId,
             new DeliveryDto
             {
