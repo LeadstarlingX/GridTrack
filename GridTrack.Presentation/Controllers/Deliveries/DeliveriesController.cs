@@ -53,4 +53,17 @@ public class DeliveriesController(IMessageBus bus) : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("{id}/timeline")]
+    public async Task<IActionResult> GetDeliveryTimeline(string id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var deliveryId))
+            return BadRequest();
+
+        var result = await bus.InvokeAsync<DeliveryTimelineResponse?>(
+            new GetDeliveryTimelineQuery(deliveryId),
+            ct);
+
+        return result is null ? NotFound() : Ok(result);
+    }
 }

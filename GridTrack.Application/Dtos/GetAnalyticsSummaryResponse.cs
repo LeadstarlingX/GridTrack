@@ -5,4 +5,7 @@ public sealed record GetAnalyticsSummaryResponse(
     double CompletionRate,
     int ActiveDrivers,
     double AnomalyRate,
+    int PendingDeliveries,
+    double AvgDeliveryMinutes,
+    double OnTimeRatePct,
     DateTime UpdatedAt);

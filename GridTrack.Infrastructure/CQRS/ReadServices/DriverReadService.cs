@@ -97,12 +97,15 @@ public sealed class DriverReadService : IDriverReadService
                     AND del."DeliveredAt" < CURRENT_DATE + INTERVAL '1 day'
                 ) AS "CompletedToday",
                 BOOL_OR(del."AnomalyFlag" AND del."Status" NOT IN (4,5)) AS "HasAnomaly",
-                MAX(CASE WHEN del."AnomalyFlag" = true AND del."Status" NOT IN (4,5) THEN del."AnomalyReason" END) AS "AnomalyReason"
+                MAX(CASE WHEN del."AnomalyFlag" = true AND del."Status" NOT IN (4,5) THEN del."AnomalyReason" END) AS "AnomalyReason",
+                d."CarType"     AS "CarType",
+                d."LicensePlate" AS "LicensePlate",
+                d."PhoneNumber" AS "PhoneNumber"
             FROM "Drivers" d
             LEFT JOIN "Deliveries" del ON del."AssignedDriverId" = d."DriverId"
             WHERE (@DistrictId IS NULL OR d."DistrictId" = @DistrictId)
               AND (@Cursor IS NULL OR d."DriverId"::text > @Cursor)
-            GROUP BY d."DriverId", d."Name", d."ShortName", d."Location", d."DistrictId", d."IsActive"
+            GROUP BY d."DriverId", d."Name", d."ShortName", d."Location", d."DistrictId", d."IsActive", d."CarType", d."LicensePlate", d."PhoneNumber"
             HAVING (@Status IS NULL
                 OR (
                     @Status = 'offline'    AND d."IsActive" = false

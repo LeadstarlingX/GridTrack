@@ -414,6 +414,66 @@ public class DeliveryTests
     }
     
 
+    // ── Regression: double-cancel bug ───────────────────────────────────────
+
+    [Test]
+    public async Task MarkCancelled_Should_Fail_When_Already_Cancelled()
+    {
+        // Arrange — cancel once successfully
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.MarkCancelled(DateTime.UtcNow, "first cancel");
+        delivery.ClearDomainEvents();
+
+        // Act — attempt second cancel (was silently succeeding via current==next short-circuit)
+        var result = delivery.MarkCancelled(DateTime.UtcNow.AddMinutes(1), "second cancel");
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.TerminalStatus);
+        // No extra events should have been raised
+        await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task MarkCancelled_Should_Fail_When_Already_Delivered()
+    {
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.MarkPickedUp(Factory.CreatePoint(new Coordinate(11, 11)), DateTime.UtcNow);
+        delivery.UpdateLocation(Factory.CreatePoint(new Coordinate(12, 12)), DateTime.UtcNow);
+        delivery.MarkDelivered(DateTime.UtcNow);
+        delivery.ClearDomainEvents();
+
+        var result = delivery.MarkCancelled(DateTime.UtcNow.AddMinutes(1), "too late");
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.TerminalStatus);
+        await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
+    }
+
+    // ── Regression: double-flag bug ─────────────────────────────────────────
+
+    [Test]
+    public async Task FlagAnomaly_Should_Fail_When_Already_Anomalous()
+    {
+        // Arrange — flag once
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.MarkPickedUp(Factory.CreatePoint(new Coordinate(11, 11)), DateTime.UtcNow);
+        delivery.FlagAnomaly(AnomalyType.RouteDeviation, "detour");
+        delivery.ClearDomainEvents();
+
+        // Act — re-flag (was silently overwriting type/reason and raising a second event)
+        var result = delivery.FlagAnomaly(AnomalyType.EtaExceeded, "now late too");
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.AlreadyFlagged);
+        // Original anomaly data must be unchanged
+        await Assert.That(delivery.AnomalyTypeValue).IsEqualTo(AnomalyType.RouteDeviation);
+        await Assert.That(delivery.AnomalyReason).IsEqualTo("detour");
+        await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
+    }
+
     private static Delivery CreateDelivery()
     {
         var result = Delivery.Create(

@@ -28,20 +28,20 @@ public sealed class DataSeeder(
         ("babtouma",  "Bab Touma", 33.522, 36.307, 0.005),
     ];
 
-    private static readonly (string Name, string Short, string District)[] DriverSeeds =
+    private static readonly (string Name, string Short, string District, string CarType, string LicensePlate, string Phone)[] DriverSeeds =
     [
-        ("Ahmad Hassan",   "Ahmad",   "mezzeh"),
-        ("Sami Karimi",    "Sami",    "malki"),
-        ("Omar Rahhal",    "Omar",    "babtouma"),
-        ("Ali Saleh",      "Ali",     "mezzeh"),
-        ("Maher Tayeh",    "Maher",   "kafrsousa"),
-        ("Khaled Barakat", "Khaled",  "mezzeh"),
-        ("Fadi Jabri",     "Fadi",    "babtouma"),
-        ("Rami Abbas",     "Rami",    "kafrsousa"),
-        ("Hassan Nassar",  "Hassan",  "babtouma"),
-        ("Wael Daher",     "Wael",    "kafrsousa"),
-        ("Ibrahim Lahham", "Ibrahim", "babtouma"),
-        ("Ziad Chami",     "Ziad",    "mezzeh"),
+        ("Ahmad Hassan",   "Ahmad",   "mezzeh",    "Sedan",      "AHM-1001", "+963-911-101001"),
+        ("Sami Karimi",    "Sami",    "malki",     "Motorcycle", "SKR-2002", "+963-944-202002"),
+        ("Omar Rahhal",    "Omar",    "babtouma",  "Van",        "OMR-3003", "+963-955-303003"),
+        ("Ali Saleh",      "Ali",     "mezzeh",    "Sedan",      "ALS-4004", "+963-911-404004"),
+        ("Maher Tayeh",    "Maher",   "kafrsousa", "Truck",      "MHT-5005", "+963-944-505005"),
+        ("Khaled Barakat", "Khaled",  "mezzeh",    "Sedan",      "KHB-6006", "+963-955-606006"),
+        ("Fadi Jabri",     "Fadi",    "babtouma",  "Motorcycle", "FDJ-7007", "+963-911-707007"),
+        ("Rami Abbas",     "Rami",    "kafrsousa", "Van",        "RMA-8008", "+963-944-808008"),
+        ("Hassan Nassar",  "Hassan",  "babtouma",  "Sedan",      "HSN-9009", "+963-955-909009"),
+        ("Wael Daher",     "Wael",    "kafrsousa", "Sedan",      "WAD-1010", "+963-911-100010"),
+        ("Ibrahim Lahham", "Ibrahim", "babtouma",  "Truck",      "IBL-1111", "+963-944-111011"),
+        ("Ziad Chami",     "Ziad",    "mezzeh",    "Motorcycle", "ZCH-1212", "+963-955-121212"),
     ];
 
     public async Task SeedAsync(CancellationToken ct)
@@ -50,14 +50,14 @@ public sealed class DataSeeder(
 
         // ── Drivers ───────────────────────────────────────────────────────
         var drivers = new List<Driver>();
-        foreach (var (name, shortName, districtId) in DriverSeeds)
+        foreach (var (name, shortName, districtId, carType, licensePlate, phone) in DriverSeeds)
         {
             var driverId = DeterministicGuid(name);
             var district = Districts.First(d => d.Id == districtId);
             var location = Jitter(district.Lat, district.Lng, district.Jitter);
             var isActive = name != "Ziad Chami"; // Ziad is offline
 
-            var result = Driver.Create(driverId, location, districtId, now, name, shortName, isActive);
+            var result = Driver.Create(driverId, location, districtId, now, name, shortName, isActive, carType, licensePlate, phone);
             if (result.IsFailure)
             {
                 logger.LogWarning("Failed to create driver {Name}: {Error}", name, result.Error.Message);
