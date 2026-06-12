@@ -12,4 +12,5 @@ public static class DeliveryErrors
     public static readonly Error TerminalStatus = new("Delivery.TerminalStatus", "Delivery is already in a terminal status.");
     public static readonly Error InvalidStatusTransition = new("Delivery.InvalidStatusTransition", "Invalid delivery status transition.");
     public static readonly Error InvalidStatusForOperation = new("Delivery.InvalidStatusForOperation", "Delivery status does not allow this operation.");
+    public static readonly Error AlreadyFlagged = new("Delivery.AlreadyFlagged", "Delivery has already been flagged as anomalous.");
 }

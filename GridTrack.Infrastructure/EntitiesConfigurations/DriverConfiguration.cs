@@ -36,8 +36,21 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(d => d.CarType)
+            .HasMaxLength(50);
+
+        builder.Property(d => d.LicensePlate)
+            .HasMaxLength(20);
+
+        builder.Property(d => d.PhoneNumber)
+            .HasMaxLength(20);
+
         builder.HasIndex(d => d.IsActive);
 
         builder.HasIndex(d => d.DistrictId);
+
+        builder.HasIndex(d => d.LicensePlate)
+            .IsUnique()
+            .HasFilter("\"LicensePlate\" IS NOT NULL");
     }
 }

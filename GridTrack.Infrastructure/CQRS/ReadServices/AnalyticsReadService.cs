@@ -39,6 +39,27 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                                        END
                                 FROM public."Deliveries") AS "AnomalyRate",
 
+                               (SELECT COUNT(*)::int
+                                FROM public."Deliveries"
+                                WHERE "Status" = 0) AS "PendingDeliveries",
+
+                               (SELECT COALESCE(
+                                    AVG(EXTRACT(EPOCH FROM ("DeliveredAt" - "PickedUpAt")) / 60.0), 0)::float
+                                FROM public."Deliveries"
+                                WHERE "Status" = 4
+                                  AND "DeliveredAt" IS NOT NULL
+                                  AND "PickedUpAt" IS NOT NULL
+                                  AND DATE("DeliveredAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "AvgDeliveryMinutes",
+
+                               (SELECT CASE
+                                    WHEN COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL) = 0 THEN 0.0
+                                    ELSE COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL AND "DeliveredAt" <= "ExpectedEta")::float
+                                         / COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL)::float * 100.0
+                                    END
+                                FROM public."Deliveries"
+                                WHERE "Status" = 4
+                                  AND DATE("DeliveredAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "OnTimeRatePct",
+
                                NOW() AS "UpdatedAt"
                            """;
 

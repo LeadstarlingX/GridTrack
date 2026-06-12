@@ -189,6 +189,11 @@ public sealed class Delivery : BaseEntity
 
 	public Result FlagAnomaly(AnomalyType type, string reason)
 	{
+		if (Status == DeliveryStatus.Anomalous)
+		{
+			return Result.Failure(DeliveryErrors.AlreadyFlagged);
+		}
+
 		if (string.IsNullOrWhiteSpace(reason))
 		{
 			return Result.Failure(DeliveryErrors.InvalidReason);
@@ -209,6 +214,12 @@ public sealed class Delivery : BaseEntity
 
 	public Result MarkCancelled(DateTime timestamp, string reason)
 	{
+		var terminalCheck = EnsureNotTerminal();
+		if (terminalCheck.IsFailure)
+		{
+			return terminalCheck;
+		}
+
 		if (string.IsNullOrWhiteSpace(reason))
 		{
 			return Result.Failure(DeliveryErrors.InvalidReason);

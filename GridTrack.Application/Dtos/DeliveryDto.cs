@@ -13,6 +13,7 @@ public sealed class DeliveryDto
     public DateTime? ActualEta { get; init; }
     public string DistrictId { get; init; } = string.Empty;
     public bool AnomalyFlag { get; init; }
+    public AnomalyType? AnomalyTypeValue { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime? PickedUpAt { get; init; }
     public DateTime? DeliveredAt { get; init; }

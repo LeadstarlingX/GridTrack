@@ -25,6 +25,32 @@ public class DriversController(IMessageBus bus) : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetDriverDetail(string id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var driverId))
+            return BadRequest();
+
+        var result = await bus.InvokeAsync<DriverDetailResponse?>(
+            new GetDriverDetailQuery(driverId),
+            ct);
+
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpGet("{id}/stats")]
+    public async Task<IActionResult> GetDriverStats(string id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var driverId))
+            return BadRequest();
+
+        var result = await bus.InvokeAsync<DriverStatsResponse?>(
+            new GetDriverStatsQuery(driverId),
+            ct);
+
+        return result is null ? NotFound() : Ok(result);
+    }
+
     [HttpPatch("{id}/availability")]
     public async Task<IActionResult> UpdateDriverAvailability(
         [FromRoute] string id,
