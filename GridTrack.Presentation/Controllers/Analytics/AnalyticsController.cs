@@ -10,10 +10,12 @@ namespace GridTrack.Presentation.Controllers.Analytics;
 public class AnalyticsController(IMessageBus bus) : ControllerBase
 {
     [HttpGet("summary")]
-    public async Task<IActionResult> GetSummary(CancellationToken ct)
+    public async Task<IActionResult> GetSummary(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
     {
         var result = await bus.InvokeAsync<GetAnalyticsSummaryResponse>(
-            new GetAnalyticsSummaryQuery(),
+            new GetAnalyticsSummaryQuery(request.From, request.To),
             ct);
 
         return Ok(result);
@@ -91,6 +93,18 @@ public class AnalyticsController(IMessageBus bus) : ControllerBase
     {
         var result = await bus.InvokeAsync<GetDriverUtilizationResponse>(
             new GetDriverUtilizationQuery(top <= 0 ? 10 : Math.Min(top, 50)),
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpGet("status-breakdown")]
+    public async Task<IActionResult> GetStatusBreakdown(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetStatusBreakdownResponse>(
+            new GetStatusBreakdownQuery(request.From, request.To),
             ct);
 
         return Ok(result);
