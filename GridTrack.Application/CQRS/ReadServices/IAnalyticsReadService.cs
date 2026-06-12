@@ -4,7 +4,7 @@ namespace GridTrack.Application.CQRS.ReadServices;
 
 public interface IAnalyticsReadService
 {
-    Task<GetAnalyticsSummaryResponse> GetSummaryAsync(CancellationToken ct);
+    Task<GetAnalyticsSummaryResponse> GetSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct);
 
     Task<GetH3DensityResponse> GetH3DensityAsync(
         DateTime from,

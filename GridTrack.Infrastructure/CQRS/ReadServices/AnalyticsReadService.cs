@@ -14,21 +14,25 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         _sqlConnectionFactory = sqlConnectionFactory;
     }
 
-    public async Task<GetAnalyticsSummaryResponse> GetSummaryAsync(CancellationToken ct)
+    public async Task<GetAnalyticsSummaryResponse> GetSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct)
     {
         using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // When no range is given fall back to today (UTC). The "to" bound is exclusive end-of-day.
+        var rangeFrom = from ?? DateTime.UtcNow.Date;
+        var rangeTo   = (to ?? DateTime.UtcNow.Date).Date.AddDays(1);
 
         const string sql = """
                            SELECT
                                (SELECT COUNT(*)::int
                                 FROM public."Deliveries"
-                                WHERE DATE("CreatedAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "TotalDeliveriesToday",
+                                WHERE "CreatedAt" >= @From AND "CreatedAt" < @To) AS "TotalDeliveriesToday",
 
                                (SELECT CASE WHEN COUNT(*) = 0 THEN 0.0
                                             ELSE COUNT(*) FILTER (WHERE "Status" = 4)::float / COUNT(*)::float
                                        END
                                 FROM public."Deliveries"
-                                WHERE DATE("CreatedAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "CompletionRate",
+                                WHERE "CreatedAt" >= @From AND "CreatedAt" < @To) AS "CompletionRate",
 
                                (SELECT COUNT(*)::int
                                 FROM public."Drivers"
@@ -37,7 +41,8 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                                (SELECT CASE WHEN COUNT(*) = 0 THEN 0.0
                                             ELSE COUNT(*) FILTER (WHERE "AnomalyFlag" = true)::float / COUNT(*)::float
                                        END
-                                FROM public."Deliveries") AS "AnomalyRate",
+                                FROM public."Deliveries"
+                                WHERE "CreatedAt" >= @From AND "CreatedAt" < @To) AS "AnomalyRate",
 
                                (SELECT COUNT(*)::int
                                 FROM public."Deliveries"
@@ -49,7 +54,7 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                                 WHERE "Status" = 4
                                   AND "DeliveredAt" IS NOT NULL
                                   AND "PickedUpAt" IS NOT NULL
-                                  AND DATE("DeliveredAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "AvgDeliveryMinutes",
+                                  AND "DeliveredAt" >= @From AND "DeliveredAt" < @To) AS "AvgDeliveryMinutes",
 
                                (SELECT CASE
                                     WHEN COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL) = 0 THEN 0.0
@@ -58,12 +63,12 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                                     END
                                 FROM public."Deliveries"
                                 WHERE "Status" = 4
-                                  AND DATE("DeliveredAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "OnTimeRatePct",
+                                  AND "DeliveredAt" >= @From AND "DeliveredAt" < @To) AS "OnTimeRatePct",
 
                                NOW() AS "UpdatedAt"
                            """;
 
-        var row = await connection.QueryFirstAsync<GetAnalyticsSummaryResponse>(sql);
+        var row = await connection.QueryFirstAsync<GetAnalyticsSummaryResponse>(sql, new { From = rangeFrom, To = rangeTo });
         return row;
     }
 
