@@ -177,6 +177,29 @@ public class DriverGetAllTests : BaseIntegrationTest
         page2.NextCursor.Should().BeNull();
     }
 
+    // ── VehicleAndContactInfo ─────────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 68)]
+    public async Task GetAllAsync_Returns_CarType_LicensePlate_PhoneNumber_When_Set()
+    {
+        await ResetDatabaseAsync();
+
+        var d = Driver.Create(
+            Guid.NewGuid(), Damascus, "mezzeh", DateTime.UtcNow,
+            "Ahmad Hassan", "Ahmad", true,
+            carType: "Sedan", licensePlate: "AHM-9901", phoneNumber: "+963-911-990001").Value;
+        d.ClearDomainEvents();
+        await SeedDriversAsync([d]);
+
+        var result = await GetReadService().GetAllAsync(null, null, null, 10, CancellationToken.None);
+
+        result.Items.Should().HaveCount(1);
+        result.Items[0].CarType.Should().Be("Sedan");
+        result.Items[0].LicensePlate.Should().Be("AHM-9901");
+        result.Items[0].PhoneNumber.Should().Be("+963-911-990001");
+    }
+
     // ── CompletedToday ────────────────────────────────────────────────────
 
     [Test]

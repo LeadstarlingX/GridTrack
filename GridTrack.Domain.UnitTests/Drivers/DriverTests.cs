@@ -256,6 +256,33 @@ public class DriverTests
         await Assert.That(e.DistrictId).IsEqualTo("h3-1");
     }
 
+    [Test]
+    public async Task Create_Should_Store_VehicleAndContactInfo_When_Provided()
+    {
+        var result = Driver.Create(
+            Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow,
+            "Ahmad Hassan", "Ahmad", true,
+            carType: "Sedan", licensePlate: "AHM-1001", phoneNumber: "+963-911-000001");
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value.CarType).IsEqualTo("Sedan");
+        await Assert.That(result.Value.LicensePlate).IsEqualTo("AHM-1001");
+        await Assert.That(result.Value.PhoneNumber).IsEqualTo("+963-911-000001");
+    }
+
+    [Test]
+    public async Task Create_Should_Succeed_When_VehicleAndContactInfo_Are_Null()
+    {
+        var result = Driver.Create(
+            Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow,
+            "Ahmad Hassan", "Ahmad");
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value.CarType).IsNull();
+        await Assert.That(result.Value.LicensePlate).IsNull();
+        await Assert.That(result.Value.PhoneNumber).IsNull();
+    }
+
     private static Driver CreateDriver()
     {
         var result = Driver.Create(Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow, "Ahmad Hassan", "Ahmad", true);
