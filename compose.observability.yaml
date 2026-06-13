@@ -1,0 +1,67 @@
+# Optional observability stack — not needed for development or Render deployment.
+# Only start this if you want to explore distributed tracing / metrics locally.
+#   docker compose -f compose.yaml -f compose.observability.yaml up -d
+#
+# NOTE: gridtrack.tempo has a config issue and will restart — fix tempo.yaml before using it.
+
+services:
+
+  gridtrack.grafana:
+    image: grafana/grafana:latest
+    container_name: GridTrack.Grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+
+  gridtrack.tempo:
+    image: grafana/tempo:latest
+    container_name: GridTrack.Tempo
+    user: root
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo-data:/tmp/tempo
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "3200:3200"
+    restart: unless-stopped
+
+  gridtrack.prometheus:
+    image: prom/prometheus:latest
+    container_name: GridTrack.Prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  gridtrack.loki:
+    image: grafana/loki:latest
+    container_name: GridTrack.Loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./observability/loki/loki.yaml:/etc/loki/loki.yaml
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+volumes:
+  grafana-data:
+  tempo-data:
+  prometheus-data:
+  loki-data:

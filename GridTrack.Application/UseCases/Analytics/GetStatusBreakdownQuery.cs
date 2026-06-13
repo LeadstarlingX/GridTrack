@@ -1,4 +1,5 @@
 using Dapper;
+using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.Dtos;
 
@@ -11,14 +12,29 @@ public sealed class GetStatusBreakdownHandler
     private static readonly string[] StatusLabels =
         ["Created", "Assigned", "PickedUp", "InTransit", "Delivered", "Cancelled", "Anomalous"];
 
-    public async Task<GetStatusBreakdownResponse> Handle(
+    public Task<GetStatusBreakdownResponse> Handle(
         GetStatusBreakdownQuery query,
         ISqlConnectionFactory sqlConnectionFactory,
+        ICacheService cache,
         CancellationToken ct)
     {
         var from = query.From ?? DateTime.UtcNow.Date;
         var to   = (query.To ?? DateTime.UtcNow.Date).Date.AddDays(1);
 
+        var today = DateTime.UtcNow.Date;
+        var ttl = (query.To ?? today).Date >= today
+            ? TimeSpan.FromSeconds(45)
+            : TimeSpan.FromMinutes(5);
+
+        var key = $"analytics:status-bd:{from:yyyyMMdd}:{to:yyyyMMdd}";
+        return cache.GetOrSetAsync(key, innerCt => QueryAsync(from, to, sqlConnectionFactory, innerCt), ttl, ct);
+    }
+
+    private async Task<GetStatusBreakdownResponse> QueryAsync(
+        DateTime from, DateTime to,
+        ISqlConnectionFactory sqlConnectionFactory,
+        CancellationToken ct)
+    {
         using var connection = sqlConnectionFactory.CreateConnection();
 
         const string sql = """
