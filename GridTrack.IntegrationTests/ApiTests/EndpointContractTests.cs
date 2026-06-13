@@ -153,9 +153,53 @@ public class EndpointContractTests : BaseIntegrationTest
         var response = await client.GetAsync("/health");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
-    
-    
-    
+
+    // ── POST /api/telemetry/batch ─────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1109)]
+    public async Task POST_Telemetry_Batch_Returns_400_For_Empty_Events()
+    {
+        var client = AuthClient();
+        var response = await client.PostAsJsonAsync("/api/telemetry/batch", new { events = Array.Empty<object>() });
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    [NotInParallel(Order = 1110)]
+    public async Task POST_Telemetry_Batch_Returns_202_And_Counts_Processed()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+
+        var deliveryId = Guid.NewGuid();
+        var payload = new
+        {
+            events = new[]
+            {
+                new
+                {
+                    type = "delivery_created",
+                    occurredAt = DateTime.UtcNow,
+                    deliveryId,
+                    lat = 33.5138,
+                    lng = 36.2765,
+                    districtId = "mezzeh"
+                }
+            }
+        };
+
+        var response = await client.PostAsJsonAsync("/api/telemetry/batch", payload);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var body = await response.Content.ReadFromJsonAsync<TelemetryBatchResult>();
+        body.Should().NotBeNull();
+        body!.Processed.Should().Be(1);
+        body.Rejected.Should().Be(0);
+    }
+
+    private sealed record TelemetryBatchResult(int Processed, int Rejected, List<string> Errors);
+
     [Test]
     public async Task Debug_Print_All_Routes()
     {

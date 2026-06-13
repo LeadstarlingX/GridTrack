@@ -146,12 +146,25 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                           ORDER BY 1
                           """;
 
+        var urgencySql = $"""
+                          SELECT
+                              date_trunc('{safeTrunc}', "UrgencyScoreAt" AT TIME ZONE 'UTC')::text AS "Bucket",
+                              AVG("UrgencyScore")::float                                            AS "Value"
+                          FROM public."Deliveries"
+                          WHERE "UrgencyScore" IS NOT NULL
+                            AND "UrgencyScoreAt" IS NOT NULL
+                            AND "UrgencyScoreAt" >= @From AND "UrgencyScoreAt" <= @To
+                          GROUP BY 1
+                          ORDER BY 1
+                          """;
+
         var param = new { From = from, To = to };
 
         var deliveries = (await connection.QueryAsync<TrendPointResponse>(deliverySql, param)).ToList();
         var anomalies  = (await connection.QueryAsync<TrendPointResponse>(anomalySql,  param)).ToList();
+        var urgency    = (await connection.QueryAsync<TrendPointResponse>(urgencySql,   param)).ToList();
 
-        return new GetTrendsResponse(deliveries, anomalies);
+        return new GetTrendsResponse(deliveries, anomalies, urgency);
     }
 
     public async Task<GetDistrictVolumeResponse> GetDistrictVolumeAsync(
