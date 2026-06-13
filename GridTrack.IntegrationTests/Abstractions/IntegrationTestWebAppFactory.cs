@@ -64,7 +64,7 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] = _dbContainer.GetConnectionString(),
-                ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString(),
+                ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString() + ",allowAdmin=true",
                 ["ConnectionStrings:Queue"]             = null,
                 ["Clerk:Authority"]                     = "https://test.clerk.invalid",
             });

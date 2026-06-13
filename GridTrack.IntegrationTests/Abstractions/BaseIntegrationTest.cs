@@ -6,6 +6,7 @@ using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 using Wolverine;
 
 namespace GridTrack.IntegrationTests.Abstractions;
@@ -47,6 +48,15 @@ public abstract class BaseIntegrationTest
                            """;
 
         await connection.ExecuteAsync(sql);
+
+        // Flush Redis so cached analytics results don't bleed between tests.
+        var multiplexer = Factory.Services.GetRequiredService<IConnectionMultiplexer>();
+        foreach (var endpoint in multiplexer.GetEndPoints())
+        {
+            var server = multiplexer.GetServer(endpoint);
+            if (server.IsConnected)
+                await server.FlushDatabaseAsync();
+        }
     }
 
     protected static async Task SeedAsync(Func<AppDbContext, Task> seed, CancellationToken ct = default)
