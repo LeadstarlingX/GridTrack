@@ -10,10 +10,12 @@ namespace GridTrack.Presentation.Controllers.Analytics;
 public class AnalyticsController(IMessageBus bus) : ControllerBase
 {
     [HttpGet("summary")]
-    public async Task<IActionResult> GetSummary(CancellationToken ct)
+    public async Task<IActionResult> GetSummary(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
     {
         var result = await bus.InvokeAsync<GetAnalyticsSummaryResponse>(
-            new GetAnalyticsSummaryQuery(),
+            new GetAnalyticsSummaryQuery(request.From, request.To),
             ct);
 
         return Ok(result);

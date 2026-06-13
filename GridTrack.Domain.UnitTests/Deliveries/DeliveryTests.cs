@@ -474,6 +474,55 @@ public class DeliveryTests
         await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
     }
 
+    // ── SetUrgencyScore ──────────────────────────────────────────────────────
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Persist_Score_And_Timestamp()
+    {
+        var delivery = CreateDelivery();
+        var before = DateTime.UtcNow;
+
+        var result = delivery.SetUrgencyScore(7, before);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(delivery.UrgencyScore).IsEqualTo(7);
+        await Assert.That(delivery.UrgencyScoreAt).IsEqualTo(before);
+    }
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Fail_For_Score_Below_1()
+    {
+        var delivery = CreateDelivery();
+
+        var result = delivery.SetUrgencyScore(0, DateTime.UtcNow);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidUrgencyScore);
+    }
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Fail_For_Score_Above_10()
+    {
+        var delivery = CreateDelivery();
+
+        var result = delivery.SetUrgencyScore(11, DateTime.UtcNow);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidUrgencyScore);
+    }
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Allow_Update()
+    {
+        var delivery = CreateDelivery();
+        delivery.SetUrgencyScore(3, DateTime.UtcNow);
+
+        var result = delivery.SetUrgencyScore(9, DateTime.UtcNow);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(delivery.UrgencyScore).IsEqualTo(9);
+    }
+
     private static Delivery CreateDelivery()
     {
         var result = Delivery.Create(

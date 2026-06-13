@@ -39,6 +39,8 @@ public sealed class Delivery : BaseEntity
 	public DateTime? DeliveredAt { get; private set; }
 	public DateTime? CancelledAt { get; private set; }
 	public string? AnomalyReason { get; private set; }
+	public int? UrgencyScore { get; private set; }
+	public DateTime? UrgencyScoreAt { get; private set; }
 
 	public static Result<Delivery> Create(
 		Guid deliveryId,
@@ -249,6 +251,16 @@ public sealed class Delivery : BaseEntity
 				DeliveryId, AnomalyType.EtaExceeded, anomalyReason, DistrictId));
 		}
 
+		return Result.Success();
+	}
+
+	public Result SetUrgencyScore(int score, DateTime scoredAt)
+	{
+		if (score is < 1 or > 10)
+			return Result.Failure(DeliveryErrors.InvalidUrgencyScore);
+
+		UrgencyScore = score;
+		UrgencyScoreAt = scoredAt;
 		return Result.Success();
 	}
 
