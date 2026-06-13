@@ -28,4 +28,17 @@ internal sealed class FakeCacheService : ICacheService
         _store.Remove(key);
         return Task.CompletedTask;
     }
+
+    public async Task<T> GetOrSetAsync<T>(
+        string key,
+        Func<CancellationToken, Task<T>> factory,
+        TimeSpan expiration,
+        CancellationToken cancellationToken = default)
+    {
+        var cached = await GetAsync<T>(key, cancellationToken);
+        if (cached is not null) return cached;
+        var value = await factory(cancellationToken);
+        await SetAsync(key, value, expiration, cancellationToken);
+        return value;
+    }
 }

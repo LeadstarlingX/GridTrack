@@ -30,6 +30,20 @@ internal sealed class CacheService(IDistributedCache cache) : ICacheService
     public Task RemoveAsync(string key, CancellationToken cancellationToken = default) =>
         _cache.RemoveAsync(key, cancellationToken);
 
+    public async Task<T> GetOrSetAsync<T>(
+        string key,
+        Func<CancellationToken, Task<T>> factory,
+        TimeSpan expiration,
+        CancellationToken cancellationToken = default)
+    {
+        var cached = await GetAsync<T>(key, cancellationToken);
+        if (cached is not null) return cached;
+
+        var value = await factory(cancellationToken);
+        await SetAsync(key, value, expiration, cancellationToken);
+        return value;
+    }
+
     private static T Deserialize<T>(byte[] bytes)
     {
         return JsonSerializer.Deserialize<T>(bytes)!;
