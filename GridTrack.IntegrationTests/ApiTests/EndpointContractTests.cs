@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using GridTrack.Application.Dtos;
@@ -6,6 +6,8 @@ using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Application.UseCases.Drivers;
 using GridTrack.Domain.Abstractions;
 using GridTrack.IntegrationTests.Abstractions;
+using GridTrack.Presentation.Controllers.Deliveries;
+using GridTrack.Presentation.Controllers.Drivers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
@@ -198,16 +200,241 @@ public class EndpointContractTests : BaseIntegrationTest
         body.Rejected.Should().Be(0);
     }
 
-    private sealed record TelemetryBatchResult(int Processed, int Rejected, List<string> Errors);
+    // ── POST /api/deliveries/{id}/assign ─────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1111)]
+    public async Task POST_Assign_Returns_404_When_Delivery_Not_Found()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/deliveries/{Guid.NewGuid()}/assign",
+            new { driverId = Guid.NewGuid() });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    [NotInParallel(Order = 1112)]
+    public async Task POST_Assign_Returns_204_When_Delivery_Exists()
+    {
+        await ResetDatabaseAsync();
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var client = AuthClient();
+        var response = await client.PostAsJsonAsync(
+            $"/api/deliveries/{deliveryId}/assign",
+            new { driverId = Guid.NewGuid() });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    // ── POST /api/deliveries/{id}/cancel ─────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1113)]
+    public async Task POST_Cancel_Returns_404_When_Delivery_Not_Found()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/deliveries/{Guid.NewGuid()}/cancel",
+            new { reason = "No longer needed" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    [NotInParallel(Order = 1114)]
+    public async Task POST_Cancel_Returns_204_And_Delivery_Is_Cancelled()
+    {
+        await ResetDatabaseAsync();
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var client = AuthClient();
+        var cancelResponse = await client.PostAsJsonAsync(
+            $"/api/deliveries/{deliveryId}/cancel",
+            new { reason = "Customer request" });
+
+        cancelResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var getResponse = await client.GetAsync($"/api/deliveries/{deliveryId}");
+        var body = await getResponse.Content.ReadFromJsonAsync<GetDeliveryByIdResponse>();
+        body!.Status.Should().Be("Cancelled");
+    }
+
+    // ── Full lifecycle: assign → pick-up → delivered ──────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1115)]
+    public async Task Full_Lifecycle_Assign_PickUp_Delivered_Via_HTTP_Endpoints()
+    {
+        await ResetDatabaseAsync();
+        var deliveryId = Guid.NewGuid();
+        var driverId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var client = AuthClient();
+
+        var assignResponse = await client.PostAsJsonAsync(
+            $"/api/deliveries/{deliveryId}/assign",
+            new { driverId });
+        assignResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var pickUpResponse = await client.PostAsJsonAsync(
+            $"/api/deliveries/{deliveryId}/pick-up",
+            new { lat = 33.5138, lng = 36.2765 });
+        pickUpResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var deliveredResponse = await client.PostAsync(
+            $"/api/deliveries/{deliveryId}/delivered", null);
+        deliveredResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var getResponse = await client.GetAsync($"/api/deliveries/{deliveryId}");
+        var body = await getResponse.Content.ReadFromJsonAsync<GetDeliveryByIdResponse>();
+        body!.Status.Should().Be("Delivered");
+    }
+
+    // ── POST /api/deliveries/{id}/flag-anomaly ────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1116)]
+    public async Task POST_FlagAnomaly_Returns_204_On_Valid_Delivery()
+    {
+        await ResetDatabaseAsync();
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var client = AuthClient();
+        var response = await client.PostAsJsonAsync(
+            $"/api/deliveries/{deliveryId}/flag-anomaly",
+            new { type = "EtaExceeded", reason = "Driver has not moved in 30 minutes" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Test]
+    [NotInParallel(Order = 1117)]
+    public async Task POST_FlagAnomaly_Returns_400_For_Unknown_Type()
+    {
+        var client = AuthClient();
+        var response = await client.PostAsJsonAsync(
+            $"/api/deliveries/{Guid.NewGuid()}/flag-anomaly",
+            new { type = "NotARealType", reason = "test" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // ── POST /api/drivers ─────────────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1118)]
+    public async Task POST_Drivers_Creates_Driver_And_Returns_201_With_Id()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+
+        var response = await client.PostAsJsonAsync("/api/drivers", new
+        {
+            lat = 33.5138,
+            lng = 36.2765,
+            name = "Hassan Ali",
+            shortName = "Hassan",
+            districtId = "mezzeh",
+            isActive = true
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var body = await response.Content.ReadFromJsonAsync<DriverSummaryResponse>();
+        body.Should().NotBeNull();
+        body!.DriverId.Should().NotBeEmpty();
+        body.Name.Should().Be("Hassan Ali");
+        body.DistrictId.Should().Be("mezzeh");
+    }
+
+    // ── GET /api/drivers/nearest ──────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1119)]
+    public async Task GET_Drivers_Nearest_Returns_200_With_Array()
+    {
+        await ResetDatabaseAsync();
+        var driverId = Guid.NewGuid();
+        await InvokeAsync<Result<DriverDto>>(
+            new CreateDriverCommand(new CreateDriverRequest(
+                driverId, Damascus, 9, "mezzeh", "Ali Hassan", "Ali", true)));
+
+        var client = AuthClient();
+        var response = await client.GetAsync("/api/drivers/nearest?lat=33.5138&lng=36.2765&count=3");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<DriverSummaryResponse>>();
+        body.Should().NotBeNull();
+        body!.Should().HaveCountGreaterOrEqualTo(1);
+    }
+
+    // ── GET /api/drivers/by-district ──────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1120)]
+    public async Task GET_Drivers_ByDistrict_Returns_200_With_Matching_Drivers()
+    {
+        await ResetDatabaseAsync();
+        var driverId = Guid.NewGuid();
+        await InvokeAsync<Result<DriverDto>>(
+            new CreateDriverCommand(new CreateDriverRequest(
+                driverId, Damascus, 9, "mezzeh", "Karim Nasser", "Karim", true)));
+
+        var client = AuthClient();
+        var response = await client.GetAsync("/api/drivers/by-district/mezzeh");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<DriverSummaryResponse>>();
+        body.Should().NotBeNull();
+        body!.Should().HaveCountGreaterOrEqualTo(1);
+        body.Should().AllSatisfy(d => d.DistrictId.Should().Be("mezzeh"));
+    }
+
+    // ── GET /api/deliveries/by-district ───────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1121)]
+    public async Task GET_Deliveries_ByDistrict_Returns_200_With_Matching_Deliveries()
+    {
+        await ResetDatabaseAsync();
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var client = AuthClient();
+        var response = await client.GetAsync("/api/deliveries/by-district/mezzeh");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<DeliverySummaryResponse>>();
+        body.Should().NotBeNull();
+        body!.Should().HaveCountGreaterOrEqualTo(1);
+        body.Should().AllSatisfy(d => d.DistrictId.Should().Be("mezzeh"));
+    }
+
+    // ── Debug helper ──────────────────────────────────────────────────────
 
     [Test]
     public async Task Debug_Print_All_Routes()
     {
         await using var scope = Factory.Services.CreateAsyncScope();
-    
+
         var endpointSources = scope.ServiceProvider
             .GetRequiredService<IEnumerable<EndpointDataSource>>();
-        
+
         var list = new List<string>();
         foreach (var source in endpointSources)
         {
@@ -220,5 +447,6 @@ public class EndpointContractTests : BaseIntegrationTest
         list.Should().NotBeNullOrEmpty();
         await Assert.That(true).IsTrue();
     }
-    
+
+    private sealed record TelemetryBatchResult(int Processed, int Rejected, List<string> Errors);
 }
