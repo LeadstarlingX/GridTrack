@@ -28,20 +28,21 @@ public sealed class DataSeeder(
         ("babtouma",  "Bab Touma", 33.522, 36.307, 0.005),
     ];
 
-    private static readonly (string Name, string Short, string District, string CarType, string LicensePlate, string Phone)[] DriverSeeds =
+    // Shift: "morning" = 06:00–14:00 UTC, "evening" = 14:00–22:00 UTC, null = no shift
+    private static readonly (string Name, string Short, string District, CarType CarType, string LicensePlate, string Phone, decimal CapacityKg, string? Shift)[] DriverSeeds =
     [
-        ("Ahmad Hassan",   "Ahmad",   "mezzeh",    "Sedan",      "AHM-1001", "+963-911-101001"),
-        ("Sami Karimi",    "Sami",    "malki",     "Motorcycle", "SKR-2002", "+963-944-202002"),
-        ("Omar Rahhal",    "Omar",    "babtouma",  "Van",        "OMR-3003", "+963-955-303003"),
-        ("Ali Saleh",      "Ali",     "mezzeh",    "Sedan",      "ALS-4004", "+963-911-404004"),
-        ("Maher Tayeh",    "Maher",   "kafrsousa", "Truck",      "MHT-5005", "+963-944-505005"),
-        ("Khaled Barakat", "Khaled",  "mezzeh",    "Sedan",      "KHB-6006", "+963-955-606006"),
-        ("Fadi Jabri",     "Fadi",    "babtouma",  "Motorcycle", "FDJ-7007", "+963-911-707007"),
-        ("Rami Abbas",     "Rami",    "kafrsousa", "Van",        "RMA-8008", "+963-944-808008"),
-        ("Hassan Nassar",  "Hassan",  "babtouma",  "Sedan",      "HSN-9009", "+963-955-909009"),
-        ("Wael Daher",     "Wael",    "kafrsousa", "Sedan",      "WAD-1010", "+963-911-100010"),
-        ("Ibrahim Lahham", "Ibrahim", "babtouma",  "Truck",      "IBL-1111", "+963-944-111011"),
-        ("Ziad Chami",     "Ziad",    "mezzeh",    "Motorcycle", "ZCH-1212", "+963-955-121212"),
+        ("Ahmad Hassan",   "Ahmad",   "mezzeh",    CarType.Sedan,      "AHM-1001", "+963-911-101001", 200m,   "morning"),
+        ("Sami Karimi",    "Sami",    "malki",     CarType.Motorcycle, "SKR-2002", "+963-944-202002", 30m,    "evening"),
+        ("Omar Rahhal",    "Omar",    "babtouma",  CarType.Van,        "OMR-3003", "+963-955-303003", 1000m,  "morning"),
+        ("Ali Saleh",      "Ali",     "mezzeh",    CarType.Sedan,      "ALS-4004", "+963-911-404004", 200m,   "evening"),
+        ("Maher Tayeh",    "Maher",   "kafrsousa", CarType.Truck,      "MHT-5005", "+963-944-505005", 5000m,  "morning"),
+        ("Khaled Barakat", "Khaled",  "mezzeh",    CarType.Sedan,      "KHB-6006", "+963-955-606006", 200m,   "evening"),
+        ("Fadi Jabri",     "Fadi",    "babtouma",  CarType.Motorcycle, "FDJ-7007", "+963-911-707007", 30m,    "morning"),
+        ("Rami Abbas",     "Rami",    "kafrsousa", CarType.Van,        "RMA-8008", "+963-944-808008", 1000m,  "evening"),
+        ("Hassan Nassar",  "Hassan",  "babtouma",  CarType.Sedan,      "HSN-9009", "+963-955-909009", 200m,   "morning"),
+        ("Wael Daher",     "Wael",    "kafrsousa", CarType.Sedan,      "WAD-1010", "+963-911-100010", 200m,   "evening"),
+        ("Ibrahim Lahham", "Ibrahim", "babtouma",  CarType.Truck,      "IBL-1111", "+963-944-111011", 5000m,  "morning"),
+        ("Ziad Chami",     "Ziad",    "mezzeh",    CarType.Motorcycle, "ZCH-1212", "+963-955-121212", 30m,    null),
     ];
 
     public async Task SeedAsync(CancellationToken ct)
@@ -49,18 +50,33 @@ public sealed class DataSeeder(
         var now = DateTime.UtcNow;
 
         // ── Drivers ───────────────────────────────────────────────────────
+        var today = now.Date;
         var drivers = new List<Driver>();
-        foreach (var (name, shortName, districtId, carType, licensePlate, phone) in DriverSeeds)
+        foreach (var seed in DriverSeeds)
         {
-            var driverId = DeterministicGuid(name);
-            var district = Districts.First(d => d.Id == districtId);
+            var driverId = DeterministicGuid(seed.Name);
+            var district = Districts.First(d => d.Id == seed.District);
             var location = Jitter(district.Lat, district.Lng, district.Jitter);
-            var isActive = name != "Ziad Chami"; // Ziad is offline
+            var isActive = seed.Name != "Ziad Chami"; // Ziad is offline
 
-            var result = Driver.Create(driverId, location, districtId, now, name, shortName, isActive, carType, licensePlate, phone);
+            DateTime? shiftStart = seed.Shift switch
+            {
+                "morning" => today.AddHours(6),
+                "evening" => today.AddHours(14),
+                _         => null,
+            };
+            DateTime? shiftEnd = seed.Shift switch
+            {
+                "morning" => today.AddHours(14),
+                "evening" => today.AddHours(22),
+                _         => null,
+            };
+
+            var result = Driver.Create(driverId, location, seed.District, now, seed.Name, seed.Short, isActive,
+                seed.CarType, seed.LicensePlate, seed.Phone, seed.CapacityKg, shiftStart, shiftEnd);
             if (result.IsFailure)
             {
-                logger.LogWarning("Failed to create driver {Name}: {Error}", name, result.Error.Message);
+                logger.LogWarning("Failed to create driver {Name}: {Error}", seed.Name, result.Error.Message);
                 continue;
             }
 

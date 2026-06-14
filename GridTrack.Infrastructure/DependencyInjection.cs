@@ -5,6 +5,7 @@ using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
+using GridTrack.Application.Dispatch;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Caching;
@@ -13,6 +14,7 @@ using GridTrack.Infrastructure.CQRS.ReadServices;
 using GridTrack.Infrastructure.CQRS.Respositories;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
+using GridTrack.Infrastructure.Dispatch;
 using GridTrack.Infrastructure.ExternalServices;
 using GridTrack.Infrastructure.H3Service;
 using GridTrack.Infrastructure.Hubs;
@@ -73,7 +75,10 @@ public static class DependencyInjection
         services.AddScoped<IExportReadService, ExportReadService>();
         services.AddScoped<IForecastReadService, ForecastReadService>();
         services.AddScoped<IHeatmapReadService, HeatmapReadService>();
-        
+
+        services.Configure<DispatchWeightsOptions>(
+            configuration.GetSection(DispatchWeightsOptions.SectionName));
+        services.AddScoped<IDispatchStrategy, WeightedDispatchStrategy>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         
@@ -149,6 +154,12 @@ public static class DependencyInjection
         services.AddHttpClient<IAnalysisChatService, PythonAnalysisChatService>(c =>
             c.BaseAddress = new Uri(
                 configuration["Python:BaseUrl"] ?? "http://localhost:8000"));
+
+        services.AddHttpClient<IAiRecommendationService, PythonAiRecommendationService>(c =>
+        {
+            c.BaseAddress = new Uri(configuration["Python:BaseUrl"] ?? "http://localhost:8000");
+            c.Timeout = TimeSpan.FromSeconds(10);
+        });
 
         return services;
     }
