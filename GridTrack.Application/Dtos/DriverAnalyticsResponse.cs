@@ -1,6 +1,6 @@
 namespace GridTrack.Application.Dtos;
 
-public sealed record HourlyOnTimePoint(int Hour, double OnTimeRatePct, int SampleCount);
+public sealed record HourlyOnTimePointDto(int Hour, double OnTimeRatePct, int SampleCount);
 
 public sealed record DriverAnalyticsItemResponse(
     Guid DriverId,
@@ -13,6 +13,6 @@ public sealed record DriverAnalyticsItemResponse(
     double AnomalyRate,
     double AvgDurationSeconds,
     double DistrictAvgDurationSeconds,
-    IReadOnlyList<HourlyOnTimePoint> OnTimeByHour);
+    IReadOnlyList<HourlyOnTimePointDto> OnTimeByHour);
 
 public sealed record GetDriverAnalyticsResponse(IReadOnlyList<DriverAnalyticsItemResponse> Drivers);

@@ -24,10 +24,10 @@ public sealed class GetDeliveryRecommendationHandler
         var candidates = await strategy.GetCandidatesAsync(delivery.CurrentLocation, count: 3, ct);
 
         var aiCandidates = candidates
-            .Select((c, i) => new AiCandidateContext(i + 1, c.Name, c.DistanceM, c.OnTimeRatePct, c.Score))
+            .Select((c, i) => new AiCandidateContextDto(i + 1, c.Name, c.DistanceM, c.OnTimeRatePct, c.Score))
             .ToList();
 
-        var aiRequest = new AiRecommendationRequest(
+        var aiRequest = new AiRecommendationRequestDto(
             delivery.DeliveryId,
             delivery.DistrictId,
             delivery.AnomalyFlag ? delivery.AnomalyTypeValue?.ToString() : null,

@@ -7,7 +7,7 @@ namespace GridTrack.Infrastructure.ExternalServices;
 
 internal sealed class PythonAiRecommendationService(HttpClient http) : IAiRecommendationService
 {
-    public async Task<AiRecommendationResponse?> GetAsync(AiRecommendationRequest request, CancellationToken ct)
+    public async Task<AiRecommendationResponse?> GetAsync(AiRecommendationRequestDto request, CancellationToken ct)
     {
         try
         {

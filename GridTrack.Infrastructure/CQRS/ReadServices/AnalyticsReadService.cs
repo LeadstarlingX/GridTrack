@@ -461,7 +461,7 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
             .Select(r =>
             {
                 var hourly = hourlyRows.TryGetValue(r.DriverId, out var h)
-                    ? h.Select(p => new HourlyOnTimePoint(p.Hour, p.OnTimeRatePct, p.SampleCount))
+                    ? h.Select(p => new HourlyOnTimePointDto(p.Hour, p.OnTimeRatePct, p.SampleCount))
                        .ToList()
                     : [];
 
