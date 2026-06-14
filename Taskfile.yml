@@ -67,6 +67,10 @@ tasks:
   test-all:
     desc: Run all tests
     deps: [ test-architecture, test-domain, test-namingconventions, test-application, test-infrastructure-unit, test-integration, test-e2e ]
+    
+  test-without-coverage:
+    desc: Run all tests without coverage
+    deps: [ test-architecture, test-namingconventions ]
 
   # ============================================
   # COVERAGE TASKS
@@ -169,6 +173,7 @@ tasks:
     desc: Run CI pipeline (build + tests)
     cmds:
       - task: build
+      - task: test-without-coverage
       - task: coverage
       - task: update-readme-coverage
 
