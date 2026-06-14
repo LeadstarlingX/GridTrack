@@ -6,4 +6,5 @@ public interface IDistrictReadService
 {
     Task<GetDistrictsResponse> GetDistrictsAsync(CancellationToken ct);
     Task<GetDistrictBoundariesResponse> GetDistrictBoundariesAsync(CancellationToken ct);
+    Task<DistrictContextDto> GetDistrictContextAsync(string districtId, CancellationToken ct);
 }

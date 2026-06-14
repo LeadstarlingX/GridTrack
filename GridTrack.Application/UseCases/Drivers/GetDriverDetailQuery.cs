@@ -21,11 +21,14 @@ public sealed class GetDriverDetailHandler
             driver.ShortName,
             driver.DistrictId,
             driver.IsActive,
-            driver.CarType,
+            driver.CarType?.ToString(),
             driver.LicensePlate,
             driver.PhoneNumber,
             driver.Location.Y,
             driver.Location.X,
-            driver.LastSeen);
+            driver.LastSeen,
+            driver.VehicleCapacityKg,
+            driver.ShiftStartedAt,
+            driver.ShiftEndsAt);
     }
 }
