@@ -425,6 +425,80 @@ public class EndpointContractTests : BaseIntegrationTest
         body.Should().AllSatisfy(d => d.DistrictId.Should().Be("mezzeh"));
     }
 
+    // ── POST /api/deliveries/{id}/auto-assign ────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1122)]
+    public async Task POST_AutoAssign_Returns_404_When_Delivery_Not_Found()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+        var response = await client.PostAsync($"/api/deliveries/{Guid.NewGuid()}/auto-assign", null);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    [NotInParallel(Order = 1123)]
+    public async Task POST_AutoAssign_Returns_200_With_Candidate_List()
+    {
+        await ResetDatabaseAsync();
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var client = AuthClient();
+        var response = await client.PostAsync($"/api/deliveries/{deliveryId}/auto-assign", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<AutoAssignContractShape>();
+        body.Should().NotBeNull();
+        body!.TopCandidates.Should().NotBeNull();
+    }
+
+    // ── GET /api/ai/delivery/{id}/recommendation ──────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1124)]
+    public async Task GET_DeliveryRecommendation_Returns_404_When_Delivery_Not_Found()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+        var response = await client.GetAsync($"/api/ai/delivery/{Guid.NewGuid()}/recommendation");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    [NotInParallel(Order = 1125)]
+    public async Task GET_DeliveryRecommendation_Returns_200_With_Response_Shape()
+    {
+        await ResetDatabaseAsync();
+        var deliveryId = Guid.NewGuid();
+        await InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(deliveryId, Damascus, 9, null, "mezzeh")));
+
+        var client = AuthClient();
+        var response = await client.GetAsync($"/api/ai/delivery/{deliveryId}/recommendation");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<DeliveryRecommendationContractShape>();
+        body.Should().NotBeNull();
+        body!.DeliveryId.Should().Be(deliveryId);
+        body.TopCandidates.Should().NotBeNull();
+        body.AiAvailable.Should().BeFalse(); // Python unavailable in tests
+    }
+
+    // ── GET /api/ai/district-summary/{id} ────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 1126)]
+    public async Task GET_DistrictSummary_Returns_404_When_No_Data_Available()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+        var response = await client.GetAsync("/api/ai/district-summary/mezzeh");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     // ── Debug helper ──────────────────────────────────────────────────────
 
     [Test]
@@ -449,4 +523,19 @@ public class EndpointContractTests : BaseIntegrationTest
     }
 
     private sealed record TelemetryBatchResult(int Processed, int Rejected, List<string> Errors);
+
+    private sealed record AutoAssignContractShape(
+        bool AutoAssigned,
+        Guid? AssignedDriverId,
+        List<object> TopCandidates);
+
+    private sealed record DeliveryRecommendationContractShape(
+        Guid DeliveryId,
+        string DistrictId,
+        List<object> TopCandidates,
+        string? RecommendedAction,
+        Guid? RecommendedDriverId,
+        string? Reason,
+        int? UrgencyScore,
+        bool AiAvailable);
 }

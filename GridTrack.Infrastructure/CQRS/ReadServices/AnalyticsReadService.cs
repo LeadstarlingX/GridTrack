@@ -356,6 +356,148 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         return new GetAnomalyBreakdownResponse(byType, byDistrict);
     }
 
+    public async Task<GetDriverAnalyticsResponse> GetDriverAnalyticsAsync(CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // ── Per-driver aggregate stats (7-day rolling window) ──────────────
+        const string mainSql = """
+            SELECT
+                d."DriverId",
+                d."Name",
+                d."CarType",
+                d."DistrictId",
+                COUNT(del."DeliveryId") FILTER (
+                    WHERE del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                )::int AS "TotalLast7Days",
+                COUNT(del."DeliveryId") FILTER (
+                    WHERE del."Status" = 4
+                      AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                )::int AS "CompletedLast7Days",
+                CASE
+                    WHEN COUNT(del."DeliveryId") FILTER (
+                        WHERE del."Status" = 4
+                          AND del."ExpectedEta" IS NOT NULL
+                          AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                    ) = 0 THEN NULL
+                    ELSE COUNT(del."DeliveryId") FILTER (
+                             WHERE del."Status" = 4
+                               AND del."ExpectedEta" IS NOT NULL
+                               AND del."DeliveredAt" <= del."ExpectedEta"
+                               AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                         / COUNT(del."DeliveryId") FILTER (
+                             WHERE del."Status" = 4
+                               AND del."ExpectedEta" IS NOT NULL
+                               AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                END AS "OnTimeRatePct",
+                CASE
+                    WHEN COUNT(del."DeliveryId") FILTER (
+                        WHERE del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                    ) = 0 THEN 0.0
+                    ELSE COUNT(del."DeliveryId") FILTER (
+                             WHERE del."AnomalyFlag" = true
+                               AND del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                         / COUNT(del."DeliveryId") FILTER (
+                             WHERE del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                END AS "AnomalyRate",
+                COALESCE(AVG(
+                    EXTRACT(EPOCH FROM (del."DeliveredAt" - del."PickedUpAt"))
+                ) FILTER (
+                    WHERE del."Status" = 4
+                      AND del."DeliveredAt" IS NOT NULL
+                      AND del."PickedUpAt"  IS NOT NULL
+                      AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                ), 0)::float AS "AvgDurationSeconds"
+            FROM "Drivers" d
+            LEFT JOIN "Deliveries" del ON del."AssignedDriverId" = d."DriverId"
+            GROUP BY d."DriverId", d."Name", d."CarType", d."DistrictId"
+            ORDER BY "TotalLast7Days" DESC, d."Name"
+            """;
+
+        // ── District-average duration (7-day) for comparison ───────────────
+        const string districtSql = """
+            SELECT
+                "DistrictId",
+                COALESCE(AVG(EXTRACT(EPOCH FROM ("DeliveredAt" - "PickedUpAt"))), 0)::float AS "AvgDurationSeconds"
+            FROM "Deliveries"
+            WHERE "Status" = 4
+              AND "DeliveredAt" IS NOT NULL
+              AND "PickedUpAt"  IS NOT NULL
+              AND "DeliveredAt" >= NOW() - INTERVAL '7 days'
+            GROUP BY "DistrictId"
+            """;
+
+        // ── Hourly on-time rate per driver (7-day) ─────────────────────────
+        const string hourlySql = """
+            SELECT
+                del."AssignedDriverId" AS "DriverId",
+                EXTRACT(HOUR FROM del."DeliveredAt" AT TIME ZONE 'UTC')::int AS "Hour",
+                COUNT(*) FILTER (WHERE del."DeliveredAt" <= del."ExpectedEta")::float
+                    / NULLIF(COUNT(*)::float, 0) AS "OnTimeRatePct",
+                COUNT(*)::int AS "SampleCount"
+            FROM "Deliveries" del
+            WHERE del."Status" = 4
+              AND del."AssignedDriverId" IS NOT NULL
+              AND del."ExpectedEta" IS NOT NULL
+              AND del."DeliveredAt" IS NOT NULL
+              AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+            GROUP BY del."AssignedDriverId",
+                     EXTRACT(HOUR FROM del."DeliveredAt" AT TIME ZONE 'UTC')
+            ORDER BY del."AssignedDriverId", "Hour"
+            """;
+
+        var mainRows    = (await connection.QueryAsync<DriverStatsRow>(mainSql)).ToList();
+        var districtAvg = (await connection.QueryAsync<DistrictAvgRow>(districtSql))
+                              .ToDictionary(r => r.DistrictId, r => r.AvgDurationSeconds);
+        var hourlyRows  = (await connection.QueryAsync<HourlyRow>(hourlySql))
+                              .GroupBy(r => r.DriverId)
+                              .ToDictionary(g => g.Key, g => g.ToList());
+
+        var drivers = mainRows
+            .Select(r =>
+            {
+                var hourly = hourlyRows.TryGetValue(r.DriverId, out var h)
+                    ? h.Select(p => new HourlyOnTimePoint(p.Hour, p.OnTimeRatePct, p.SampleCount))
+                       .ToList()
+                    : [];
+
+                return new DriverAnalyticsItemResponse(
+                    r.DriverId,
+                    r.Name,
+                    r.CarType,
+                    r.DistrictId,
+                    r.TotalLast7Days,
+                    r.CompletedLast7Days,
+                    r.OnTimeRatePct,
+                    r.AnomalyRate,
+                    r.AvgDurationSeconds,
+                    districtAvg.GetValueOrDefault(r.DistrictId, 0),
+                    hourly);
+            })
+            .ToList();
+
+        return new GetDriverAnalyticsResponse(drivers);
+    }
+
+    private sealed record DriverStatsRow(
+        Guid DriverId,
+        string Name,
+        string? CarType,
+        string DistrictId,
+        int TotalLast7Days,
+        int CompletedLast7Days,
+        double? OnTimeRatePct,
+        double AnomalyRate,
+        double AvgDurationSeconds);
+
+    private sealed record DistrictAvgRow(string DistrictId, double AvgDurationSeconds);
+
+    private sealed record HourlyRow(Guid DriverId, int Hour, double OnTimeRatePct, int SampleCount);
+
     private sealed record PerformanceRow(
         string DistrictId,
         int DeliveredCount,

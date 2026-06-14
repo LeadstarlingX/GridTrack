@@ -83,4 +83,11 @@ internal sealed class CachedAnalyticsReadService(
             innerCt => inner.GetAnomalyBreakdownAsync(from, to, innerCt),
             RangeTtl(to),
             ct);
+
+    public Task<GetDriverAnalyticsResponse> GetDriverAnalyticsAsync(CancellationToken ct)
+        => cache.GetOrSetAsync(
+            "analytics:driver-analytics",
+            innerCt => inner.GetDriverAnalyticsAsync(innerCt),
+            LiveTtl,
+            ct);
 }

@@ -43,4 +43,6 @@ public interface IAnalyticsReadService
         DateTime? from,
         DateTime? to,
         CancellationToken ct);
+
+    Task<GetDriverAnalyticsResponse> GetDriverAnalyticsAsync(CancellationToken ct);
 }

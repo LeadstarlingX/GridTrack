@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
 using Wolverine;
+using GridTrack.Application.UseCases.Dispatch;
 
 namespace GridTrack.Presentation.Controllers.Deliveries;
 
@@ -110,6 +111,20 @@ public class DeliveriesController(IMessageBus bus) : ControllerBase
         var result = await bus.InvokeAsync<Result>(
             new CancelDeliveryCommand(new CancelDeliveryRequest(deliveryId, DateTime.UtcNow, request.Reason)), ct);
         return ResultResponse(result);
+    }
+
+    [HttpPost("{id}/auto-assign")]
+    public async Task<IActionResult> AutoAssign(string id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var deliveryId))
+            return BadRequest();
+        var result = await bus.InvokeAsync<Result<AutoAssignResponse>>(
+            new AutoAssignDeliveryCommand(deliveryId), ct);
+        if (result.IsFailure)
+            return result.Error == ApplicationErrors.DeliveryNotFound
+                ? NotFound(new { error = result.Error.Message })
+                : Conflict(new { error = result.Error.Message });
+        return Ok(result.Value);
     }
 
     [HttpPost("{id}/flag-anomaly")]

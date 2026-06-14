@@ -11,4 +11,7 @@ public sealed record DriverDetailResponse(
     string? PhoneNumber,
     double Lat,
     double Lng,
-    DateTime LastSeen);
+    DateTime LastSeen,
+    decimal? VehicleCapacityKg,
+    DateTime? ShiftStartedAt,
+    DateTime? ShiftEndsAt);

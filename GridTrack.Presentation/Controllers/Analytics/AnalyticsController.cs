@@ -121,4 +121,14 @@ public class AnalyticsController(IMessageBus bus) : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("drivers")]
+    public async Task<IActionResult> GetDriverAnalytics(CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetDriverAnalyticsResponse>(
+            new GetDriverAnalyticsQuery(),
+            ct);
+
+        return Ok(result);
+    }
 }
