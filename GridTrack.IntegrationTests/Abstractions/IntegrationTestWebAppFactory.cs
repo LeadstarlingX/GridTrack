@@ -6,6 +6,7 @@ using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using GridTrack.Infrastructure.Seeding;
+using GridTrack.Infrastructure.Simulation;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
@@ -94,6 +95,9 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
 
             var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
             if (seed != null) services.Remove(seed);
+
+            var sim = services.SingleOrDefault(d => d.ImplementationType == typeof(PositionSimulatorService));
+            if (sim != null) services.Remove(sim);
 
             services.RemoveAll<IDashboardPushService>();
             services.AddSingleton(DashboardPushMock);

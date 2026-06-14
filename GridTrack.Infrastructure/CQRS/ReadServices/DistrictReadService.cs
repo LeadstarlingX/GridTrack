@@ -122,7 +122,40 @@ public sealed class DistrictReadService : IDistrictReadService
         return polys;
     }
 
+    public async Task<DistrictContextDto> GetDistrictContextAsync(string districtId, CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        const string deliverySql = """
+            SELECT
+                COUNT(*) FILTER (WHERE "Status" NOT IN (4, 5, 6))::int AS "ActiveDeliveries",
+                COUNT(*) FILTER (WHERE "CreatedAt" >= NOW() - INTERVAL '24 hours')::float AS "Total24h",
+                COUNT(*) FILTER (
+                    WHERE "AnomalyFlag" = true AND "CreatedAt" >= NOW() - INTERVAL '24 hours'
+                )::float AS "Anomalous24h"
+            FROM public."Deliveries"
+            WHERE "DistrictId" = @DistrictId
+            """;
+
+        const string driverSql = """
+            SELECT COUNT(*)::int FROM public."Drivers"
+            WHERE "DistrictId" = @DistrictId AND "IsActive" = true
+            """;
+
+        var delivRow = await connection.QuerySingleAsync<DeliveryContextRow>(
+            deliverySql, new { DistrictId = districtId });
+        var activeDrivers = await connection.ExecuteScalarAsync<int>(
+            driverSql, new { DistrictId = districtId });
+
+        var anomalyRate = delivRow.Total24h > 0
+            ? delivRow.Anomalous24h / delivRow.Total24h
+            : 0.0;
+
+        return new DistrictContextDto(districtId, delivRow.ActiveDeliveries, activeDrivers, anomalyRate);
+    }
+
     // ── Private DTOs for Dapper mapping ────────────────────────────────────
     private sealed record DistrictFlatRow(string Id, double Lat, double Lng);
     private sealed record DistrictBoundaryRow(string H3Index, string GeoJson);
+    private sealed record DeliveryContextRow(int ActiveDeliveries, double Total24h, double Anomalous24h);
 }
