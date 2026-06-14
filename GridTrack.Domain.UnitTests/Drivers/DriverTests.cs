@@ -262,10 +262,10 @@ public class DriverTests
         var result = Driver.Create(
             Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow,
             "Ahmad Hassan", "Ahmad", true,
-            carType: "Sedan", licensePlate: "AHM-1001", phoneNumber: "+963-911-000001");
+            carType: CarType.Sedan, licensePlate: "AHM-1001", phoneNumber: "+963-911-000001");
 
         await Assert.That(result.IsSuccess).IsTrue();
-        await Assert.That(result.Value.CarType).IsEqualTo("Sedan");
+        await Assert.That(result.Value.CarType).IsEqualTo(CarType.Sedan);
         await Assert.That(result.Value.LicensePlate).IsEqualTo("AHM-1001");
         await Assert.That(result.Value.PhoneNumber).IsEqualTo("+963-911-000001");
     }
@@ -281,6 +281,38 @@ public class DriverTests
         await Assert.That(result.Value.CarType).IsNull();
         await Assert.That(result.Value.LicensePlate).IsNull();
         await Assert.That(result.Value.PhoneNumber).IsNull();
+    }
+
+    [Test]
+    public async Task Create_Should_Store_ShiftAndCapacity_When_Provided()
+    {
+        var shiftStart = DateTime.UtcNow.Date.AddHours(6);
+        var shiftEnd   = DateTime.UtcNow.Date.AddHours(14);
+
+        var result = Driver.Create(
+            Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow,
+            "Ahmad Hassan", "Ahmad", true,
+            carType: CarType.Van, vehicleCapacityKg: 1000m,
+            shiftStartedAt: shiftStart, shiftEndsAt: shiftEnd);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value.CarType).IsEqualTo(CarType.Van);
+        await Assert.That(result.Value.VehicleCapacityKg).IsEqualTo(1000m);
+        await Assert.That(result.Value.ShiftStartedAt).IsEqualTo(shiftStart);
+        await Assert.That(result.Value.ShiftEndsAt).IsEqualTo(shiftEnd);
+    }
+
+    [Test]
+    public async Task Create_Should_Have_Null_ShiftAndCapacity_By_Default()
+    {
+        var result = Driver.Create(
+            Guid.NewGuid(), Factory.CreatePoint(new Coordinate(1, 1)), "h3-1", DateTime.UtcNow,
+            "Ahmad Hassan", "Ahmad");
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value.VehicleCapacityKg).IsNull();
+        await Assert.That(result.Value.ShiftStartedAt).IsNull();
+        await Assert.That(result.Value.ShiftEndsAt).IsNull();
     }
 
     private static Driver CreateDriver()

@@ -188,7 +188,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         var d = Driver.Create(
             Guid.NewGuid(), Damascus, "mezzeh", DateTime.UtcNow,
             "Ahmad Hassan", "Ahmad", true,
-            carType: "Sedan", licensePlate: "AHM-9901", phoneNumber: "+963-911-990001").Value;
+            carType: CarType.Sedan, licensePlate: "AHM-9901", phoneNumber: "+963-911-990001").Value;
         d.ClearDomainEvents();
         await SeedDriversAsync([d]);
 
