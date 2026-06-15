@@ -83,4 +83,91 @@ public class InboundResultHandlerIntegrationTests : BaseIntegrationTest
         row.Score.Should().Be(8);
         row.ScoredAt.Should().NotBeNull();
     }
+
+    [Test]
+    [NotInParallel(Order = 613)]
+    public async Task DemandSurge_Should_Be_Broadcast_With_Correct_Fields()
+    {
+        Factory.DashboardPushMock.ClearReceivedCalls();
+        var msg = new DemandSurgeMessage("mezzeh", 42, 10.5, 2.8, DateTime.UtcNow);
+
+        await InvokeAsync(msg);
+
+        await Factory.DashboardPushMock
+            .Received()
+            .BroadcastDemandSurgeAsync("mezzeh", 42, 10.5, 2.8, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [NotInParallel(Order = 614)]
+    public async Task DemandSurge_Should_Not_Trigger_Urgency_Or_Forecast_Broadcast()
+    {
+        Factory.DashboardPushMock.ClearReceivedCalls();
+        var msg = new DemandSurgeMessage("babtouma", 20, 5.0, 3.1, DateTime.UtcNow);
+
+        await InvokeAsync(msg);
+
+        await Factory.DashboardPushMock
+            .DidNotReceive()
+            .BroadcastUrgencyUpdateAsync(
+                Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<int>(),
+                Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        await Factory.DashboardPushMock
+            .DidNotReceive()
+            .BroadcastForecastResultAsync(
+                Arg.Any<string>(), Arg.Any<int>(),
+                Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [NotInParallel(Order = 615)]
+    public async Task AnomalyIncident_Should_Be_Broadcast_With_Correct_Fields()
+    {
+        Factory.DashboardPushMock.ClearReceivedCalls();
+        var msg = new AnomalyIncidentMessage(
+            "kafrsousa", 4, 30, "4 stalls — check district traffic", DateTime.UtcNow);
+
+        await InvokeAsync(msg);
+
+        await Factory.DashboardPushMock
+            .Received()
+            .BroadcastAnomalyIncidentAsync(
+                "kafrsousa", 4, "4 stalls — check district traffic",
+                Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [NotInParallel(Order = 616)]
+    public async Task AnomalyIncident_Should_Not_Trigger_Surge_Broadcast()
+    {
+        Factory.DashboardPushMock.ClearReceivedCalls();
+        var msg = new AnomalyIncidentMessage("malki", 3, 30, "Alert", DateTime.UtcNow);
+
+        await InvokeAsync(msg);
+
+        await Factory.DashboardPushMock
+            .DidNotReceive()
+            .BroadcastDemandSurgeAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<double>(),
+                Arg.Any<double>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [NotInParallel(Order = 617)]
+    public async Task AnomalyIncident_Distinct_Districts_Are_Broadcast_Separately()
+    {
+        Factory.DashboardPushMock.ClearReceivedCalls();
+
+        await InvokeAsync(new AnomalyIncidentMessage("mezzeh", 3, 30, "alert mezzeh", DateTime.UtcNow));
+        await InvokeAsync(new AnomalyIncidentMessage("malki",  5, 30, "alert malki",  DateTime.UtcNow));
+
+        await Factory.DashboardPushMock
+            .Received()
+            .BroadcastAnomalyIncidentAsync("mezzeh", 3, "alert mezzeh", Arg.Any<CancellationToken>());
+
+        await Factory.DashboardPushMock
+            .Received()
+            .BroadcastAnomalyIncidentAsync("malki", 5, "alert malki", Arg.Any<CancellationToken>());
+    }
 }
