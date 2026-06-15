@@ -90,4 +90,12 @@ internal sealed class CachedAnalyticsReadService(
             innerCt => inner.GetDriverAnalyticsAsync(innerCt),
             LiveTtl,
             ct);
+
+    public Task<double> GetHistoricalHourlyDeliveryAvgAsync(
+        string districtId, int dayOfWeek, int hour, CancellationToken ct)
+        => cache.GetOrSetAsync(
+            $"analytics:hourly-avg:{districtId}:{dayOfWeek}:{hour}",
+            innerCt => inner.GetHistoricalHourlyDeliveryAvgAsync(districtId, dayOfWeek, hour, innerCt),
+            HistoricalTtl,
+            ct);
 }
