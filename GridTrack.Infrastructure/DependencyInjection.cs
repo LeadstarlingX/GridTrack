@@ -163,6 +163,12 @@ public static class DependencyInjection
             c.Timeout = TimeSpan.FromSeconds(10);
         });
 
+        services.AddHttpClient<IForecastService, PythonForecastService>(c =>
+        {
+            c.BaseAddress = new Uri(configuration["Python:BaseUrl"] ?? "http://localhost:8000");
+            c.Timeout = TimeSpan.FromSeconds(15);
+        });
+
         return services;
     }
 
