@@ -185,7 +185,7 @@ public sealed class Delivery : BaseEntity
 			? (ExpectedEta.Value - CreatedAt).TotalSeconds
 			: 0;
 		RaiseDomainEvent(new DeliveryCompletedDomainEvent(
-			DeliveryId, timestamp, AssignedDriverId, PickedUpAt, expectedSecs));
+			DeliveryId, DistrictId, timestamp, AssignedDriverId, PickedUpAt, expectedSecs));
 		return Result.Success();
 	}
 

@@ -55,11 +55,11 @@ internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDas
             }],
             ct);
 
-    public Task BroadcastUrgencyUpdateAsync(Guid deliveryId, int urgencyScore, string aiNote, CancellationToken ct)
-        => hub.Clients.All.SendCoreAsync(
-            "UrgencyUpdated",
-            [new { deliveryId, urgencyScore, aiNote }],
-            ct);
+    public Task BroadcastUrgencyUpdateAsync(Guid deliveryId, string? districtId, int urgencyScore, string aiNote, CancellationToken ct)
+    {
+        var target = districtId is not null ? hub.Clients.Group(districtId) : hub.Clients.All;
+        return target.SendCoreAsync("UrgencyUpdated", [new { deliveryId, urgencyScore, aiNote }], ct);
+    }
 
     public Task BroadcastForecastResultAsync(
         string districtId, int forecastedDemand, DateTime updatedAt, CancellationToken ct)

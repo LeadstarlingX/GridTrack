@@ -132,7 +132,7 @@ public class IntegrationEventPublishersTests
         var pickedUpAt = DateTime.UtcNow;
         var deliveredAt = pickedUpAt.AddMinutes(45);
         var e = new DeliveryCompletedDomainEvent(
-            deliveryId, deliveredAt, driverId, pickedUpAt, ExpectedDurationSeconds: 3600);
+            deliveryId, "district-1", deliveredAt, driverId, pickedUpAt, ExpectedDurationSeconds: 3600);
 
         var result = CompletedIntegrationHandler.Map(e);
 
@@ -146,6 +146,7 @@ public class IntegrationEventPublishersTests
     {
         var e = new DeliveryCompletedDomainEvent(
             Guid.NewGuid(),
+            "district-1",
             DateTime.UtcNow,
             DriverId: null,
             PickedUpAt: DateTime.UtcNow.AddMinutes(-30),
@@ -161,6 +162,7 @@ public class IntegrationEventPublishersTests
     {
         var e = new DeliveryCompletedDomainEvent(
             Guid.NewGuid(),
+            "district-1",
             DateTime.UtcNow,
             DriverId: Guid.NewGuid(),
             PickedUpAt: null,
@@ -177,7 +179,7 @@ public class IntegrationEventPublishersTests
         var pickedUpAt = new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc);
         var deliveredAt = new DateTime(2026, 1, 15, 9, 30, 0, DateTimeKind.Utc);
         var e = new DeliveryCompletedDomainEvent(
-            Guid.NewGuid(), deliveredAt, Guid.NewGuid(), pickedUpAt, ExpectedDurationSeconds: 3600);
+            Guid.NewGuid(), "district-1", deliveredAt, Guid.NewGuid(), pickedUpAt, ExpectedDurationSeconds: 3600);
 
         var result = CompletedIntegrationHandler.Map(e);
 
@@ -189,7 +191,7 @@ public class IntegrationEventPublishersTests
     {
         var pickedUpAt = DateTime.UtcNow;
         var e = new DeliveryCompletedDomainEvent(
-            Guid.NewGuid(), pickedUpAt.AddMinutes(60),
+            Guid.NewGuid(), "district-1", pickedUpAt.AddMinutes(60),
             Guid.NewGuid(), pickedUpAt, ExpectedDurationSeconds: 2700);
 
         var result = CompletedIntegrationHandler.Map(e);

@@ -162,19 +162,30 @@ public class DashboardPushServiceTests
     }
 
     // ──────────────────────────────────────────────────────────────
-    // BroadcastUrgencyUpdateAsync  (hub.Clients.All — not Group)
+    // BroadcastUrgencyUpdateAsync
     // ──────────────────────────────────────────────────────────────
 
     [Test]
-    public async Task BroadcastUrgencyUpdate_Should_Target_All_Clients()
+    public async Task BroadcastUrgencyUpdate_Should_Target_All_Clients_When_DistrictId_Is_Null()
     {
         var (svc, hub) = Build();
 
-        await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), 7, "ETA breach.", CancellationToken.None);
+        await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), null, 7, "ETA breach.", CancellationToken.None);
 
-        // All is used — no group name should be captured
         await Assert.That(hub.FakeClients.AllProxy.Calls).Count().IsEqualTo(1);
         await Assert.That(hub.FakeClients.GroupProxy.Calls).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task BroadcastUrgencyUpdate_Should_Target_District_Group_When_DistrictId_Provided()
+    {
+        var (svc, hub) = Build();
+
+        await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), "mezzeh", 7, "ETA breach.", CancellationToken.None);
+
+        await Assert.That(hub.FakeClients.LastGroupName).IsEqualTo("mezzeh");
+        await Assert.That(hub.FakeClients.GroupProxy.Calls).Count().IsEqualTo(1);
+        await Assert.That(hub.FakeClients.AllProxy.Calls).Count().IsEqualTo(0);
     }
 
     [Test]
@@ -182,7 +193,7 @@ public class DashboardPushServiceTests
     {
         var (svc, hub) = Build();
 
-        await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), 9, "Critical.", CancellationToken.None);
+        await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), null, 9, "Critical.", CancellationToken.None);
 
         await Assert.That(hub.FakeClients.AllProxy.Calls[0].Method).IsEqualTo("UrgencyUpdated");
     }
@@ -193,7 +204,7 @@ public class DashboardPushServiceTests
         var (svc, hub) = Build();
         var deliveryId = Guid.NewGuid();
 
-        await svc.BroadcastUrgencyUpdateAsync(deliveryId, 8, "Significant delay.", CancellationToken.None);
+        await svc.BroadcastUrgencyUpdateAsync(deliveryId, null, 8, "Significant delay.", CancellationToken.None);
 
         var payload = hub.FakeClients.AllProxy.Calls[0].Args[0]!;
         await Assert.That(GetProperty<Guid>(payload, "deliveryId")).IsEqualTo(deliveryId);

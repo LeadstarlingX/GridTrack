@@ -25,6 +25,7 @@ public sealed record DeliveryLocationUpdatedDomainEvent(
 
 public sealed record DeliveryCompletedDomainEvent(
     Guid DeliveryId,
+    string DistrictId,
     DateTime DeliveredAt,
     Guid? DriverId,
     DateTime? PickedUpAt,
