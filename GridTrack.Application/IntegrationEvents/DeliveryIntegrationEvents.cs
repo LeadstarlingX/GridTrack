@@ -43,3 +43,19 @@ public record ForecastResultMessage(
     string   Label,
     string   Color,
     DateTime GeneratedAt);
+
+/// <summary>Inbound: Python → .NET. Statistical demand surge in a district.</summary>
+public record DemandSurgeMessage(
+    string   DistrictId,
+    int      CurrentCount,
+    double   HistoricalMean,
+    double   Deviations,
+    DateTime DetectedAt);
+
+/// <summary>Inbound: Python → .NET. Groq-summarised anomaly incident (≥3 anomalies/30 min).</summary>
+public record AnomalyIncidentMessage(
+    string   DistrictId,
+    int      AnomalyCount,
+    int      WindowMinutes,
+    string   Summary,
+    DateTime DetectedAt);
