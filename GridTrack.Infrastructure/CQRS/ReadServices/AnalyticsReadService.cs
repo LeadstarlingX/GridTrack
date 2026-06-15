@@ -527,4 +527,25 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         bool IsActive,
         int CompletedToday,
         int ActiveDeliveries);
+
+    public async Task<double> GetHistoricalHourlyDeliveryAvgAsync(
+        string districtId, int dayOfWeek, int hour, CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+        const string sql = """
+            SELECT COALESCE(AVG(cnt), 0)
+            FROM (
+                SELECT DATE("CreatedAt") AS day, COUNT(*)::int AS cnt
+                FROM public."Deliveries"
+                WHERE "DistrictId" = @DistrictId
+                  AND EXTRACT(DOW FROM "CreatedAt") = @DayOfWeek
+                  AND EXTRACT(HOUR FROM "CreatedAt") = @Hour
+                  AND "CreatedAt" >= NOW() - INTERVAL '28 days'
+                GROUP BY DATE("CreatedAt")
+            ) sub
+            """;
+        var result = await connection.ExecuteScalarAsync<double>(sql,
+            new { DistrictId = districtId, DayOfWeek = dayOfWeek, Hour = hour });
+        return result;
+    }
 }

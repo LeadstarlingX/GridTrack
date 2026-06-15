@@ -5,3 +5,11 @@ public sealed record ForecastDto(
     DateTime ForecastWindow,
     int ExpectedDeliveries,
     DateTime GeneratedAt);
+
+public sealed record StaffingForecastResponse(
+    string   DistrictId,
+    DateTime TargetAt,
+    int      RecommendedDrivers,
+    string   Confidence,          // "high" | "medium" | "low"
+    string   Reasoning,
+    double   HistoricalAvgDeliveries);

@@ -45,4 +45,11 @@ public interface IAnalyticsReadService
         CancellationToken ct);
 
     Task<GetDriverAnalyticsResponse> GetDriverAnalyticsAsync(CancellationToken ct);
+
+    /// <summary>Average deliveries created at the given hour/day-of-week over the past 28 days.</summary>
+    Task<double> GetHistoricalHourlyDeliveryAvgAsync(
+        string districtId,
+        int    dayOfWeek,
+        int    hour,
+        CancellationToken ct);
 }
