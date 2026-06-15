@@ -47,7 +47,7 @@ public static class CompletedIntegrationHandler
         return new DeliveryCompletedIntegrationEvent(
             e.DeliveryId,
             e.DriverId.Value,
-            DistrictId: string.Empty,
+            e.DistrictId,
             e.PickedUpAt.Value,
             e.DeliveredAt,
             actual,

@@ -33,6 +33,6 @@ public static class UrgencyResultHandler
         }
 
         await push.BroadcastUrgencyUpdateAsync(
-            msg.DeliveryId, msg.UrgencyScore, msg.AiNote, ct);
+            msg.DeliveryId, delivery?.DistrictId, msg.UrgencyScore, msg.AiNote, ct);
     }
 }

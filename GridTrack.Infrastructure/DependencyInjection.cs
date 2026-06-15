@@ -152,8 +152,10 @@ public static class DependencyInjection
         });
 
         services.AddHttpClient<IAnalysisChatService, PythonAnalysisChatService>(c =>
-            c.BaseAddress = new Uri(
-                configuration["Python:BaseUrl"] ?? "http://localhost:8000"));
+        {
+            c.BaseAddress = new Uri(configuration["Python:BaseUrl"] ?? "http://localhost:8000");
+            c.Timeout = TimeSpan.FromSeconds(25);
+        });
 
         services.AddHttpClient<IAiRecommendationService, PythonAiRecommendationService>(c =>
         {

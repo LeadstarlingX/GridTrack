@@ -33,7 +33,7 @@ public class InboundResultHandlerIntegrationTests : BaseIntegrationTest
 
         await Factory.DashboardPushMock
             .Received()
-            .BroadcastUrgencyUpdateAsync(deliveryId, 7, "Check driver now", Arg.Any<CancellationToken>());
+            .BroadcastUrgencyUpdateAsync(deliveryId, Arg.Any<string?>(), 7, "Check driver now", Arg.Any<CancellationToken>());
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
 using GridTrack.Application.Errors;
@@ -10,13 +11,21 @@ public sealed record GetDeliveryRecommendationQuery(Guid DeliveryId);
 
 public sealed class GetDeliveryRecommendationHandler
 {
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
     public async Task<Result<DeliveryRecommendationResponse>> Handle(
         GetDeliveryRecommendationQuery query,
         IDeliveryReadService deliveryReadService,
         IDispatchStrategy strategy,
         IAiRecommendationService aiService,
+        ICacheService cache,
         CancellationToken ct)
     {
+        var cacheKey = $"recommend:{query.DeliveryId}";
+        var cached = await cache.GetAsync<DeliveryRecommendationResponse>(cacheKey, ct);
+        if (cached is not null)
+            return Result.Success(cached);
+
         var delivery = await deliveryReadService.GetAggregateByIdAsync(query.DeliveryId, ct);
         if (delivery is null)
             return Result.Failure<DeliveryRecommendationResponse>(ApplicationErrors.DeliveryNotFound);
@@ -54,6 +63,7 @@ public sealed class GetDeliveryRecommendationHandler
             aiResponse?.UrgencyScore,
             AiAvailable: aiResponse is not null);
 
+        await cache.SetAsync(cacheKey, response, CacheTtl, ct);
         return Result.Success(response);
     }
 }
