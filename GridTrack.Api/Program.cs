@@ -55,6 +55,10 @@ public class Program
                         .DefaultIncomingMessage<UrgencyResultMessage>();
                     opts.ListenToRabbitQueue("gridtrack.forecast-results")
                         .DefaultIncomingMessage<ForecastResultMessage>();
+                    opts.ListenToRabbitQueue("gridtrack.demand-surge")
+                        .DefaultIncomingMessage<DemandSurgeMessage>();
+                    opts.ListenToRabbitQueue("gridtrack.anomaly-incidents")
+                        .DefaultIncomingMessage<AnomalyIncidentMessage>();
                 }
             });
     }
