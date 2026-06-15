@@ -7,5 +7,5 @@ We are proud of our high code coverage for the core layers of project.
 |-------|---------------|
 | Domain | 98.1% |
 | Application | 88.4% |
-| Infrastructure | 81.9% |
+| Infrastructure | 82.0% |
 <!-- COVERAGE_END -->
