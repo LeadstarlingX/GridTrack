@@ -103,5 +103,16 @@ public class AnalysisChatHandlerTests
             LastCsvContext = csvContext;
             return Task.FromResult(answer);
         }
+
+#pragma warning disable CS1998
+        public async IAsyncEnumerable<string> StreamAsync(
+            string question, string csvContext, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            if (answer is not null) yield return answer;
+        }
+#pragma warning restore CS1998
+
+        public Task<string?> TranscribeAsync(Stream audio, string fileName, string contentType, CancellationToken ct)
+            => Task.FromResult<string?>(null);
     }
 }
