@@ -67,4 +67,18 @@ internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDas
             "ForecastOverlayUpdated",
             [new { districtId, forecastedDemand, updatedAt }],
             ct);
+
+    public Task BroadcastDemandSurgeAsync(
+        string districtId, int currentCount, double historicalMean, double deviations, CancellationToken ct)
+        => hub.Clients.All.SendCoreAsync(
+            "DemandSurge",
+            [new { districtId, currentCount, historicalMean, deviations }],
+            ct);
+
+    public Task BroadcastAnomalyIncidentAsync(
+        string districtId, int anomalyCount, string summary, CancellationToken ct)
+        => hub.Clients.All.SendCoreAsync(
+            "AnomalyIncident",
+            [new { districtId, anomalyCount, summary }],
+            ct);
 }
