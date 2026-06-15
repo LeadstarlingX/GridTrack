@@ -13,7 +13,7 @@ using NetTopologySuite.Geometries;
 
 namespace GridTrack.Infrastructure.Simulation;
 
-/// <summary>Simulates driver patrol, delivery pickup/dropoff lifecycle, stalls, and random cancellations.</summary>
+
 public sealed class PositionSimulatorService(
     ISqlConnectionFactory sqlFactory,
     IHubContext<DashboardHub> hub,

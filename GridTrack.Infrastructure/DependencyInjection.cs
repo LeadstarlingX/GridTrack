@@ -126,8 +126,7 @@ public static class DependencyInjection
         // match the frontend's string unions instead of emitting integers.
         services.AddSignalR(o =>
             {
-                // Default ClientTimeoutInterval is 30s — too short when a browser tab is
-                // temporarily frozen by the browser's background-tab throttling. 60s gives
+                // Default ClientTimeoutInterval is 30s. 60s gives
                 // the client time to unfreeze and respond to the server keep-alive ping
                 // before the server considers the connection dead.
                 o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
