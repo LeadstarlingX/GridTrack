@@ -44,7 +44,8 @@ public sealed class GetDistrictSummaryHandler
             return fresh;
         }
 
-        // AI unavailable — return last known result (stale)
-        return await cache.GetAsync<DistrictSummaryResponse>(staleKey, ct);
+        // AI unavailable — return last known result (stale), or a permanent error indicator
+        return await cache.GetAsync<DistrictSummaryResponse>(staleKey, ct)
+            ?? new DistrictSummaryResponse(query.DistrictId, "Unreachable, access denied", DateTime.UtcNow, null);
     }
 }

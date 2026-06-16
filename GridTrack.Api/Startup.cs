@@ -23,9 +23,6 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
-        var conn = Configuration.GetConnectionString("DefaultConnection");
-        Console.WriteLine($"\n******** Using connection string: {conn} ********\n");
-
         services.AddApi(Configuration)
             .AddPresentation()
             .AddInfrastructure(Configuration)
@@ -38,11 +35,9 @@ public class Startup
              .AllowCredentials()));
     }
 
-    public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IApiVersionDescriptionProvider provider)
+    public void Configure(IApplicationBuilder app, IApiVersionDescriptionProvider provider)
     {
         app.UseSwagger();
-        
-        
         app.UseSwaggerUI(options =>
         {
             foreach (ApiVersionDescription description in provider.ApiVersionDescriptions)
@@ -54,14 +49,6 @@ public class Startup
         });
         app.ApplyMigrations();
         app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-        if (env.IsDevelopment())
-        {
-            app.UseDeveloperExceptionPage();
-            
-        }
-
-        // app.UseHttpsRedirection();
 
         app.UseStaticFiles();
 
