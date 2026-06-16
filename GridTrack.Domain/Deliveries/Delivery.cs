@@ -168,11 +168,6 @@ public sealed class Delivery : BaseEntity
 			return terminalCheck;
 		}
 
-		if (Status != DeliveryStatus.InTransit && Status != DeliveryStatus.PickedUp)
-		{
-			return Result.Failure(DeliveryErrors.InvalidStatusForOperation);
-		}
-
 		var transition = TransitionTo(DeliveryStatus.Delivered);
 		if (transition.IsFailure)
 		{

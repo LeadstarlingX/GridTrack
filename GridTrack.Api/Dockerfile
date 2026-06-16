@@ -1,5 +1,5 @@
 # ------- 1. Runtime layer (smallest) -------
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-jammy-chiseled AS base
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS base
 WORKDIR /app
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080

@@ -140,12 +140,10 @@ public class Startup
                     (!ctx.Request.Headers.TryGetValue("X-Telemetry-Key", out var provided) || provided != key))
                     return Results.Unauthorized();
 
-                var tasks = req.Events.Select(e =>
-                    hub.Clients.All.SendCoreAsync(
-                        "DriverPositionUpdated",
-                        [new { driverId = e.DriverId, lat = e.Lat, lng = e.Lng, districtId = e.DistrictId }],
-                        ct));
-                await Task.WhenAll(tasks);
+                await hub.Clients.All.SendCoreAsync(
+                    "DriverPositionBatch",
+                    [req.Events.Select(e => new { driverId = e.DriverId, lat = e.Lat, lng = e.Lng, districtId = e.DistrictId }).ToList()],
+                    ct);
                 return Results.Ok(new { accepted = req.Events.Count });
             }).AllowAnonymous();
 

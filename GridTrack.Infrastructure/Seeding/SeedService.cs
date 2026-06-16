@@ -28,10 +28,9 @@ public sealed class SeedService(
         if (forceReseed)
         {
             logger.LogWarning("FORCE_RESEED=true — clearing all seed data before re-seeding");
-            db.Set<DeliveryRoute>().RemoveRange(db.Set<DeliveryRoute>());
-            db.Set<Delivery>().RemoveRange(db.Set<Delivery>());
-            db.Set<Driver>().RemoveRange(db.Set<Driver>());
-            await db.SaveChangesAsync(ct);
+            await db.Set<DeliveryRoute>().ExecuteDeleteAsync(ct);
+            await db.Set<Delivery>().ExecuteDeleteAsync(ct);
+            await db.Set<Driver>().ExecuteDeleteAsync(ct);
         }
         else
         {

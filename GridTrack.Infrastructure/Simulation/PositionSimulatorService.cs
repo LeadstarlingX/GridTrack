@@ -173,6 +173,7 @@ public sealed class PositionSimulatorService(
         var now = DateTime.UtcNow;
         var opts = options.Value;
         var broadcastTasks = new List<Task>(_drivers.Count);
+        var positionBatch = new List<object>(_drivers.Count);
 
         for (var i = 0; i < _drivers.Count; i++)
         {
@@ -389,16 +390,18 @@ public sealed class PositionSimulatorService(
                     .ToArray()
                 : null;
 
-            broadcastTasks.Add(hub.Clients.All.SendCoreAsync("DriverPositionUpdated",
-                [new {
-                    driverId   = d.Id,
-                    lat, lng,
-                    districtId = d.DistrictId,
-                    deliveryId = d.ActiveDeliveryId?.ToString(),
-                    routeAhead,
-                }], ct));
+            positionBatch.Add(new
+            {
+                driverId   = d.Id,
+                lat, lng,
+                districtId = d.DistrictId,
+                deliveryId = d.ActiveDeliveryId?.ToString(),
+                routeAhead,
+            });
         }
 
+        if (positionBatch.Count > 0)
+            broadcastTasks.Add(hub.Clients.All.SendCoreAsync("DriverPositionBatch", [positionBatch], ct));
         try { await Task.WhenAll(broadcastTasks); }
         catch (Exception ex) { logger.LogWarning(ex, "PositionSimulator: broadcast error"); }
     }
