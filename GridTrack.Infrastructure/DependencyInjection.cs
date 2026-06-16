@@ -23,6 +23,8 @@ using GridTrack.Infrastructure.Simulation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using StackExchange.Redis;
 
@@ -166,6 +168,14 @@ public static class DependencyInjection
         {
             c.BaseAddress = new Uri(configuration["Python:BaseUrl"] ?? "http://localhost:8000");
             c.Timeout = TimeSpan.FromSeconds(15);
+        });
+
+        services.AddSingleton<IDistrictDataService>(sp =>
+        {
+            var env = sp.GetRequiredService<IHostEnvironment>();
+            var logger = sp.GetRequiredService<ILogger<DistrictDataService>>();
+            var path = Path.Combine(env.ContentRootPath, "wwwroot", "damascus_level10.geojson");
+            return new DistrictDataService(path, logger);
         });
 
         return services;

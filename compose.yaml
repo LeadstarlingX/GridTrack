@@ -64,6 +64,16 @@ services:
     restart: unless-stopped
 
 
+  gridtrack.osrm:
+    image: osrm/osrm-backend:v5.26.0
+    container_name: GridTrack.OSRM
+    command: osrm-routed --algorithm mld /data/syria-latest.osrm
+    volumes:
+      - ./.containers/osrm:/data
+    ports:
+      - "5001:5000"
+    restart: unless-stopped
+
   gridtrack.api:
     image: gridtrack.api
     container_name: GridTrack.Api
@@ -75,7 +85,7 @@ services:
       Cors__AllowedOrigin: "http://localhost:5173"
       Clerk__Authority: "${CLERK_AUTHORITY}"
       Python__BaseUrl: "http://gridtrack.python:8000"
-      Osrm__BaseUrl: "http://router.project-osrm.org"
+      Osrm__BaseUrl: "http://gridtrack.osrm:5000"
       Simulation__Enabled: "true"
       Simulation__PositionUpdateIntervalMs: "200"
     ports:
@@ -87,6 +97,8 @@ services:
         condition: service_healthy
       gridtrack.rabbitmq:
         condition: service_healthy
+      gridtrack.osrm:
+        condition: service_started
     restart: unless-stopped
 
   gridtrack.python:

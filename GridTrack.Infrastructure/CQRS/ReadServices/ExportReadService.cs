@@ -80,19 +80,21 @@ public sealed class ExportReadService : IExportReadService
 
         var sql = $"""
                    SELECT
-                       "DeliveryId",
-                       "Status",
-                       "DistrictId",
-                       "AssignedDriverId",
-                       "CreatedAt",
-                       "PickedUpAt",
-                       "DeliveredAt",
-                       "CancelledAt",
-                       "AnomalyFlag",
-                       "AnomalyReason"
-                   FROM public."Deliveries"
+                       d."DeliveryId",
+                       d."Status",
+                       d."DistrictId",
+                       d."AssignedDriverId",
+                       dr."Name"        AS DriverName,
+                       d."CreatedAt",
+                       d."PickedUpAt",
+                       d."DeliveredAt",
+                       d."CancelledAt",
+                       d."AnomalyFlag",
+                       d."AnomalyReason"
+                   FROM public."Deliveries" d
+                   LEFT JOIN public."Drivers" dr ON dr."DriverId" = d."AssignedDriverId"
                    {whereClause}
-                   ORDER BY "CreatedAt" DESC
+                   ORDER BY d."CreatedAt" DESC
                    """;
 
         var rows = await connection.QueryAsync<DeliveryExportRow>(sql, parameters);
@@ -110,7 +112,7 @@ public sealed class ExportReadService : IExportReadService
 
         // Header
         writer.WriteLine(
-            "DeliveryId,Status,DistrictId,AssignedDriverId," +
+            "DeliveryId,Status,DistrictId,AssignedDriverId,DriverName," +
             "CreatedAt,PickedUpAt,DeliveredAt,CancelledAt," +
             "AnomalyFlag,AnomalyReason");
 
@@ -121,6 +123,7 @@ public sealed class ExportReadService : IExportReadService
                 r.Status,
                 Escape(r.DistrictId),
                 r.AssignedDriverId?.ToString() ?? string.Empty,
+                Escape(r.DriverName ?? string.Empty),
                 r.CreatedAt.ToString("O"),
                 r.PickedUpAt?.ToString("O") ?? string.Empty,
                 r.DeliveredAt?.ToString("O") ?? string.Empty,
@@ -147,6 +150,7 @@ public sealed class ExportReadService : IExportReadService
         int Status,
         string DistrictId,
         Guid? AssignedDriverId,
+        string? DriverName,
         DateTime CreatedAt,
         DateTime? PickedUpAt,
         DateTime? DeliveredAt,

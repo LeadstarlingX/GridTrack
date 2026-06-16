@@ -19,6 +19,7 @@ public sealed class PositionSimulatorService(
     IHubContext<DashboardHub> hub,
     IOsrmService osrm,
     IServiceScopeFactory scopeFactory,
+    IDistrictDataService districts,
     IOptions<SimulatorOptions> options,
     ILogger<PositionSimulatorService> logger) : BackgroundService
 {
@@ -33,15 +34,12 @@ public sealed class PositionSimulatorService(
         DateTime? PausedUntil,
         bool StallBroadcastSent,
         Guid? ActiveDeliveryId,
-        DeliveryPhase Phase);
+        DeliveryPhase Phase,
+        int CancelAtWaypoint,
+        int StallAtWaypoint,
+        DateTime? DwellUntil);
 
     private sealed record SimDelivery(Guid Id, double Lat, double Lng, string DistrictId);
-
-    private static readonly (double DLat, double DLng)[] DestOffsets =
-    [
-        ( 0.005,  0.000), ( 0.000,  0.005), (-0.005,  0.000), ( 0.000, -0.005),
-        ( 0.003,  0.004), (-0.004,  0.003), ( 0.004, -0.003), (-0.003, -0.004),
-    ];
 
     private static readonly GeometryFactory Geo = new(new PrecisionModel(), 4326);
 
@@ -69,7 +67,11 @@ public sealed class PositionSimulatorService(
             await Task.Delay(opts.PositionUpdateIntervalMs, ct);
             _tickCount++;
             if (_tickCount % opts.DeliveryReloadIntervalTicks == 0)
+            {
                 await LoadPendingDeliveriesAsync(ct);
+                if (_pendingDeliveries.Count < 30)
+                    await SpawnPendingDeliveriesAsync(ct);
+            }
             await TickAsync(ct);
         }
     }
@@ -91,7 +93,7 @@ public sealed class PositionSimulatorService(
             for (var i = 0; i < rows.Count; i++)
             {
                 var r = rows[i];
-                var waypoints = await FetchRouteWaypointsAsync(r.CenterLat, r.CenterLng, i, ct);
+                var waypoints = await FetchPatrolRouteAsync(r.CenterLat, r.CenterLng, i, ct);
                 var start = waypoints.Count > 1 ? i % waypoints.Count : 0;
                 drivers.Add(new SimDriver(
                     r.Id, r.Name, r.ShortName, r.DistrictId, r.IsActive,
@@ -99,7 +101,8 @@ public sealed class PositionSimulatorService(
                     Waypoints: waypoints, WaypointIndex: start, Direction: 1,
                     LastBroadcastAt: DateTime.UtcNow,
                     PausedUntil: null, StallBroadcastSent: false,
-                    ActiveDeliveryId: null, Phase: DeliveryPhase.Patrol));
+                    ActiveDeliveryId: null, Phase: DeliveryPhase.Patrol,
+                    CancelAtWaypoint: -1, StallAtWaypoint: -1, DwellUntil: null));
             }
             _drivers = drivers;
         }
@@ -120,7 +123,7 @@ public sealed class PositionSimulatorService(
                 WHERE "Status" = 0
                   AND "AssignedDriverId" IS NULL
                 ORDER BY "CreatedAt"
-                LIMIT 50
+                LIMIT 100
                 """;
             var rows = await conn.QueryAsync<DeliveryRow>(sql);
             var fresh = rows
@@ -132,6 +135,35 @@ public sealed class PositionSimulatorService(
                     _pendingDeliveries.Enqueue(d);
         }
         catch (Exception ex) { logger.LogError(ex, "PositionSimulator: failed to load deliveries"); }
+    }
+
+    private async Task SpawnPendingDeliveriesAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var conn = sqlFactory.CreateConnection();
+            const int batch = 50;
+            var now = DateTime.UtcNow;
+            for (var i = 0; i < batch; i++)
+            {
+                var d = districts.GetRandom();
+                var lat = d.CentroidLat + (Random.Shared.NextDouble() * 2 - 1) * d.JitterRadius;
+                var lng = d.CentroidLng + (Random.Shared.NextDouble() * 2 - 1) * d.JitterRadius;
+                var createdAt = now.AddSeconds(-Random.Shared.Next(30, 180));
+                var eta = createdAt.AddMinutes(20 + Random.Shared.Next(40));
+                await conn.ExecuteAsync(
+                    """
+                    INSERT INTO public."Deliveries"
+                        ("DeliveryId", "CurrentLocation", "Status", "DistrictId", "CreatedAt", "ExpectedEta", "AnomalyFlag")
+                    VALUES
+                        (@Id, ST_SetSRID(ST_MakePoint(@Lng, @Lat), 4326), 0, @DistrictId, @CreatedAt, @ExpectedEta, false)
+                    """,
+                    new { Id = Guid.NewGuid(), Lng = lng, Lat = lat, DistrictId = d.Id, CreatedAt = createdAt, ExpectedEta = eta });
+            }
+            logger.LogInformation("PositionSimulator: spawned {Count} pending deliveries", batch);
+            await LoadPendingDeliveriesAsync(ct);
+        }
+        catch (Exception ex) { logger.LogWarning(ex, "PositionSimulator: delivery spawn failed"); }
     }
 
     // ── Tick ────────────────────────────────────────────────────────────────
@@ -147,7 +179,7 @@ public sealed class PositionSimulatorService(
             var d = _drivers[i];
             if (d.Waypoints.Count == 0) continue;
 
-            // ── Stall logic ───────────────────────────────────────────────
+            // ── Stall (PausedUntil) ───────────────────────────────────────
             if (d.PausedUntil.HasValue && d.PausedUntil.Value > now)
             {
                 if (!d.StallBroadcastSent &&
@@ -159,8 +191,21 @@ public sealed class PositionSimulatorService(
                 }
                 continue;
             }
-
             d = d with { PausedUntil = null, StallBroadcastSent = false };
+
+            // ── Post-delivery dwell ───────────────────────────────────────
+            if (d.DwellUntil.HasValue && d.DwellUntil.Value > now) continue;
+            if (d.DwellUntil.HasValue)
+                d = d with { DwellUntil = null, LastBroadcastAt = now };
+
+            // ── Patrol refresh when loop completes ────────────────────────
+            if (d.Phase == DeliveryPhase.Patrol && d.WaypointIndex == 0 && d.Direction == -1)
+            {
+                var (curLat, curLng) = d.Waypoints[0];
+                var freshWaypoints = await FetchPatrolRouteAsync(curLat, curLng, ct);
+                _drivers[i] = d with { Waypoints = freshWaypoints, WaypointIndex = 0, Direction = 1, LastBroadcastAt = now };
+                continue;
+            }
 
             // ── Delivery assignment (patrol only) ─────────────────────────
             if (d.Phase == DeliveryPhase.Patrol &&
@@ -172,8 +217,13 @@ public sealed class PositionSimulatorService(
                 var (curLat, curLng) = d.Waypoints[d.WaypointIndex];
                 var pickupWaypoints = await FetchRouteWaypointsAsync(curLat, curLng, delivery.Lat, delivery.Lng, ct);
 
-                await InvokeCommandAsync(
-                    new AssignDriverToDeliveryCommand(new AssignDriverRequest(delivery.Id, d.Id)), ct);
+                // Roll once: will this driver cancel before reaching pickup?
+                var cancelBeforePickup = Random.Shared.Next(100) < opts.PrePickupCancellationProbabilityPct;
+                var cancelAt = cancelBeforePickup
+                    ? Random.Shared.Next(5, Math.Max(6, pickupWaypoints.Count - 5))
+                    : -1;
+
+                await InvokeCommandAsync(new AssignDriverToDeliveryCommand(new AssignDriverRequest(delivery.Id, d.Id)), ct);
 
                 _drivers[i] = d with
                 {
@@ -182,9 +232,36 @@ public sealed class PositionSimulatorService(
                     Waypoints = pickupWaypoints,
                     WaypointIndex = 0,
                     Direction = 1,
+                    CancelAtWaypoint = cancelAt,
+                    StallAtWaypoint = -1,
                     LastBroadcastAt = now,
                 };
                 logger.LogDebug("Driver {Name} assigned delivery {Id}", d.Name, delivery.Id);
+                continue;
+            }
+
+            // ── Pre-pickup cancellation ───────────────────────────────────
+            if (d.Phase == DeliveryPhase.MovingToPickup &&
+                d.CancelAtWaypoint >= 0 && d.WaypointIndex >= d.CancelAtWaypoint)
+            {
+                await InvokeCommandAsync(new CancelDeliveryCommand(new CancelDeliveryRequest(
+                    d.ActiveDeliveryId!.Value, now, "Customer cancelled before pickup")), ct);
+
+                _activeDeliveryIds.Remove(d.ActiveDeliveryId!.Value);
+                var (curLat, curLng) = d.Waypoints[d.WaypointIndex];
+                var patrolWaypoints = await FetchPatrolRouteAsync(curLat, curLng, ct);
+                _drivers[i] = d with
+                {
+                    ActiveDeliveryId = null,
+                    Phase = DeliveryPhase.Patrol,
+                    Waypoints = patrolWaypoints,
+                    WaypointIndex = 0,
+                    Direction = 1,
+                    CancelAtWaypoint = -1,
+                    StallAtWaypoint = -1,
+                    LastBroadcastAt = now,
+                };
+                logger.LogDebug("Driver {Name} cancelled before pickup", d.Name);
                 continue;
             }
 
@@ -193,19 +270,31 @@ public sealed class PositionSimulatorService(
                 IsAtEnd(d.WaypointIndex, d.Direction, d.Waypoints.Count))
             {
                 var (pickLat, pickLng) = d.Waypoints[^1];
-                await InvokeCommandAsync(
-                    new MarkDeliveryPickedUpCommand(new PickUpDeliveryRequest(
-                        d.ActiveDeliveryId!.Value,
-                        Geo.CreatePoint(new Coordinate(pickLng, pickLat)),
-                        now)), ct);
+                await InvokeCommandAsync(new MarkDeliveryPickedUpCommand(new PickUpDeliveryRequest(
+                    d.ActiveDeliveryId!.Value,
+                    Geo.CreatePoint(new Coordinate(pickLng, pickLat)),
+                    now)), ct);
 
-                // Dropoff = jittered point ~0.5 km from pickup
-                var angle = Random.Shared.NextDouble() * Math.PI * 2;
-                var dropLat = pickLat + 0.004 * Math.Sin(angle);
-                var dropLng = pickLng + 0.004 * Math.Cos(angle);
+                // Cross-district dropoff
+                var dropDistrict = districts.GetRandom(d.DistrictId);
+                var dropLat = dropDistrict.CentroidLat + (Random.Shared.NextDouble() * 2 - 1) * dropDistrict.JitterRadius;
+                var dropLng = dropDistrict.CentroidLng + (Random.Shared.NextDouble() * 2 - 1) * dropDistrict.JitterRadius;
                 var dropWaypoints = await FetchRouteWaypointsAsync(pickLat, pickLng, dropLat, dropLng, ct);
 
-                // ETA = route duration × buffer, written directly so domain can detect late cancellation
+                // Roll once: will this transit have a stall and/or a cancellation?
+                var willStall = Random.Shared.Next(100) < opts.StallPauseProbabilityPct;
+                var willCancelTransit = Random.Shared.Next(100) < opts.CancellationProbabilityPct;
+                var stallAt = willStall
+                    ? Random.Shared.Next(10, Math.Max(11, dropWaypoints.Count / 2))
+                    : -1;
+                var cancelTransitAt = willCancelTransit
+                    ? Random.Shared.Next(dropWaypoints.Count / 3,
+                        Math.Max(dropWaypoints.Count / 3 + 1, dropWaypoints.Count - 10))
+                    : -1;
+                // Ensure stall fires before cancellation when both are set
+                if (stallAt >= 0 && cancelTransitAt >= 0 && stallAt >= cancelTransitAt)
+                    stallAt = Math.Max(0, cancelTransitAt / 2);
+
                 var etaSecs = dropWaypoints.Count * opts.PositionUpdateIntervalMs / 1000.0 * opts.EtaBufferMultiplier;
                 await SetDeliveryEtaAsync(d.ActiveDeliveryId!.Value, now.AddSeconds(etaSecs), ct);
 
@@ -215,22 +304,37 @@ public sealed class PositionSimulatorService(
                     Waypoints = dropWaypoints,
                     WaypointIndex = 0,
                     Direction = 1,
+                    CancelAtWaypoint = cancelTransitAt,
+                    StallAtWaypoint = stallAt,
                     LastBroadcastAt = now,
                 };
-                logger.LogDebug("Driver {Name} picked up delivery {Id}, heading to dropoff", d.Name, d.ActiveDeliveryId);
+                logger.LogDebug("Driver {Name} picked up, heading to {District}", d.Name, dropDistrict.Id);
                 continue;
             }
 
-            // ── Random cancellation in transit ────────────────────────────
+            // ── Planned stall during transit ──────────────────────────────
             if (d.Phase == DeliveryPhase.MovingToDropoff &&
-                Random.Shared.Next(100) < opts.CancellationProbabilityPct)
+                d.StallAtWaypoint >= 0 && d.WaypointIndex >= d.StallAtWaypoint)
             {
-                await InvokeCommandAsync(
-                    new CancelDeliveryCommand(new CancelDeliveryRequest(
-                        d.ActiveDeliveryId!.Value, now, "Customer cancelled in transit")), ct);
+                _drivers[i] = d with
+                {
+                    PausedUntil = now.AddSeconds(opts.StallPauseDurationSeconds),
+                    StallAtWaypoint = -1,
+                };
+                continue;
+            }
+
+            // ── Planned cancellation during transit ───────────────────────
+            if (d.Phase == DeliveryPhase.MovingToDropoff &&
+                d.CancelAtWaypoint >= 0 && d.WaypointIndex >= d.CancelAtWaypoint)
+            {
+                await InvokeCommandAsync(new CancelDeliveryCommand(new CancelDeliveryRequest(
+                    d.ActiveDeliveryId!.Value, now, "Customer cancelled in transit")), ct);
 
                 _activeDeliveryIds.Remove(d.ActiveDeliveryId!.Value);
-                var patrolWaypoints = await FetchRouteWaypointsAsync(d.CenterLat, d.CenterLng, d.CenterLat, d.CenterLng, ct);
+                var (curLat, curLng) = d.Waypoints[d.WaypointIndex];
+                var patrolWaypoints = await FetchPatrolRouteAsync(curLat, curLng, ct);
+                var dwellSecs = opts.DwellMinSeconds + Random.Shared.Next(Math.Max(1, opts.DwellMaxSeconds - opts.DwellMinSeconds));
                 _drivers[i] = d with
                 {
                     ActiveDeliveryId = null,
@@ -238,9 +342,12 @@ public sealed class PositionSimulatorService(
                     Waypoints = patrolWaypoints,
                     WaypointIndex = 0,
                     Direction = 1,
+                    CancelAtWaypoint = -1,
+                    StallAtWaypoint = -1,
+                    DwellUntil = now.AddSeconds(dwellSecs),
                     LastBroadcastAt = now,
                 };
-                logger.LogDebug("Driver {Name} cancelled delivery", d.Name);
+                logger.LogDebug("Driver {Name} cancelled in transit", d.Name);
                 continue;
             }
 
@@ -248,12 +355,13 @@ public sealed class PositionSimulatorService(
             if (d.Phase == DeliveryPhase.MovingToDropoff &&
                 IsAtEnd(d.WaypointIndex, d.Direction, d.Waypoints.Count))
             {
-                await InvokeCommandAsync(
-                    new MarkDeliveryCompletedCommand(new CompleteDeliveryRequest(
-                        d.ActiveDeliveryId!.Value, now)), ct);
+                await InvokeCommandAsync(new MarkDeliveryCompletedCommand(new CompleteDeliveryRequest(
+                    d.ActiveDeliveryId!.Value, now)), ct);
 
                 _activeDeliveryIds.Remove(d.ActiveDeliveryId!.Value);
-                var patrolWaypoints = await FetchRouteWaypointsAsync(d.CenterLat, d.CenterLng, d.CenterLat, d.CenterLng, ct);
+                var (dropLat2, dropLng2) = d.Waypoints[^1];
+                var patrolWaypoints = await FetchPatrolRouteAsync(dropLat2, dropLng2, ct);
+                var dwellSecs = opts.DwellMinSeconds + Random.Shared.Next(Math.Max(1, opts.DwellMaxSeconds - opts.DwellMinSeconds));
                 _drivers[i] = d with
                 {
                     ActiveDeliveryId = null,
@@ -261,20 +369,16 @@ public sealed class PositionSimulatorService(
                     Waypoints = patrolWaypoints,
                     WaypointIndex = 0,
                     Direction = 1,
+                    CancelAtWaypoint = -1,
+                    StallAtWaypoint = -1,
+                    DwellUntil = now.AddSeconds(dwellSecs),
                     LastBroadcastAt = now,
                 };
                 logger.LogDebug("Driver {Name} completed delivery", d.Name);
                 continue;
             }
 
-            // ── Stall: only applies to drivers actively moving to dropoff ──
-            if (d.Phase == DeliveryPhase.MovingToDropoff &&
-                Random.Shared.Next(100) < opts.StallPauseProbabilityPct)
-            {
-                _drivers[i] = d with { PausedUntil = now.AddSeconds(opts.StallPauseDurationSeconds) };
-                continue;
-            }
-
+            // ── Advance position and broadcast ────────────────────────────
             var (lat, lng) = d.Waypoints[d.WaypointIndex];
             var (nextIdx, nextDir) = AdvanceIndex(d.WaypointIndex, d.Direction, d.Waypoints.Count);
             _drivers[i] = d with { WaypointIndex = nextIdx, Direction = nextDir, LastBroadcastAt = now };
@@ -337,12 +441,26 @@ public sealed class PositionSimulatorService(
         return BuildCircularFallback(fromLat, fromLng);
     }
 
-    // Overload for patrol — uses DestOffsets jitter
-    private async Task<IReadOnlyList<(double Lat, double Lng)>> FetchRouteWaypointsAsync(
+    // Initial patrol: golden angle spread so drivers start in different directions
+    private async Task<IReadOnlyList<(double Lat, double Lng)>> FetchPatrolRouteAsync(
         double centerLat, double centerLng, int driverIndex, CancellationToken ct)
     {
-        var (dLat, dLng) = DestOffsets[driverIndex % DestOffsets.Length];
-        return await FetchRouteWaypointsAsync(centerLat, centerLng, centerLat + dLat, centerLng + dLng, ct);
+        var angle = (driverIndex * 2.399963) % (2 * Math.PI);
+        var dist = 0.005 + Random.Shared.NextDouble() * 0.004;
+        var destLat = centerLat + dist * Math.Sin(angle);
+        var destLng = centerLng + dist * Math.Cos(angle);
+        return await FetchRouteWaypointsAsync(centerLat, centerLng, destLat, destLng, ct);
+    }
+
+    // Subsequent patrol refresh: fully random direction
+    private async Task<IReadOnlyList<(double Lat, double Lng)>> FetchPatrolRouteAsync(
+        double currentLat, double currentLng, CancellationToken ct)
+    {
+        var angle = Random.Shared.NextDouble() * 2 * Math.PI;
+        var dist = 0.005 + Random.Shared.NextDouble() * 0.004;
+        var destLat = currentLat + dist * Math.Sin(angle);
+        var destLng = currentLng + dist * Math.Cos(angle);
+        return await FetchRouteWaypointsAsync(currentLat, currentLng, destLat, destLng, ct);
     }
 
     private static IReadOnlyList<(double Lat, double Lng)> BuildCircularFallback(double lat, double lng)

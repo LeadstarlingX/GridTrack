@@ -3,38 +3,27 @@ using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
+using GridTrack.Application.Interfaces;
 
 namespace GridTrack.Infrastructure.CQRS.ReadServices;
 
 public sealed class DistrictReadService : IDistrictReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
+    private readonly IDistrictDataService _districtService;
 
-    public DistrictReadService(ISqlConnectionFactory sqlConnectionFactory)
+    public DistrictReadService(ISqlConnectionFactory sqlConnectionFactory, IDistrictDataService districtService)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
+        _districtService = districtService;
     }
 
-    public async Task<GetDistrictsResponse> GetDistrictsAsync(CancellationToken ct)
+    public Task<GetDistrictsResponse> GetDistrictsAsync(CancellationToken ct)
     {
-        using var connection = _sqlConnectionFactory.CreateConnection();
-
-        const string sql = """
-                           SELECT
-                               "H3Index"                           AS "Id",
-                               ST_Y("CenterPoint"::geometry)::float AS "Lat",
-                               ST_X("CenterPoint"::geometry)::float AS "Lng"
-                           FROM public."H3District"
-                           ORDER BY "H3Index"
-                           """;
-
-        var rows = await connection.QueryAsync<DistrictFlatRow>(sql);
-
-        var items = rows
-            .Select(r => new DistrictItemResponse(r.Id, r.Id, new CoordinateResponse(r.Lat, r.Lng)))
+        var items = _districtService.GetAll()
+            .Select(d => new DistrictItemResponse(d.Id, d.NameAr, new CoordinateResponse(d.CentroidLat, d.CentroidLng)))
             .ToList();
-
-        return new GetDistrictsResponse(items);
+        return Task.FromResult(new GetDistrictsResponse(items));
     }
 
     public async Task<GetDistrictBoundariesResponse> GetDistrictBoundariesAsync(CancellationToken ct)
