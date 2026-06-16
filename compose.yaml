@@ -1,18 +1,4 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# GridTrack backend stack — starts everything except the React frontend.
-#   Backend:  docker compose up -d
-#   Frontend: cd ..\GridTrack.Web && npm run dev
-#
-# Secrets (GROQ_API_KEY, CLERK_AUTHORITY) must be present in a .env file
-# at this directory.  See .env.example for the required keys.
-#
-# Optional observability (Grafana, Tempo, Prometheus, Loki):
-#   docker compose -f compose.yaml -f compose.observability.yaml up -d
-# ─────────────────────────────────────────────────────────────────────────────
-
 services:
-
-  # ── Infrastructure ───────────────────────────────────────────────────────
 
   gridtrack.db:
     image: postgis/postgis:18-3.6
@@ -35,7 +21,7 @@ services:
 
   gridtrack.redis:
     image: redis:8.4.0
-    container_name: GridTrack.redis
+    container_name: GridTrack.Redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -65,7 +51,6 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # ── Structured logging (lightweight, useful for debugging) ───────────────
 
   gridtrack.seq:
     image: datalust/seq:2025.2
@@ -78,7 +63,6 @@ services:
       - "8080:80"     # Seq UI  →  http://localhost:8080
     restart: unless-stopped
 
-  # ── Application services ─────────────────────────────────────────────────
 
   gridtrack.api:
     image: gridtrack.api

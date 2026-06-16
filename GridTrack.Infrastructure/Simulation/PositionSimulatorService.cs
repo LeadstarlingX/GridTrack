@@ -267,8 +267,8 @@ public sealed class PositionSimulatorService(
                 continue;
             }
 
-            // ── Advance waypoint & optionally stall ──────────────────────
-            if (d.Phase == DeliveryPhase.Patrol &&
+            // ── Stall: only applies to drivers actively moving to dropoff ──
+            if (d.Phase == DeliveryPhase.MovingToDropoff &&
                 Random.Shared.Next(100) < opts.StallPauseProbabilityPct)
             {
                 _drivers[i] = d with { PausedUntil = now.AddSeconds(opts.StallPauseDurationSeconds) };
@@ -279,8 +279,20 @@ public sealed class PositionSimulatorService(
             var (nextIdx, nextDir) = AdvanceIndex(d.WaypointIndex, d.Direction, d.Waypoints.Count);
             _drivers[i] = d with { WaypointIndex = nextIdx, Direction = nextDir, LastBroadcastAt = now };
 
+            var routeAhead = d.Phase != DeliveryPhase.Patrol
+                ? d.Waypoints.Skip(d.WaypointIndex).Take(40)
+                    .Select(static w => new[] { w.Lat, w.Lng })
+                    .ToArray()
+                : null;
+
             broadcastTasks.Add(hub.Clients.All.SendCoreAsync("DriverPositionUpdated",
-                [new { driverId = d.Id, lat, lng, districtId = d.DistrictId }], ct));
+                [new {
+                    driverId   = d.Id,
+                    lat, lng,
+                    districtId = d.DistrictId,
+                    deliveryId = d.ActiveDeliveryId?.ToString(),
+                    routeAhead,
+                }], ct));
         }
 
         try { await Task.WhenAll(broadcastTasks); }

@@ -183,6 +183,7 @@ public static class DependencyInjection
     {
         services.Configure<SimulatorOptions>(configuration.GetSection("Simulation"));
         services.AddHostedService<PositionSimulatorService>();
+        services.AddHostedService<AnomalySimulatorService>();
         return services;
     }
 
