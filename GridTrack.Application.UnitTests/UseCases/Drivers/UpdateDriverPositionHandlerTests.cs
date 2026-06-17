@@ -79,7 +79,7 @@ public class UpdateDriverPositionHandlerTests
         public Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
             => Task.FromResult(_driver);
 
-        public Task<GetDriversResponse> GetAllAsync(string? cursor, string? districtId, string? status, int pageSize, CancellationToken ct)
+        public Task<GetDriversResponse> GetAllAsync(string? cursor, string? districtId, string? status, string? search, int pageSize, CancellationToken ct)
             => Task.FromResult(new GetDriversResponse([], null, 0));
     }
 

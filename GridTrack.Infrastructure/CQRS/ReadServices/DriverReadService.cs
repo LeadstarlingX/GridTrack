@@ -64,9 +64,12 @@ public sealed class DriverReadService : IDriverReadService
         => await _context.Set<Driver>().FirstOrDefaultAsync(d => d.DriverId == id, ct);
 
     public async Task<GetDriversResponse> GetAllAsync(
-        string? cursor, string? districtId, string? status, int pageSize, CancellationToken ct)
+        string? cursor, string? districtId, string? status, string? search, int pageSize, CancellationToken ct)
     {
         using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // Free-text search across name, phone number, and license plate.
+        var searchPattern = string.IsNullOrWhiteSpace(search) ? null : $"%{search.Trim()}%";
 
         // Derive status from deliveries:
         //   IsActive = false              → "offline"
@@ -105,6 +108,10 @@ public sealed class DriverReadService : IDriverReadService
             LEFT JOIN "Deliveries" del ON del."AssignedDriverId" = d."DriverId"
             WHERE (@DistrictId IS NULL OR d."DistrictId" = @DistrictId)
               AND (@Cursor IS NULL OR d."DriverId"::text > @Cursor)
+              AND (@Search IS NULL
+                   OR d."Name" ILIKE @Search
+                   OR d."PhoneNumber" ILIKE @Search
+                   OR d."LicensePlate" ILIKE @Search)
             GROUP BY d."DriverId", d."Name", d."ShortName", d."Location", d."DistrictId", d."IsActive", d."CarType", d."LicensePlate", d."PhoneNumber"
             HAVING (@Status IS NULL
                 OR (
@@ -127,7 +134,7 @@ public sealed class DriverReadService : IDriverReadService
 
         var rows = (await connection.QueryAsync<DriverListItemResponse>(
             sql,
-            new { Cursor = cursor, DistrictId = districtId, Status = status, PageSize = pageSize + 1 }))
+            new { Cursor = cursor, DistrictId = districtId, Status = status, Search = searchPattern, PageSize = pageSize + 1 }))
             .ToList();
 
         string? nextCursor = null;

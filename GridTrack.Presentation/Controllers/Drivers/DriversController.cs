@@ -23,7 +23,7 @@ public class DriversController(IMessageBus bus) : ControllerBase
     public async Task<IActionResult> GetDrivers([FromQuery] GetDriversRequest request, CancellationToken ct)
     {
         var result = await bus.InvokeAsync<GetDriversResponse>(
-            new GetDriversQuery(request.Cursor, request.DistrictId, request.Status, request.PageSize ?? 8), ct);
+            new GetDriversQuery(request.Cursor, request.DistrictId, request.Status, request.Search, request.PageSize ?? 8), ct);
         return Ok(result);
     }
 

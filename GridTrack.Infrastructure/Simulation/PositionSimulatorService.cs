@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.Interfaces;
@@ -42,6 +44,12 @@ public sealed class PositionSimulatorService(
     private sealed record SimDelivery(Guid Id, double Lat, double Lng, string DistrictId);
 
     private static readonly GeometryFactory Geo = new(new PrecisionModel(), 4326);
+
+    private static readonly Meter SimulatorMeter = new("gridtrack.simulator", "1.0");
+    private static readonly Histogram<double> TickDuration =
+        SimulatorMeter.CreateHistogram<double>("simulator.tick.duration", "ms", "Time to compute and broadcast one position tick");
+    private static readonly Histogram<int> BatchSize =
+        SimulatorMeter.CreateHistogram<int>("simulator.batch.size", "{drivers}", "Driver positions broadcast per tick");
 
     private List<SimDriver> _drivers = [];
     private readonly Queue<SimDelivery> _pendingDeliveries = new();
@@ -170,6 +178,7 @@ public sealed class PositionSimulatorService(
 
     private async Task TickAsync(CancellationToken ct)
     {
+        var sw = Stopwatch.StartNew();
         var now = DateTime.UtcNow;
         var opts = options.Value;
         var broadcastTasks = new List<Task>(_drivers.Count);
@@ -404,6 +413,9 @@ public sealed class PositionSimulatorService(
             broadcastTasks.Add(hub.Clients.All.SendCoreAsync("DriverPositionBatch", [positionBatch], ct));
         try { await Task.WhenAll(broadcastTasks); }
         catch (Exception ex) { logger.LogWarning(ex, "PositionSimulator: broadcast error"); }
+
+        TickDuration.Record(sw.Elapsed.TotalMilliseconds);
+        BatchSize.Record(positionBatch.Count);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

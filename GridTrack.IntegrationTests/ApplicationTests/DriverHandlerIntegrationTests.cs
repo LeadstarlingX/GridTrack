@@ -129,13 +129,13 @@ public class DriverHandlerIntegrationTests : BaseIntegrationTest
         await SeedDriversAsync(drivers);
 
         var page1 = await InvokeAsync<GetDriversResponse>(
-            new GetDriversQuery(null, null, null, 3));
+            new GetDriversQuery(null, null, null, null, 3));
 
         page1.Items.Should().HaveCount(3);
         page1.NextCursor.Should().NotBeNull();
 
         var page2 = await InvokeAsync<GetDriversResponse>(
-            new GetDriversQuery(page1.NextCursor, null, null, 3));
+            new GetDriversQuery(page1.NextCursor, null, null, null, 3));
 
         page2.Items.Should().HaveCount(1);
         page2.NextCursor.Should().BeNull();
@@ -157,7 +157,7 @@ public class DriverHandlerIntegrationTests : BaseIntegrationTest
         await SeedDriversAsync([active, offline]);
 
         var result = await InvokeAsync<GetDriversResponse>(
-            new GetDriversQuery(null, null, "offline", 10));
+            new GetDriversQuery(null, null, "offline", null, 10));
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be("offline");

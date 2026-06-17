@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -7,6 +8,10 @@ namespace GridTrack.Infrastructure.Hubs;
 [Authorize]
 public sealed class DashboardHub : Hub
 {
+    private static readonly Meter HubMeter = new("gridtrack.hub", "1.0");
+    private static readonly UpDownCounter<int> ConnectedClients =
+        HubMeter.CreateUpDownCounter<int>("hub.connections.active", description: "Number of active SignalR connections");
+
     public async Task JoinDistrict(string districtId)
         => await Groups.AddToGroupAsync(Context.ConnectionId, districtId);
 
@@ -18,11 +23,13 @@ public sealed class DashboardHub : Hub
 
     public override async Task OnConnectedAsync()
     {
+        ConnectedClients.Add(1);
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        ConnectedClients.Add(-1);
         await base.OnDisconnectedAsync(exception);
     }
 }

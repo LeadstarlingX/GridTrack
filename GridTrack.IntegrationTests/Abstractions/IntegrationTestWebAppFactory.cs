@@ -1,6 +1,8 @@
+using System.Runtime.CompilerServices;
 using GridTrack.Api;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
+using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Data;
@@ -101,7 +103,38 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
 
             services.RemoveAll<IDashboardPushService>();
             services.AddSingleton(DashboardPushMock);
+
+            // Force the AI services into their "unavailable" state. Integration tests assert the
+            // degraded path (AiAvailable=false, null summary) and must not depend on whether a real
+            // Python/Groq service happens to be reachable on localhost:8000 (e.g. a running Docker stack).
+            services.RemoveAll<IAnalysisChatService>();
+            services.AddSingleton<IAnalysisChatService, UnavailableChatService>();
+            services.RemoveAll<IAiRecommendationService>();
+            services.AddSingleton<IAiRecommendationService, UnavailableRecommendationService>();
         });
+    }
+
+    // AI service stubs — always report "unavailable" so the degraded-path assertions are deterministic.
+    private sealed class UnavailableChatService : IAnalysisChatService
+    {
+        public Task<string?> AskAsync(string question, string csvContext, CancellationToken ct)
+            => Task.FromResult<string?>(null);
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            string question, string csvContext, [EnumeratorCancellation] CancellationToken ct)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public Task<string?> TranscribeAsync(Stream audio, string fileName, string contentType, CancellationToken ct)
+            => Task.FromResult<string?>(null);
+    }
+
+    private sealed class UnavailableRecommendationService : IAiRecommendationService
+    {
+        public Task<AiRecommendationResponse?> GetAsync(AiRecommendationRequestDto request, CancellationToken ct)
+            => Task.FromResult<AiRecommendationResponse?>(null);
     }
 
     public override async ValueTask DisposeAsync()
