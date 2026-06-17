@@ -184,7 +184,7 @@ public class DeliveryTests
         var result = delivery.MarkDelivered(DateTime.UtcNow);
 
         await Assert.That(result.IsFailure).IsTrue();
-        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidStatusForOperation);
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidStatusTransition);
     }
 
     [Test]

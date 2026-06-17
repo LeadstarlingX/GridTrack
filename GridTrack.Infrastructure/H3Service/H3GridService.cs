@@ -1,4 +1,6 @@
+using GridTrack.Application.Errors;
 using GridTrack.Application.Interfaces;
+using GridTrack.Domain.Abstractions;
 using H3;
 using H3.Algorithms;
 using H3.Extensions;
@@ -10,37 +12,28 @@ namespace GridTrack.Infrastructure.H3Service;
 
 public sealed class H3GridService : IH3GridService
 {
-    public Task<string> GetCellAsync(Point location, int resolution)
+    public Task<Result<string>> GetCellAsync(Point location, int resolution)
     {
         if (location is null)
-        {
-            throw new ArgumentNullException(nameof(location));
-        }
+            return Task.FromResult(Result.Failure<string>(H3ServiceErrors.LocationNotProvided));
 
-        var latLng = new Coordinate(location.X, location.Y);
-        var cell = latLng.ToH3Index(resolution);
-        string cellString = cell.ToString();
-
-        return Task.FromResult(cellString);
+        var cell = new Coordinate(location.X, location.Y).ToH3Index(resolution);
+        return Task.FromResult(Result.Success(cell.ToString()));
     }
 
-    public Task<IEnumerable<string>> GetGridDiskAsync(string cellIndex, int ringDistance)
+    public Task<Result<IEnumerable<string>>> GetGridDiskAsync(string cellIndex, int ringDistance)
     {
         if (string.IsNullOrWhiteSpace(cellIndex))
-        {
-            throw new ArgumentException("H3 index cannot be empty.", nameof(cellIndex));
-        }
+            return Task.FromResult(Result.Failure<IEnumerable<string>>(H3ServiceErrors.InvalidCellIndex));
 
         if (ringDistance <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(ringDistance), "Ring distance must be positive.");
-        }
-        
+            return Task.FromResult(Result.Failure<IEnumerable<string>>(H3ServiceErrors.InvalidRingDistance));
+
         var cell = new H3Index(cellIndex);
         var neighbors = cell.GridDiskDistances(ringDistance)
-            .Where(n => n.Distance > 0) // exclude origin
+            .Where(n => n.Distance > 0)
             .Select(n => n.Index.ToString());
-        return Task.FromResult(neighbors);
+        return Task.FromResult(Result.Success<IEnumerable<string>>(neighbors));
     }
 
     public Task<IEnumerable<string>> FillBoundingBoxAsync(

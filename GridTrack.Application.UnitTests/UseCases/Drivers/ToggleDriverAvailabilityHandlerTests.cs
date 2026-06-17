@@ -1,6 +1,7 @@
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dtos;
+using GridTrack.Application.Errors;
 using GridTrack.Application.UseCases.Drivers;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Drivers;
@@ -13,18 +14,19 @@ public class ToggleDriverAvailabilityHandlerTests
     private static readonly GeometryFactory Factory = new();
 
     [Test]
-    public async Task Handle_Returns_Null_Response_When_Driver_Not_Found()
+    public async Task Handle_Returns_Failure_When_Driver_Not_Found()
     {
         var handler = new ToggleDriverAvailabilityHandler();
 
-        var (response, events) = await handler.Handle(
+        var (result, events) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(Guid.NewGuid(), true),
             new FakeDriverReadService(null),
             new FakeDriverRepository(),
             new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
-        await Assert.That(response).IsNull();
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(ApplicationErrors.DriverNotFound);
         await Assert.That(events).IsNull();
     }
 
@@ -34,16 +36,16 @@ public class ToggleDriverAvailabilityHandlerTests
         var driver = CreateDriver(isActive: false);
         var handler = new ToggleDriverAvailabilityHandler();
 
-        var (response, _) = await handler.Handle(
+        var (result, _) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(driver.DriverId, true),
             new FakeDriverReadService(driver),
             new FakeDriverRepository(),
             new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
-        await Assert.That(response).IsNotNull();
-        await Assert.That(response!.Id).IsEqualTo(driver.DriverId.ToString());
-        await Assert.That(response.Status).IsEqualTo("available");
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value.Id).IsEqualTo(driver.DriverId.ToString());
+        await Assert.That(result.Value.Status).IsEqualTo("available");
     }
 
     [Test]
@@ -52,15 +54,15 @@ public class ToggleDriverAvailabilityHandlerTests
         var driver = CreateDriver(isActive: true);
         var handler = new ToggleDriverAvailabilityHandler();
 
-        var (response, _) = await handler.Handle(
+        var (result, _) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(driver.DriverId, false),
             new FakeDriverReadService(driver),
             new FakeDriverRepository(),
             new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
-        await Assert.That(response).IsNotNull();
-        await Assert.That(response!.Status).IsEqualTo("offline");
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value.Status).IsEqualTo("offline");
     }
 
     [Test]
@@ -85,15 +87,15 @@ public class ToggleDriverAvailabilityHandlerTests
         var driver = CreateDriver(isActive: true);
         var handler = new ToggleDriverAvailabilityHandler();
 
-        var (response, events) = await handler.Handle(
+        var (result, events) = await handler.Handle(
             new ToggleDriverAvailabilityCommand(driver.DriverId, true),
             new FakeDriverReadService(driver),
             new FakeDriverRepository(),
             new CreateDriverHandlerTests.FakeUnitOfWork(),
             CancellationToken.None);
 
-        await Assert.That(response).IsNotNull();
-        await Assert.That(response!.Status).IsEqualTo("available");
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(result.Value.Status).IsEqualTo("available");
         await Assert.That(events).IsNull();
     }
 

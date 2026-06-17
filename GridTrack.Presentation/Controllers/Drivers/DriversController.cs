@@ -1,4 +1,5 @@
 using GridTrack.Application.Dtos;
+using GridTrack.Application.Errors;
 using GridTrack.Application.UseCases.Common;
 using GridTrack.Application.UseCases.Drivers;
 using GridTrack.Domain.Abstractions;
@@ -92,8 +93,12 @@ public class DriversController(IMessageBus bus) : ControllerBase
         if (!Guid.TryParse(id, out var driverId))
             return BadRequest();
         var isActive = request.Status.Equals("available", StringComparison.OrdinalIgnoreCase);
-        var result = await bus.InvokeAsync<DriverAvailabilityResponse?>(
+        var result = await bus.InvokeAsync<Result<DriverAvailabilityResponse>>(
             new ToggleDriverAvailabilityCommand(driverId, isActive), ct);
-        return result is null ? NotFound() : Ok(result);
+        if (result.IsFailure)
+            return result.Error == ApplicationErrors.DriverNotFound
+                ? NotFound()
+                : Conflict(new { error = result.Error.Message });
+        return Ok(result.Value);
     }
 }

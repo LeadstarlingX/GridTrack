@@ -28,61 +28,50 @@ public class TelemetryController(IMessageBus bus) : ControllerBase
 
         foreach (var evt in request.Events)
         {
-            try
-            {
-                await DispatchEvent(evt, ct);
+            var error = await DispatchEvent(evt, ct);
+            if (error is null)
                 processed++;
-            }
-            catch (Exception ex)
+            else
             {
                 rejected++;
-                errors.Add($"[{evt.Type ?? "unknown"}] {ex.Message}");
+                errors.Add($"[{evt.Type ?? "unknown"}] {error}");
             }
         }
 
         return Accepted(new { processed, rejected, errors });
     }
 
-    private async Task DispatchEvent(TelemetryEventRequest evt, CancellationToken ct)
+    private async Task<string?> DispatchEvent(TelemetryEventRequest evt, CancellationToken ct)
     {
         var occurredAt = evt.OccurredAt ?? DateTime.UtcNow;
 
-        switch (evt.Type?.ToLowerInvariant())
+        return evt.Type?.ToLowerInvariant() switch
         {
-            case "position":
-                await DispatchPosition(evt, occurredAt, ct);
-                break;
-
-            case "delivery_created":
-                await DispatchDeliveryCreated(evt, occurredAt, ct);
-                break;
-
-            case "delivery_status":
-                await DispatchDeliveryStatus(evt, occurredAt, ct);
-                break;
-
-            default:
-                throw new InvalidOperationException($"Unknown event type '{evt.Type}'.");
-        }
+            "position"        => await DispatchPosition(evt, occurredAt, ct),
+            "delivery_created" => await DispatchDeliveryCreated(evt, occurredAt, ct),
+            "delivery_status"  => await DispatchDeliveryStatus(evt, occurredAt, ct),
+            _                  => $"Unknown event type '{evt.Type}'.",
+        };
     }
 
-    private async Task DispatchPosition(TelemetryEventRequest evt, DateTime occurredAt, CancellationToken ct)
+    private async Task<string?> DispatchPosition(TelemetryEventRequest evt, DateTime occurredAt, CancellationToken ct)
     {
         if (evt.DriverId is null)
-            throw new InvalidOperationException("driverId is required for position events.");
+            return "driverId is required for position events.";
         if (evt.Lat is null || evt.Lng is null)
-            throw new InvalidOperationException("lat and lng are required for position events.");
+            return "lat and lng are required for position events.";
 
         var point = GeoFactory.CreatePoint(new Coordinate(evt.Lng.Value, evt.Lat.Value));
         await bus.InvokeAsync(
             new UpdateDriverPositionCommand(new UpdatePositionRequest(evt.DriverId.Value, point, occurredAt)),
             ct);
+        return null;
     }
 
-    private async Task DispatchDeliveryCreated(TelemetryEventRequest evt, DateTime occurredAt, CancellationToken ct)
+    private async Task<string?> DispatchDeliveryCreated(TelemetryEventRequest evt, DateTime occurredAt, CancellationToken ct)
     {
         if (evt.Lat is null || evt.Lng is null)
-            throw new InvalidOperationException("lat and lng are required for delivery_created events.");
+            return "lat and lng are required for delivery_created events.";
 
         var point = GeoFactory.CreatePoint(new Coordinate(evt.Lng.Value, evt.Lat.Value));
         await bus.InvokeAsync(
@@ -93,12 +82,13 @@ public class TelemetryController(IMessageBus bus) : ControllerBase
                 evt.ExpectedEta,
                 evt.DistrictId)),
             ct);
+        return null;
     }
 
-    private async Task DispatchDeliveryStatus(TelemetryEventRequest evt, DateTime occurredAt, CancellationToken ct)
+    private async Task<string?> DispatchDeliveryStatus(TelemetryEventRequest evt, DateTime occurredAt, CancellationToken ct)
     {
         if (evt.DeliveryId is null)
-            throw new InvalidOperationException("deliveryId is required for delivery_status events.");
+            return "deliveryId is required for delivery_status events.";
 
         var deliveryId = evt.DeliveryId.Value;
 
@@ -106,7 +96,7 @@ public class TelemetryController(IMessageBus bus) : ControllerBase
         {
             case "picked_up":
                 if (evt.Lat is null || evt.Lng is null)
-                    throw new InvalidOperationException("lat and lng are required for picked_up status.");
+                    return "lat and lng are required for picked_up status.";
                 var pickupPoint = GeoFactory.CreatePoint(new Coordinate(evt.Lng.Value, evt.Lat.Value));
                 await bus.InvokeAsync(
                     new MarkDeliveryPickedUpCommand(new PickUpDeliveryRequest(deliveryId, pickupPoint, occurredAt)),
@@ -129,7 +119,9 @@ public class TelemetryController(IMessageBus bus) : ControllerBase
                 break;
 
             default:
-                throw new InvalidOperationException($"Unknown delivery status '{evt.Status}'. Expected: picked_up, delivered, cancelled.");
+                return $"Unknown delivery status '{evt.Status}'. Expected: picked_up, delivered, cancelled.";
         }
+
+        return null;
     }
 }
