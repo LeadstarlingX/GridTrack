@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using GridTrack.Application.Dispatch;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.Drivers;
@@ -15,8 +16,16 @@ public sealed class DataSeeder(
     AppDbContext db,
     IOsrmService osrm,
     IDistrictDataService districtService,
+    IRouteCostCalculator costCalculator,
     ILogger<DataSeeder> logger)
 {
+    // Max simultaneous OSRM requests during seeding. The 150 route calls used to run
+    // strictly sequentially (~1 s each ≈ 2.5 min); fanning out drops that to ~15 s.
+    private const int OsrmConcurrency = 12;
+
+    private sealed record DeliverySpec(
+        Driver Driver, Point Origin, Point Destination, DateTime CreatedAt, bool IsActive);
+
     private static readonly GeometryFactory Geo = new(new PrecisionModel(), 4326);
     private static readonly Random Rng = new(42);
 
@@ -125,13 +134,19 @@ public sealed class DataSeeder(
         db.Set<Driver>().AddRange(drivers);
         await db.SaveChangesAsync(ct);
 
-        // ── Historical deliveries ─────────────────────────────────────────
+        // ── Build delivery specs (no network yet) ─────────────────────────
+        // ~40 are in-progress *right now*, each on a distinct driver, so the dashboard
+        // shows many drivers with active orders. The rest are historical (last 7 days).
         var activeDrivers = drivers.Where(d => d.IsActive).ToList();
-        var deliveryRoutes = new List<DeliveryRoute>();
+        const int activeCount = 40;
+        const int historicalCount = 110;
 
-        for (var i = 0; i < 150; i++)
+        var specs = new List<DeliverySpec>(activeCount + historicalCount);
+        for (var i = 0; i < activeCount + historicalCount; i++)
         {
+            var isActive = i < activeCount;
             var driver = activeDrivers[i % activeDrivers.Count];
+
             var originDistrict = districtService.GetById(driver.DistrictId);
             if (originDistrict is null) continue;
             var origin = Jitter(originDistrict.CentroidLat, originDistrict.CentroidLng, originDistrict.JitterRadius);
@@ -139,44 +154,47 @@ public sealed class DataSeeder(
             var destDistrict = districtService.GetRandom(driver.DistrictId);
             var destination = Jitter(destDistrict.CentroidLat, destDistrict.CentroidLng, destDistrict.JitterRadius);
 
-            // Spread createdAt over the last 7 days
-            var createdAt = now.AddDays(-7).AddSeconds(Rng.Next(0, (int)TimeSpan.FromDays(7).TotalSeconds));
-            var isPast = createdAt < now.AddHours(-2);
+            var createdAt = isActive
+                ? now.AddMinutes(-Rng.Next(15, 90))  // recent → still on the road
+                : now.AddDays(-7).AddSeconds(Rng.Next(0, (int)TimeSpan.FromDays(7).TotalSeconds));
 
-            double durationSeconds = RandomRange(900, 3600);
-            List<(double, double)> waypoints = [];
-            try
-            {
-                var route = await osrm.GetRouteAsync(origin.Y, origin.X, destination.Y, destination.X, ct);
-                if (route is not null)
-                {
-                    durationSeconds = route.DurationSeconds;
-                    waypoints = route.Waypoints.ToList();
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "OSRM call failed for delivery {Index}, using fallback", i);
-            }
+            specs.Add(new DeliverySpec(driver, origin, destination, createdAt, isActive));
+        }
 
-            var expectedEta = createdAt.AddSeconds(durationSeconds);
-            var deliveryId = Guid.NewGuid();
+        // ── Fetch all OSRM routes in parallel (bounded) ───────────────────
+        var routes = await FetchRoutesAsync(specs, ct);
 
-            var deliveryResult = Delivery.Create(deliveryId, origin, driver.DistrictId, createdAt, expectedEta);
+        // ── Materialize delivery aggregates ───────────────────────────────
+        var deliveryRoutes = new List<DeliveryRoute>();
+        for (var i = 0; i < specs.Count; i++)
+        {
+            var spec  = specs[i];
+            var route = routes[i];
+
+            var durationSeconds = route?.DurationSeconds ?? RandomRange(900, 3600);
+            var distanceMeters  = route?.DistanceMeters  ?? durationSeconds * 8.0; // ~8 m/s fallback
+            var waypoints       = route?.Waypoints ?? [];
+
+            var expectedEta = spec.CreatedAt.AddSeconds(durationSeconds);
+            var deliveryId  = Guid.NewGuid();
+
+            var deliveryResult = Delivery.Create(deliveryId, spec.Origin, spec.Driver.DistrictId, spec.CreatedAt, expectedEta);
             if (deliveryResult.IsFailure) continue;
 
             var delivery = deliveryResult.Value;
             delivery.ClearDomainEvents();
 
-            var assignedAt = createdAt.AddMinutes(RandomRange(2, 5));
+            var assignedAt = spec.CreatedAt.AddMinutes(RandomRange(2, 5));
             var pickedUpAt = assignedAt.AddMinutes(RandomRange(5, 10));
 
-            delivery.AssignDriver(driver.DriverId);
-            delivery.MarkPickedUp(origin, pickedUpAt);
-            delivery.UpdateLocation(origin, pickedUpAt);
+            delivery.AssignDriver(spec.Driver.DriverId);
+            delivery.MarkPickedUp(spec.Origin, pickedUpAt);
+            delivery.UpdateLocation(spec.Origin, pickedUpAt); // → InTransit
+            delivery.SetRoute(distanceMeters, durationSeconds,
+                costCalculator.Calculate(distanceMeters, durationSeconds));
             delivery.ClearDomainEvents();
 
-            if (isPast)
+            if (!spec.IsActive)
             {
                 var factor = 0.8 + Rng.NextDouble() * 0.4;
                 var deliveredAt = pickedUpAt.AddSeconds(durationSeconds * factor);
@@ -214,8 +232,8 @@ public sealed class DataSeeder(
                 {
                     DeliveryId = deliveryId,
                     Sequence   = seq,
-                    Lat        = waypoints[seq].Item1,
-                    Lng        = waypoints[seq].Item2,
+                    Lat        = waypoints[seq].Lat,
+                    Lng        = waypoints[seq].Lng,
                 });
             }
         }
@@ -239,6 +257,37 @@ public sealed class DataSeeder(
         }
         db.Set<Delivery>().AddRange(pendingDeliveries);
         await db.SaveChangesAsync(ct);
+    }
+
+    // Fans OSRM calls out across OsrmConcurrency workers; preserves spec order in the
+    // result array. A failed/absent route comes back as null and the caller falls back.
+    private async Task<OsrmRouteResult?[]> FetchRoutesAsync(
+        IReadOnlyList<DeliverySpec> specs, CancellationToken ct)
+    {
+        var results = new OsrmRouteResult?[specs.Count];
+        using var gate = new SemaphoreSlim(OsrmConcurrency);
+
+        var tasks = specs.Select(async (spec, i) =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                results[i] = await osrm.GetRouteAsync(
+                    spec.Origin.Y, spec.Origin.X, spec.Destination.Y, spec.Destination.X, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "OSRM call failed for delivery {Index}, using fallback", i);
+                results[i] = null;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+        return results;
     }
 
     private static Guid DeterministicGuid(string seed)
