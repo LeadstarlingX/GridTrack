@@ -13,10 +13,10 @@ internal sealed class CachedAnalyticsReadService(
     AnalyticsReadService inner,
     ICacheService cache) : IAnalyticsReadService
 {
-    private static readonly TimeSpan LiveTtl       = TimeSpan.FromSeconds(45);
-    private static readonly TimeSpan HistoricalTtl = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan MapTtl        = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan UtilTtl       = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan LiveTtl       = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan HistoricalTtl = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan MapTtl        = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan UtilTtl       = TimeSpan.FromMinutes(5);
 
     private static string Fmt(DateTime? dt) => dt?.ToString("yyyyMMdd") ?? "all";
 

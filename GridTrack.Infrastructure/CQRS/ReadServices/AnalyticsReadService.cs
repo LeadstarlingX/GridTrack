@@ -160,19 +160,11 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
 
         var param = new { From = from, To = to };
 
-        using var conn2 = _sqlConnectionFactory.CreateConnection();
-        using var conn3 = _sqlConnectionFactory.CreateConnection();
+        var deliveries = (await connection.QueryAsync<TrendPointResponse>(deliverySql, param)).ToList();
+        var anomalies  = (await connection.QueryAsync<TrendPointResponse>(anomalySql, param)).ToList();
+        var urgency    = (await connection.QueryAsync<TrendPointResponse>(urgencySql, param)).ToList();
 
-        var deliveriesTask = connection.QueryAsync<TrendPointResponse>(deliverySql, param);
-        var anomaliesTask  = conn2.QueryAsync<TrendPointResponse>(anomalySql, param);
-        var urgencyTask    = conn3.QueryAsync<TrendPointResponse>(urgencySql, param);
-
-        await Task.WhenAll(deliveriesTask, anomaliesTask, urgencyTask);
-
-        return new GetTrendsResponse(
-            deliveriesTask.Result.ToList(),
-            anomaliesTask.Result.ToList(),
-            urgencyTask.Result.ToList());
+        return new GetTrendsResponse(deliveries, anomalies, urgency);
     }
 
     public async Task<GetDistrictVolumeResponse> GetDistrictVolumeAsync(
@@ -458,18 +450,10 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
             ORDER BY del."AssignedDriverId", "Hour"
             """;
 
-        using var conn2 = _sqlConnectionFactory.CreateConnection();
-        using var conn3 = _sqlConnectionFactory.CreateConnection();
-
-        var mainTask    = connection.QueryAsync<DriverStatsRow>(mainSql);
-        var districtTask = conn2.QueryAsync<DistrictAvgRow>(districtSql);
-        var hourlyTask  = conn3.QueryAsync<HourlyRow>(hourlySql);
-
-        await Task.WhenAll(mainTask, districtTask, hourlyTask);
-
-        var mainRows    = mainTask.Result.ToList();
-        var districtAvg = districtTask.Result.ToDictionary(r => r.DistrictId, r => r.AvgDurationSeconds);
-        var hourlyRows  = hourlyTask.Result
+        var mainRows    = (await connection.QueryAsync<DriverStatsRow>(mainSql)).ToList();
+        var districtAvg = (await connection.QueryAsync<DistrictAvgRow>(districtSql))
+                              .ToDictionary(r => r.DistrictId, r => r.AvgDurationSeconds);
+        var hourlyRows  = (await connection.QueryAsync<HourlyRow>(hourlySql))
                               .GroupBy(r => r.DriverId)
                               .ToDictionary(g => g.Key, g => g.ToList());
 
