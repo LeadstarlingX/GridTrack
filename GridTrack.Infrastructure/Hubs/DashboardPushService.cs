@@ -5,19 +5,28 @@ using Microsoft.AspNetCore.SignalR;
 namespace GridTrack.Infrastructure.Hubs;
 
 
-internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDashboardPushService
+internal sealed class DashboardPushService(
+    IHubContext<DashboardHub> hub,
+    IDistrictGroupCache districtGroupCache) : IDashboardPushService
 {
-    public Task BroadcastDriverPositionAsync(string districtId, DriverDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendCoreAsync(
-            "DriverPositionUpdated",
-            [new
-            {
-                driverId   = payload.DriverId,
-                lat        = payload.Location.Coordinate.Y,
-                lng        = payload.Location.Coordinate.X,
-                districtId = payload.DistrictId,
-            }],
-            ct);
+    public async Task BroadcastDriverPositionAsync(string districtId, DriverDto payload, CancellationToken ct)
+    {
+        var message = new
+        {
+            driverId   = payload.DriverId,
+            lat        = payload.Location.Coordinate.Y,
+            lng        = payload.Location.Coordinate.X,
+            districtId = payload.DistrictId,
+        };
+
+        // Broadcast to subscribers of this specific district.
+        await hub.Clients.Group(districtId).SendCoreAsync("DriverPositionUpdated", [message], ct);
+
+        // Fan-out to any district groups that include this district.
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("DriverPositionUpdated", [message], ct);
+    }
 
     public Task BroadcastDeliveryUpdateAsync(string districtId, DeliveryDto payload, CancellationToken ct)
         => hub.Clients.Group(districtId).SendCoreAsync(

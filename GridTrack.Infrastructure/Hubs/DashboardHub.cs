@@ -18,6 +18,14 @@ public sealed class DashboardHub : Hub
     public async Task LeaveDistrict(string districtId)
         => await Groups.RemoveFromGroupAsync(Context.ConnectionId, districtId);
 
+    // Subscribe to all drivers whose district belongs to the named district group.
+    // The server broadcasts to the "dg:{groupId}" SignalR group on every position tick.
+    public async Task JoinDistrictGroup(string districtGroupId)
+        => await Groups.AddToGroupAsync(Context.ConnectionId, $"dg:{districtGroupId}");
+
+    public async Task LeaveDistrictGroup(string districtGroupId)
+        => await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"dg:{districtGroupId}");
+
     // Returns server UTC timestamp; client computes round-trip by diffing with send time.
     public Task<long> Ping(long clientSentMs) => Task.FromResult(clientSentMs);
 

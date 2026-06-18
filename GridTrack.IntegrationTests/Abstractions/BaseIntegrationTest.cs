@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Domain.Deliveries;
@@ -43,7 +44,7 @@ public abstract class BaseIntegrationTest
         using var connection = connectionFactory.CreateConnection();
 
         const string sql = """
-                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District", delivery_routes
+                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District", delivery_routes, district_groups
                            RESTART IDENTITY CASCADE;
                            """;
 
@@ -93,4 +94,20 @@ public abstract class BaseIntegrationTest
             ctx.Set<DeliveryRoute>().AddRange(routes);
             return Task.CompletedTask;
         }, ct);
+
+    // Polls until the assertion passes or the timeout expires.
+    // Use this for assertions that depend on background-service side-effects
+    // (e.g. PositionFlushService writing to Postgres, StreamPositionConsumer broadcasting).
+    protected static async Task AssertEventuallyAsync(Func<Task> assertion, int timeoutMs = 8000)
+    {
+        var sw = Stopwatch.StartNew();
+        while (true)
+        {
+            try { await assertion(); return; }
+            catch when (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                await Task.Delay(200);
+            }
+        }
+    }
 }
