@@ -1,3 +1,5 @@
+using Dapper;
+using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.Errors;
 using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Application.UseCases.Drivers;
@@ -11,7 +13,7 @@ namespace GridTrack.Presentation.Controllers.Telemetry;
 
 [ApiController]
 [Route("/api/telemetry")]
-public class TelemetryController(IMessageBus bus) : ControllerBase
+public class TelemetryController(IMessageBus bus, ISqlConnectionFactory sqlFactory) : ControllerBase
 {
     private static readonly GeometryFactory GeoFactory =
         NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
@@ -29,6 +31,24 @@ public class TelemetryController(IMessageBus bus) : ControllerBase
                 ? NotFound(new { error = result.Error.Message })
                 : UnprocessableEntity(new { error = result.Error.Message });
         return NoContent();
+    }
+
+    // Sync baseline: direct per-request Postgres UPDATE, bypassing the write-behind buffer.
+    // Used for architecture comparison — shows the latency cost without the buffer optimization.
+    [HttpPost("position/sync")]
+    public async Task<IActionResult> UpdatePositionSync(
+        [FromBody] TelemetryPositionRequest request, CancellationToken ct)
+    {
+        using var conn = sqlFactory.CreateConnection();
+        var rows = await conn.ExecuteAsync(
+            """
+            UPDATE "Drivers"
+            SET "Location" = ST_SetSRID(ST_MakePoint(@lng, @lat), 4326),
+                "LastSeen"  = @ts
+            WHERE "DriverId" = @id
+            """,
+            new { id = request.DriverId, lat = request.Lat, lng = request.Lng, ts = request.Timestamp ?? DateTime.UtcNow });
+        return rows == 0 ? NotFound(new { error = "Driver not found." }) : NoContent();
     }
 
     [HttpPost("batch")]

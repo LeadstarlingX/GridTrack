@@ -57,17 +57,29 @@ public static class DependencyInjection
         return services;
     }
     
+    // Loopback + all RFC1918 ranges (Docker gateway, LAN) bypass the rate limiter.
+    // Rate limiting is only meaningful for external internet traffic.
+    private static bool IsInternalIp(System.Net.IPAddress ip)
+    {
+        if (System.Net.IPAddress.IsLoopback(ip)) return true;
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+        var b = ip.GetAddressBytes();
+        return b[0] == 10
+            || (b[0] == 172 && b[1] is >= 16 and <= 31)
+            || (b[0] == 192 && b[1] == 168);
+    }
+
     private static IServiceCollection AddRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
         {
-            // Global limiter: 100 req/min per IP.
-            // Loopback (127.0.0.1 / ::1) is exempt — load tests and dev tools run locally.
+            // Global limiter: 100 req/min per IP, internal traffic exempt.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
                 var remoteIp = context.Connection.RemoteIpAddress;
-                if (remoteIp is not null && System.Net.IPAddress.IsLoopback(remoteIp))
-                    return RateLimitPartition.GetNoLimiter("loopback");
+                if (remoteIp is not null && IsInternalIp(remoteIp))
+                    return RateLimitPartition.GetNoLimiter("internal");
 
                 var key = remoteIp?.ToString() ?? "unknown";
                 return RateLimitPartition.GetFixedWindowLimiter(
