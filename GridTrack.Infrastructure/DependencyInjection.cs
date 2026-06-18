@@ -43,7 +43,7 @@ public static class DependencyInjection
 
         AddPersistence(services, configuration);
         AddCaching(services, configuration);
-        AddMySignalR(services);
+        AddMySignalR(services, configuration);
         AddExternalServices(services, configuration);
         AddSeeding(services);
         AddSimulation(services, configuration);
@@ -86,6 +86,10 @@ public static class DependencyInjection
             configuration.GetSection(DispatchWeightsOptions.SectionName));
         services.AddScoped<IDispatchStrategy, WeightedDispatchStrategy>();
 
+        services.Configure<RouteCostOptions>(
+            configuration.GetSection(RouteCostOptions.SectionName));
+        services.AddSingleton<IRouteCostCalculator, RouteCostCalculator>();
+
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         
         var dataSource = new NpgsqlDataSourceBuilder(connectionString)
@@ -100,16 +104,25 @@ public static class DependencyInjection
         return services;
     }
     
-    private static IServiceCollection AddCaching(this IServiceCollection services, IConfiguration configuration)
+    // Redis is a hard dependency — cache, the position stream, AND the SignalR backplane all
+    // need it. Resolve + normalize the "Cache" connection string in one place and fail fast if
+    // it is missing (an empty/absent Redis connection is not acceptable).
+    private static string ResolveRedisConnectionString(IConfiguration configuration)
     {
-        var rawCs = configuration.GetConnectionString("Cache") ??
-                    throw new ArgumentNullException(nameof(configuration));
+        var rawCs = configuration.GetConnectionString("Cache")
+            ?? throw new InvalidOperationException(
+                "ConnectionStrings:Cache (Redis) is required but was not configured.");
 
         // Render (and some other providers) supply a redis:// URI.
         // StackExchange.Redis expects plain "host:port[,password=...]" — strip the scheme.
-        var connectionString = rawCs.StartsWith("redis://", StringComparison.OrdinalIgnoreCase)
+        return rawCs.StartsWith("redis://", StringComparison.OrdinalIgnoreCase)
             ? rawCs["redis://".Length..]
             : rawCs;
+    }
+
+    private static IServiceCollection AddCaching(this IServiceCollection services, IConfiguration configuration)
+    {
+        var connectionString = ResolveRedisConnectionString(configuration);
 
         services.AddStackExchangeRedisCache(options => options.Configuration = connectionString);
 
@@ -126,8 +139,10 @@ public static class DependencyInjection
         return services;
     }
     
-    private static IServiceCollection AddMySignalR(this IServiceCollection services)
+    private static IServiceCollection AddMySignalR(this IServiceCollection services, IConfiguration configuration)
     {
+        var redisConnectionString = ResolveRedisConnectionString(configuration);
+
         // Serialize enums (AnomalyType, DeliveryStatus) as strings so SignalR payloads
         // match the frontend's string unions instead of emitting integers.
         services.AddSignalR(o =>
@@ -137,6 +152,15 @@ public static class DependencyInjection
                 // before the server considers the connection dead.
                 o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
                 o.KeepAliveInterval     = TimeSpan.FromSeconds(15);
+            })
+            // Redis backplane: every API replica publishes/subscribes hub messages through Redis,
+            // so a broadcast on one node reaches clients connected to another node. Redis is a
+            // hard dependency (same instance as the cache + position stream) — there is no
+            // in-memory fallback. ChannelPrefix namespaces the backplane's pub/sub channels so
+            // other apps / future tenants sharing this Redis can't cross-talk.
+            .AddStackExchangeRedis(redisConnectionString, options =>
+            {
+                options.Configuration.ChannelPrefix = RedisChannel.Literal("gridtrack-signalr");
             })
             .AddJsonProtocol(o =>
                 o.PayloadSerializerOptions.Converters.Add(
