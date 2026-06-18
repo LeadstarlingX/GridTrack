@@ -1,0 +1,63 @@
+# Minimal, Linux/CI-friendly stack for the k6 load test in GitHub Actions.
+#
+# Why a separate file: the main compose.yaml mounts Windows bind paths
+# (.\.containers\...) and depends on OSRM (needs a prebuilt Syria map extract)
+# and ClickHouse. None of that exists on a GitHub runner. This file brings up
+# only what the write-behind + analytics load paths need — db, redis, rabbitmq,
+# api — with no host volumes, simulation off, and ClickHouse disabled.
+#
+# Usage (CI): docker compose -f compose.ci.yaml up -d --build
+services:
+  gridtrack.db:
+    image: postgis/postgis:18-3.6
+    command: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=256MB"]
+    environment:
+      POSTGRES_DB: gridtrack_docker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gridtrack_docker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  gridtrack.redis:
+    image: redis:8.4.0
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  gridtrack.rabbitmq:
+    image: rabbitmq:management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  gridtrack.api:
+    image: gridtrack.api
+    build:
+      context: .
+      dockerfile: GridTrack.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__ClickHouse: ""   # disable cold-path flush — ClickHouse not in CI
+      Simulation__Enabled: "false"        # k6 is the only load source
+      FORCE_RESEED: "true"                # fresh seeded drivers each run
+    ports:
+      - "5098:8080"
+    depends_on:
+      gridtrack.db:
+        condition: service_healthy
+      gridtrack.redis:
+        condition: service_healthy
+      gridtrack.rabbitmq:
+        condition: service_healthy

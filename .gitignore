@@ -13,6 +13,9 @@ progress.md
 Integration_Plan.md
 DEPLOYMENT.md
 
+# k6 test results (generated output — not source)
+load-tests/results/
+
 # Runtime data
 observability/**/data/
 observability/**/tmp/

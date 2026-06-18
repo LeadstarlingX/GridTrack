@@ -1,354 +1,390 @@
 /**
- * GridTrack k6 load test
+ * GridTrack k6 stress test — production-grade
  *
- * Targets Render free tier: 0.5 vCPU / 256 MB .NET · 128 MB Python · 25 MB Redis
- * Run:
- *   k6 run --env BASE=https://gridtrack-api.onrender.com gridtrack.js
- *   k6 run --env BASE=http://localhost:5000 gridtrack.js          (local)
+ * Architecture under test:
+ *   Telemetry hot path : HTTP → ConcurrentDictionary write (~ns) → Redis XADD (fire-and-forget)
+ *                        → StreamPositionConsumer → SignalR fan-out (district + district-group subs)
+ *   Write-behind flush : PositionFlushService drains buffer every 5 s → Postgres batch UPDATE
+ *                        + ClickHouse bulk insert
  *
- * Scenarios are staggered so the service doesn't hit all load simultaneously.
- * Each scenario is independently thresholded so you can see which path breaks first.
+ * Usage:
+ *   .\load-tests\stress.ps1               # 500 driver VUs, auto-fetches real driver IDs
+ *   .\load-tests\stress.ps1 2000          # push toward the ceiling
+ *   .\load-tests\stress.ps1 5000          # find where it breaks
+ *
+ *   k6 run --env BASE=http://localhost:5098 \
+ *          --env DRIVER_VUS=1000          \
+ *          --env DRIVER_IDS=id1,id2,...   \
+ *          --env JWT_TOKEN=<clerk_jwt>    \   # enables SignalR negotiate scenario
+ *          load-tests/gridtrack.js
  */
 
 import http from 'k6/http'
 import { check, sleep, group } from 'k6'
-import { Rate, Trend } from 'k6/metrics'
+import { Rate, Trend, Counter } from 'k6/metrics'
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js'
 
-// ── Config ────────────────────────────────────────────────────────────────────
+// ── Config ─────────────────────────────────────────────────────────────────────
 
-const BASE        = __ENV.BASE        || 'http://localhost:5000'
-// How many simulated drivers to hammer the telemetry endpoint.
-// Local smoke:   DRIVER_VUS=10   (~10 events/s, verifies the pipeline works)
-// Stress test:   DRIVER_VUS=1000 (~1000 events/s, single-container limit test)
-const DRIVER_VUS  = parseInt(__ENV.DRIVER_VUS  || '50')
-// Optional Clerk JWT — required only for signalr_negotiate (hub is [Authorize]).
-// If omitted that scenario still runs but skips the HTTP request (no error inflation).
-// Obtain from browser DevTools: Network → dashboardHub/negotiate → Authorization header.
-const JWT_TOKEN   = __ENV.JWT_TOKEN   || ''
+const BASE         = __ENV.BASE          || 'http://localhost:5098'
+const DRIVER_VUS   = parseInt(__ENV.DRIVER_VUS || '500')
+const DRIVER_IDS   = (__ENV.DRIVER_IDS   || '').split(',').filter(Boolean)
+const JWT_TOKEN    = __ENV.JWT_TOKEN     || ''
+// WRITE_BEHIND=true  → /api/telemetry/position  (buffered, default)
+// WRITE_BEHIND=false → /api/telemetry/position/sync  (direct Postgres, baseline)
+const WRITE_BEHIND = (__ENV.WRITE_BEHIND ?? 'true') !== 'false'
+// QUICK=true  → shorter stages for side-by-side comparison runs
+const QUICK        = __ENV.QUICK === 'true'
 
-// Seed data — replace with real IDs from your database before running remotely.
-// LOCAL: run the app, fetch /api/deliveries, copy a few IDs here.
-const SEED = {
-    deliveryIds: [
-        // 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-    ],
-    driverIds: [
-        // 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-    ],
-    districtIds: ['mezzeh', 'malki', 'kafarsouseh'],
-    // Damascus centre — matches APP_CONFIG.map.center
-    sampleLat: 33.5138,
-    sampleLng: 36.2765,
-}
+const TEL_URL = WRITE_BEHIND
+    ? `${BASE}/api/telemetry/position`
+    : `${BASE}/api/telemetry/position/sync`
 
-// ── Custom metrics ────────────────────────────────────────────────────────────
+const MODE_LABEL = WRITE_BEHIND ? 'write-behind' : 'direct-postgres'
 
-const analyticsLatency     = new Trend('gridtrack_analytics_latency',    true)
-const signalrNegLatency    = new Trend('gridtrack_signalr_neg_latency',  true)
-const deliveryWriteLatency = new Trend('gridtrack_delivery_write_latency', true)
-const aiChatLatency        = new Trend('gridtrack_ai_chat_latency',      true)
-const driverTelLatency     = new Trend('gridtrack_driver_tel_latency',   true)
-const errorRate            = new Rate('gridtrack_error_rate')
+const DISTRICTS = ['mezzeh', 'malki', 'kafarsouseh', 'babtouma', 'kafrsousa', 'bab-sharqi', 'midan', 'qaboun']
 
-// ── Options ───────────────────────────────────────────────────────────────────
+// ── Custom metrics ──────────────────────────────────────────────────────────────
+
+const telLatency  = new Trend('gridtrack_driver_tel_latency',      true)
+const readLatency = new Trend('gridtrack_analytics_latency',       true)
+const delLatency  = new Trend('gridtrack_delivery_write_latency',  true)
+const dgLatency   = new Trend('gridtrack_district_group_latency',  true)
+const hubLatency  = new Trend('gridtrack_signalr_neg_latency',     true)
+const errorRate   = new Rate('gridtrack_error_rate')
+const accepted    = new Counter('gridtrack_tel_accepted')   // 204s only — real write-behind hits
+
+// ── Scenarios ──────────────────────────────────────────────────────────────────
 
 export const options = {
     scenarios: {
-        // 1. Read / analytics — simulates multiple dashboard browser tabs
+
+        // 1. Driver GPS telemetry — the write-behind hot path (or direct-postgres baseline).
+        //    Each VU = one driver posting 1 position/s.
+        //    Ramps up to DRIVER_VUS, holds for 2 min to measure sustained throughput,
+        //    then cools down. Use DRIVER_VUS=2000-5000 to find the throughput ceiling.
+        driver_telemetry: {
+            executor: 'ramping-vus',
+            startVUs: 0,
+            stages: QUICK
+                ? [
+                    { duration: '15s', target: Math.floor(DRIVER_VUS * 0.25) },
+                    { duration: '15s', target: DRIVER_VUS },
+                    { duration: '45s', target: DRIVER_VUS },
+                    { duration: '15s', target: 0 },
+                ]
+                : [
+                    { duration: '30s', target: Math.floor(DRIVER_VUS * 0.25) },
+                    { duration: '30s', target: DRIVER_VUS },
+                    { duration: '2m',  target: DRIVER_VUS },
+                    { duration: '20s', target: 0 },
+                ],
+            gracefulRampDown: '15s',
+            exec: 'driverTelemetry',
+        },
+
+        // 2. Concurrent dashboard observers hitting all analytics endpoints.
         analytics_read: {
             executor: 'ramping-vus',
             startVUs: 0,
-            stages: [
-                { duration: '20s', target: 10 },  // warm up
-                { duration: '60s', target: 30 },  // sustained moderate
-                { duration: '30s', target: 50 },  // peak — Render's breaking point
-                { duration: '20s', target: 0  },  // cool down
-            ],
+            stages: QUICK
+                ? [
+                    { duration: '15s', target: 50  },
+                    { duration: '15s', target: 150 },
+                    { duration: '45s', target: 150 },
+                    { duration: '15s', target: 0   },
+                ]
+                : [
+                    { duration: '30s', target: 50  },
+                    { duration: '30s', target: 150 },
+                    { duration: '2m',  target: 150 },
+                    { duration: '20s', target: 0   },
+                ],
             gracefulRampDown: '10s',
             exec: 'analyticsRead',
         },
 
-        // 2. SignalR negotiate — one per browser tab; each reconnects every ~30s on Render cold starts
-        signalr_negotiate: {
-            executor: 'constant-arrival-rate',
-            rate: 3,               // 3 negotiates/sec = 180/min
-            timeUnit: '1s',
-            duration: '2m',
-            preAllocatedVUs: 10,
-            maxVUs: 20,
-            startTime: '10s',      // start after analytics warms the service
-            exec: 'signalrNegotiate',
+        // 3. Delivery lifecycle: create → auto-assign → cancel.
+        //    Reduced to 5 VUs in QUICK mode — OSRM route calc is the bottleneck here,
+        //    not the write-behind architecture. Full stress.ps1 uses 20.
+        delivery_lifecycle: {
+            executor: 'constant-vus',
+            vus: QUICK ? 5 : 20,
+            duration: QUICK ? '90s' : '3m',
+            startTime: QUICK ? '15s' : '30s',
+            exec: 'deliveryLifecycle',
         },
 
-        // 3. Write path — delivery lifecycle under load
-        delivery_writes: {
+        // 4. District group CRUD — exercises the new endpoints end-to-end.
+        district_group_crud: {
             executor: 'constant-vus',
             vus: 5,
-            duration: '90s',
-            startTime: '30s',
-            exec: 'deliveryWrites',
+            duration: QUICK ? '75s' : '2m30s',
+            startTime: QUICK ? '15s' : '30s',
+            exec: 'districtGroupCrud',
         },
 
-        // 4. AI chat — Groq-backed; test latency ceiling + 429 handling
-        //    Low VU count because Groq free tier rate-limits aggressively.
-        ai_chat: {
-            executor: 'constant-vus',
-            vus: 2,
-            duration: '60s',
-            startTime: '60s',
-            exec: 'aiChat',
-        },
-
-        // 5. Driver GPS telemetry — the real stress test.
-        //    Each VU = one driver posting one position update per second.
-        //    DRIVER_VUS=1000 → 1000 events/s through the full pipeline
-        //    (handler → EF → Postgres → DomainEvent → SignalR broadcast).
-        //    Pair with `dotnet-counters monitor` to watch CPU/memory ceiling.
-        //    Pre-condition: SEED.driverIds must be populated with real IDs,
-        //    or run with Simulation:Enabled=false and let k6 be the only source.
-        driver_telemetry: {
-            executor: 'constant-vus',
-            vus: DRIVER_VUS,
-            duration: '2m',
-            startTime: '15s',   // start after analytics warms the service
-            exec: 'driverTelemetry',
+        // 5. SignalR negotiate — needs a Clerk JWT to reach the hub.
+        //    Skipped (VU sleeps) when JWT_TOKEN is not provided.
+        signalr_negotiate: {
+            executor: 'constant-arrival-rate',
+            rate: 10,
+            timeUnit: '1s',
+            duration: QUICK ? '90s' : '3m',
+            preAllocatedVUs: 20,
+            maxVUs: 40,
+            startTime: QUICK ? '15s' : '30s',
+            exec: 'signalrNegotiate',
         },
     },
 
     thresholds: {
-        // Overall HTTP health
-        http_req_failed:             ['rate<0.02'],          // <2% error rate
-        http_req_duration:           ['p(95)<3000'],         // broad safety net
+        // HTTP health
+        http_req_failed:   ['rate<0.01'],       // <1% errors globally
+        http_req_duration: ['p(95)<1000'],      // broad safety net
 
-        // Per-scenario custom metrics
-        'gridtrack_analytics_latency':     ['p(95)<500', 'p(99)<1500'],
-        'gridtrack_signalr_neg_latency':   ['p(95)<300'],
-        'gridtrack_delivery_write_latency':['p(95)<800'],
-        'gridtrack_ai_chat_latency':       ['p(95)<8000'],   // Groq cold start can be slow
-        'gridtrack_driver_tel_latency':    ['p(95)<200', 'p(99)<500'],  // hot path must be fast
-        'gridtrack_error_rate':            ['rate<0.02'],
+        // Per-path
+        'gridtrack_driver_tel_latency':     ['p(95)<20',   'p(99)<100'],  // write-behind: should be <10ms
+        'gridtrack_analytics_latency':      ['p(95)<500',  'p(99)<2000'], // Postgres aggregates under load
+        'gridtrack_delivery_write_latency': ['p(95)<500'],
+        'gridtrack_district_group_latency': ['p(95)<300'],
+        'gridtrack_signalr_neg_latency':    ['p(95)<100'],
+        'gridtrack_error_rate':             ['rate<0.01'],
     },
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────────
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
 
-function today()     { return new Date().toISOString().slice(0, 10) }
-function daysAgo(n)  { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10) }
-
 function ok(res, tag) {
-    const passed = check(res, {
-        [`${tag} status 2xx`]: (r) => r.status >= 200 && r.status < 300,
-    })
+    const passed = check(res, { [`${tag} 2xx`]: (r) => r.status >= 200 && r.status < 300 })
     errorRate.add(!passed)
     return passed
 }
 
-function randomFrom(arr) {
-    return arr[Math.floor(Math.random() * arr.length)]
+function jitter(base) { return base * (0.85 + Math.random() * 0.3) }
+function pick(arr)    { return arr[Math.floor(Math.random() * arr.length)] }
+function today()      { return new Date().toISOString().slice(0, 10) }
+function daysAgo(n)   { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10) }
+
+// Damascus centre + small random walk
+function pos() {
+    return {
+        lat: 33.5138 + (Math.random() - 0.5) * 0.1,
+        lng: 36.2765 + (Math.random() - 0.5) * 0.1,
+    }
 }
 
-// ── Scenario 1: Analytics read ────────────────────────────────────────────────
+// ── 1. Driver telemetry ───────────────────────────────────────────────────────
+
+export function driverTelemetry() {
+    // Cycle through real IDs if provided; otherwise fake UUIDs exercise the
+    // existence-check path and still validate the endpoint + middleware stack.
+    const driverId = DRIVER_IDS.length > 0
+        ? DRIVER_IDS[__VU % DRIVER_IDS.length]
+        : `00000000-0000-0000-0000-${String(__VU).padStart(12, '0')}`
+
+    const { lat, lng } = pos()
+    const t0 = Date.now()
+
+    const res = http.post(
+        TEL_URL,
+        JSON.stringify({ driverId, lat, lng }),
+        { headers: JSON_HEADERS, tags: { name: 'telemetry/position' } },
+    )
+    telLatency.add(res.timings.duration)
+
+    const hit = res.status === 204   // write-behind path fully exercised
+    const ok  = hit || res.status === 404
+    if (hit) accepted.add(1)
+    check(res, { 'telemetry 204|404': () => ok })
+    errorRate.add(!ok)
+
+    // Target 1 Hz; subtract elapsed to keep rate stable
+    const wait = Math.max(0, 1000 - (Date.now() - t0)) / 1000
+    if (wait > 0) sleep(wait)
+}
+
+// ── 2. Analytics read ─────────────────────────────────────────────────────────
 
 export function analyticsRead() {
     group('analytics', () => {
-        // Dashboard landing — these fire on every page open
-        const summaryRes = http.get(`${BASE}/api/analytics/summary`, { tags: { name: 'analytics_summary' } })
-        analyticsLatency.add(summaryRes.timings.duration)
-        ok(summaryRes, 'analytics/summary')
+        const reads = [
+            [`${BASE}/api/analytics/summary`,                                               'analytics/summary'],
+            [`${BASE}/api/analytics/trends?from=${daysAgo(7)}&to=${today()}&granularity=day`, 'analytics/trends'],
+            [`${BASE}/api/analytics/drivers`,                                               'analytics/drivers'],
+            [`${BASE}/api/deliveries?pageSize=10&from=${daysAgo(7)}&to=${today()}`,         'deliveries/list'],
+            [`${BASE}/api/drivers?pageSize=10`,                                             'drivers/list'],
+            [`${BASE}/api/districts`,                                                       'districts'],
+            [`${BASE}/api/district-groups`,                                                 'district-groups/list'],
+        ]
 
-        sleep(0.2)
+        for (const [url, tag] of reads) {
+            const res = http.get(url, { tags: { name: tag } })
+            readLatency.add(res.timings.duration)
+            ok(res, tag)
+            sleep(jitter(0.1))
+        }
 
-        const distRes = http.get(`${BASE}/api/districts`, { tags: { name: 'districts' } })
-        ok(distRes, 'districts')
-
-        sleep(0.3)
-
-        // Trend chart (7-day default)
-        const trendRes = http.get(
-            `${BASE}/api/analytics/trends?from=${daysAgo(7)}&to=${today()}&granularity=day`,
-            { tags: { name: 'analytics_trends' } },
-        )
-        analyticsLatency.add(trendRes.timings.duration)
-        ok(trendRes, 'analytics/trends')
-
-        sleep(0.5)
-
-        // Deliveries table (first page)
-        const delRes = http.get(
-            `${BASE}/api/deliveries?pageSize=6&from=${daysAgo(7)}&to=${today()}`,
-            { tags: { name: 'deliveries_list' } },
-        )
-        analyticsLatency.add(delRes.timings.duration)
-        ok(delRes, 'deliveries list')
-
-        sleep(0.4)
-
-        // Driver list
-        const drvRes = http.get(`${BASE}/api/drivers?pageSize=8`, { tags: { name: 'drivers_list' } })
-        ok(drvRes, 'drivers list')
-
-        sleep(0.3)
-
-        // Driver analytics (heavier — multiple joins)
-        const drvAnaRes = http.get(`${BASE}/api/analytics/drivers`, { tags: { name: 'analytics_drivers' } })
-        analyticsLatency.add(drvAnaRes.timings.duration)
-        ok(drvAnaRes, 'analytics/drivers')
-
-        sleep(randomFrom([0.5, 0.8, 1.2]))  // simulate human think time
+        sleep(jitter(0.4))
     })
 }
 
-// ── Scenario 2: SignalR negotiate ─────────────────────────────────────────────
+// ── 3. Delivery lifecycle ─────────────────────────────────────────────────────
 
-export function signalrNegotiate() {
-    // Negotiate is the HTTP handshake that precedes the WebSocket upgrade.
-    // k6 can't maintain long-lived WebSocket connections in arrival-rate mode,
-    // so we test the most expensive part: the negotiate POST.
-    //
-    // The hub has [Authorize] — without JWT_TOKEN the request returns 401,
-    // which is auth working correctly, not a pipeline error.
-    // Pass --env JWT_TOKEN=<clerk_jwt> to test authenticated negotiate latency.
-    if (!JWT_TOKEN) {
-        sleep(1)
-        return
-    }
+export function deliveryLifecycle() {
+    group('delivery', () => {
+        const { lat, lng } = pos()
 
-    const res = http.post(
-        `${BASE}/dashboardHub/negotiate?negotiateVersion=1`,
-        null,
-        {
-            headers: { 'Authorization': `Bearer ${JWT_TOKEN}` },
-            tags: { name: 'signalr_negotiate' },
-        },
-    )
-    signalrNegLatency.add(res.timings.duration)
-    check(res, { 'negotiate 200': (r) => r.status === 200 })
-    errorRate.add(res.status !== 200)
-    sleep(0.2)
-}
-
-// ── Scenario 3: Delivery write path ───────────────────────────────────────────
-
-export function deliveryWrites() {
-    group('delivery_write', () => {
-        // Create a delivery
         const createRes = http.post(
             `${BASE}/api/deliveries`,
-            JSON.stringify({
-                lat: SEED.sampleLat + (Math.random() - 0.5) * 0.05,
-                lng: SEED.sampleLng + (Math.random() - 0.5) * 0.05,
-                districtId: null,   // let backend H3-detect
-            }),
-            { headers: JSON_HEADERS, tags: { name: 'delivery_create' } },
+            JSON.stringify({ lat, lng, districtId: null }),
+            { headers: JSON_HEADERS, tags: { name: 'delivery/create' } },
         )
-        deliveryWriteLatency.add(createRes.timings.duration)
-        const created = ok(createRes, 'delivery create')
+        delLatency.add(createRes.timings.duration)
+        if (!ok(createRes, 'delivery/create')) { sleep(1); return }
 
-        if (!created) { sleep(1); return }
-
-        let deliveryId = null
-        try { deliveryId = JSON.parse(createRes.body).deliveryId } catch {}
+        let deliveryId
+        try   { deliveryId = JSON.parse(createRes.body).deliveryId } catch {}
         if (!deliveryId) { sleep(1); return }
 
-        sleep(0.5)
+        sleep(jitter(0.3))
 
-        // Auto-assign a driver (exercises PostGIS nearest-driver query + Wolverine pipeline)
         const assignRes = http.post(
-            `${BASE}/api/deliveries/${deliveryId}/auto-assign`,
-            null,
-            { tags: { name: 'delivery_auto_assign' } },
+            `${BASE}/api/deliveries/${deliveryId}/auto-assign`, null,
+            { tags: { name: 'delivery/auto-assign' } },
         )
-        deliveryWriteLatency.add(assignRes.timings.duration)
-        // 409 = no driver available — not an error for our purposes
-        check(assignRes, { 'auto-assign 2xx or 409': (r) => r.status < 300 || r.status === 409 })
+        delLatency.add(assignRes.timings.duration)
+        check(assignRes, { 'assign 2xx|409': (r) => r.status < 300 || r.status === 409 })
 
-        sleep(0.8)
+        sleep(jitter(0.5))
 
-        // Cancel the delivery (clean up, avoids polluting DB with test data)
         const cancelRes = http.post(
             `${BASE}/api/deliveries/${deliveryId}/cancel`,
-            JSON.stringify({ reason: 'k6 load test cleanup' }),
-            { headers: JSON_HEADERS, tags: { name: 'delivery_cancel' } },
+            JSON.stringify({ reason: 'k6 cleanup' }),
+            { headers: JSON_HEADERS, tags: { name: 'delivery/cancel' } },
         )
-        ok(cancelRes, 'delivery cancel')
+        delLatency.add(cancelRes.timings.duration)
+        ok(cancelRes, 'delivery/cancel')
 
-        sleep(randomFrom([0.5, 1.0, 1.5]))
+        sleep(jitter(0.8))
     })
 }
 
-// ── Scenario 5: Driver GPS telemetry ─────────────────────────────────────────
-//
-// Usage:
-//   k6 run --env BASE=http://localhost:5000 --env DRIVER_VUS=1000 gridtrack.js
-//
-// Each VU simulates one driver moving around Damascus at ~1 update/s.
-// Jitter keeps positions realistic (± 0.05°) and avoids identical coordinates.
-// If SEED.driverIds is populated, VUs cycle through real IDs; otherwise a
-// stable random UUID per VU is used so the endpoint returns 404 (expected
-// when Simulation is still running and drivers exist in DB, fill the seed).
-//
-// Pair with: dotnet-counters monitor --process-name GridTrack.Api
-//   to watch GC pressure, thread pool queue depth, CPU ceiling in real time.
+// ── 4. District group CRUD ────────────────────────────────────────────────────
 
-export function driverTelemetry() {
-    // Stable "driver" identity for this VU — reuses same ID each iteration
-    // so position updates look like one continuous driver trace.
-    const driverId = SEED.driverIds.length > 0
-        ? SEED.driverIds[__VU % SEED.driverIds.length]
-        : `00000000-0000-0000-0000-${String(__VU).padStart(12, '0')}`
+export function districtGroupCrud() {
+    group('district-groups', () => {
+        const createRes = http.post(
+            `${BASE}/api/district-groups`,
+            JSON.stringify({
+                name: `k6-${__VU}-${Date.now()}`,
+                districtIds: [pick(DISTRICTS), pick(DISTRICTS)].filter((v, i, a) => a.indexOf(v) === i),
+            }),
+            { headers: JSON_HEADERS, tags: { name: 'dg/create' } },
+        )
+        dgLatency.add(createRes.timings.duration)
+        if (!ok(createRes, 'dg/create')) { sleep(2); return }
 
-    const lat = SEED.sampleLat + (Math.random() - 0.5) * 0.05
-    const lng = SEED.sampleLng + (Math.random() - 0.5) * 0.05
+        let id
+        try   { id = JSON.parse(createRes.body).id } catch {}
+        if (!id) { sleep(2); return }
 
-    const res = http.post(
-        `${BASE}/api/telemetry/position`,
-        JSON.stringify({ driverId, lat, lng }),
-        { headers: JSON_HEADERS, tags: { name: 'driver_telemetry' } },
-    )
+        sleep(jitter(0.2))
 
-    driverTelLatency.add(res.timings.duration)
+        const getRes = http.get(`${BASE}/api/district-groups/${id}`, { tags: { name: 'dg/get' } })
+        dgLatency.add(getRes.timings.duration)
+        ok(getRes, 'dg/get')
 
-    // 404 = driver not in DB (seed not populated) — expected in smoke runs,
-    // not counted as a pipeline error so the test run still finishes cleanly.
-    const pipelineError = res.status !== 204 && res.status !== 404
-    check(res, { 'telemetry 204 or 404': (r) => !pipelineError })
-    errorRate.add(pipelineError)
+        sleep(jitter(0.2))
 
-    // 1 Hz: subtract the request duration so we don't drift above 1/s
-    const remaining = Math.max(0, 1000 - res.timings.duration) / 1000
-    if (remaining > 0) sleep(remaining)
+        const putRes = http.put(
+            `${BASE}/api/district-groups/${id}`,
+            JSON.stringify({ name: `k6-${__VU}-updated`, districtIds: [pick(DISTRICTS)] }),
+            { headers: JSON_HEADERS, tags: { name: 'dg/update' } },
+        )
+        dgLatency.add(putRes.timings.duration)
+        ok(putRes, 'dg/update')
+
+        sleep(jitter(0.2))
+
+        const delRes = http.del(`${BASE}/api/district-groups/${id}`, null, { tags: { name: 'dg/delete' } })
+        dgLatency.add(delRes.timings.duration)
+        ok(delRes, 'dg/delete')
+
+        sleep(jitter(1.0))
+    })
 }
 
-// ── Scenario 4: AI chat ───────────────────────────────────────────────────────
+// ── 5. SignalR negotiate ──────────────────────────────────────────────────────
 
-export function aiChat() {
-    // Use non-streaming endpoint — streaming needs k6 ws or experimental fetch.
-    // This still exercises: .NET → Groq API → JSON parse → response.
+export function signalrNegotiate() {
+    if (!JWT_TOKEN) { sleep(1); return }
+
     const res = http.post(
-        `${BASE}/api/analysis/chat`,
-        JSON.stringify({
-            messages: [
-                { role: 'user', content: 'What is the current status of district mezzeh? Be brief.' },
-            ],
-            csvData: '',  // minimal payload — tests Groq latency, not CSV parsing
-        }),
+        `${BASE}/dashboardHub/negotiate?negotiateVersion=1`, null,
         {
-            headers: JSON_HEADERS,
-            tags: { name: 'ai_chat' },
-            timeout: '15s',   // Groq cold start can be 8–12s
+            headers: { Authorization: `Bearer ${JWT_TOKEN}` },
+            tags: { name: 'signalr/negotiate' },
         },
     )
-    aiChatLatency.add(res.timings.duration)
+    hubLatency.add(res.timings.duration)
+    check(res, { 'negotiate 200': (r) => r.status === 200 })
+    errorRate.add(res.status !== 200)
+    sleep(0.1)
+}
 
-    // 429 = Groq rate limit — expected under load, not a system failure
-    const rateLimited = res.status === 429
-    check(res, {
-        'ai chat ok or rate-limited': (r) => r.status === 200 || r.status === 429,
-    })
-    errorRate.add(res.status !== 200 && !rateLimited)
+// ── handleSummary — writes results/latest-{mode}.{md,json} ───────────────────
 
-    // Back off if rate-limited
-    sleep(rateLimited ? 3 : randomFrom([2, 3, 4]))
+export function handleSummary(data) {
+    const m = (metric, stat) => {
+        const v = data.metrics?.[metric]?.values?.[stat]
+        return v !== undefined ? v.toFixed(2) : 'N/A'
+    }
+    const pct = (metric) => {
+        const v = data.metrics?.[metric]?.values?.['rate']
+        return v !== undefined ? (v * 100).toFixed(2) + '%' : 'N/A'
+    }
+
+    const vus   = data.metrics?.vus_max?.values?.max ?? '?'
+    const reqs  = data.metrics?.http_reqs?.values?.count ?? '?'
+    const rps   = data.metrics?.http_reqs?.values?.rate?.toFixed(1) ?? '?'
+    const errR  = pct('http_req_failed')
+
+    const md = `## GridTrack Load Test — \`${MODE_LABEL}\`
+
+> **VUs:** ${vus} &nbsp;|&nbsp; **Requests:** ${reqs} &nbsp;|&nbsp; **RPS:** ${rps} &nbsp;|&nbsp; **Error rate:** ${errR}
+
+### Latency by path (ms)
+
+| Path | p(50) | p(90) | p(95) | p(99) |
+|------|------:|------:|------:|------:|
+| Telemetry (${MODE_LABEL}) | ${m('gridtrack_driver_tel_latency','p(50)')} | ${m('gridtrack_driver_tel_latency','p(90)')} | ${m('gridtrack_driver_tel_latency','p(95)')} | ${m('gridtrack_driver_tel_latency','p(99)')} |
+| Analytics reads | ${m('gridtrack_analytics_latency','p(50)')} | ${m('gridtrack_analytics_latency','p(90)')} | ${m('gridtrack_analytics_latency','p(95)')} | ${m('gridtrack_analytics_latency','p(99)')} |
+| Delivery lifecycle | ${m('gridtrack_delivery_write_latency','p(50)')} | ${m('gridtrack_delivery_write_latency','p(90)')} | ${m('gridtrack_delivery_write_latency','p(95)')} | ${m('gridtrack_delivery_write_latency','p(99)')} |
+| District group CRUD | ${m('gridtrack_district_group_latency','p(50)')} | ${m('gridtrack_district_group_latency','p(90)')} | ${m('gridtrack_district_group_latency','p(95)')} | ${m('gridtrack_district_group_latency','p(99)')} |
+| SignalR negotiate | ${m('gridtrack_signalr_neg_latency','p(50)')} | ${m('gridtrack_signalr_neg_latency','p(90)')} | ${m('gridtrack_signalr_neg_latency','p(95)')} | ${m('gridtrack_signalr_neg_latency','p(99)')} |
+
+### Thresholds
+
+| Metric | Limit | Result |
+|--------|-------|--------|
+| Telemetry p(95) | < 20 ms | ${m('gridtrack_driver_tel_latency','p(95)')} ms |
+| Telemetry p(99) | < 100 ms | ${m('gridtrack_driver_tel_latency','p(99)')} ms |
+| Analytics p(95) | < 500 ms | ${m('gridtrack_analytics_latency','p(95)')} ms |
+| Analytics p(99) | < 2000 ms | ${m('gridtrack_analytics_latency','p(99)')} ms |
+| Global error rate | < 1% | ${errR} |
+
+*Generated by k6 ${new Date().toISOString()}*
+`
+
+    const outDir  = 'load-tests/results'
+    const outBase = `${outDir}/latest-${MODE_LABEL}`
+
+    return {
+        stdout:              textSummary(data, { indent: ' ', enableColors: true }),
+        [`${outBase}.md`]:   md,
+        [`${outBase}.json`]: JSON.stringify(data, null, 2),
+    }
 }
