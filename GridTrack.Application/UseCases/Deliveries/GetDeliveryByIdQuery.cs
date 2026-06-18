@@ -32,6 +32,9 @@ public sealed class GetDeliveryByIdHandler
             EtaSeconds: null,
             delivery.CreatedAt,
             updatedAt,
-            RoutePolyline: polyline);
+            RoutePolyline: polyline,
+            delivery.RouteDistanceMeters,
+            delivery.RouteDurationSeconds,
+            delivery.RouteCost);
     }
 }

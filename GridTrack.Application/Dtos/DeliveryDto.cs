@@ -19,4 +19,7 @@ public sealed class DeliveryDto
     public DateTime? DeliveredAt { get; init; }
     public DateTime? CancelledAt { get; init; }
     public string? AnomalyReason { get; init; }
+    public double? RouteDistanceMeters { get; init; }
+    public double? RouteDurationSeconds { get; init; }
+    public decimal? RouteCost { get; init; }
 }

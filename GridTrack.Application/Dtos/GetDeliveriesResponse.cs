@@ -7,7 +7,8 @@ public sealed record DeliveryListItemResponse(
     Guid? AssignedDriverId,
     string? AssignedDriverName,
     int? EtaSeconds,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    decimal? RouteCost);
 
 public sealed record GetDeliveriesResponse(
     IReadOnlyList<DeliveryListItemResponse> Items,

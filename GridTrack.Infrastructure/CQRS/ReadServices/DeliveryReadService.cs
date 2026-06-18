@@ -39,7 +39,10 @@ public sealed class DeliveryReadService : IDeliveryReadService
                                "PickedUpAt",
                                "DeliveredAt",
                                "CancelledAt",
-                               "AnomalyReason"
+                               "AnomalyReason",
+                               "RouteDistanceMeters",
+                               "RouteDurationSeconds",
+                               "RouteCost"
                            FROM public."Deliveries"
                            WHERE "DeliveryId" = @Id
                            """;
@@ -66,7 +69,10 @@ public sealed class DeliveryReadService : IDeliveryReadService
                                "PickedUpAt",
                                "DeliveredAt",
                                "CancelledAt",
-                               "AnomalyReason"
+                               "AnomalyReason",
+                               "RouteDistanceMeters",
+                               "RouteDurationSeconds",
+                               "RouteCost"
                            FROM public."Deliveries"
                            WHERE "DistrictId" = @DistrictId
                            ORDER BY "CreatedAt" DESC
@@ -166,7 +172,8 @@ public sealed class DeliveryReadService : IDeliveryReadService
                        CASE WHEN d."ExpectedEta" IS NOT NULL
                             THEN EXTRACT(EPOCH FROM (d."ExpectedEta" - NOW()))::int
                             ELSE NULL END                                                 AS "EtaSeconds",
-                       d."CreatedAt"
+                       d."CreatedAt",
+                       d."RouteCost"
                    FROM public."Deliveries" d
                    LEFT JOIN public."Drivers" dr ON dr."DriverId" = d."AssignedDriverId"
                    {whereClause}

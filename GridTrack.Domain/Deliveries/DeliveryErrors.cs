@@ -14,4 +14,5 @@ public static class DeliveryErrors
     public static readonly Error InvalidStatusForOperation = new("Delivery.InvalidStatusForOperation", "Delivery status does not allow this operation.");
     public static readonly Error AlreadyFlagged = new("Delivery.AlreadyFlagged", "Delivery has already been flagged as anomalous.");
     public static readonly Error InvalidUrgencyScore = new("Delivery.InvalidUrgencyScore", "Urgency score must be between 1 and 10.");
+    public static readonly Error InvalidRoute = new("Delivery.InvalidRoute", "Route distance, duration, and cost must be non-negative.");
 }

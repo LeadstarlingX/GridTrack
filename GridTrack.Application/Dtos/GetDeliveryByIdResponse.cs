@@ -9,4 +9,7 @@ public sealed record GetDeliveryByIdResponse(
     int? EtaSeconds,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    IReadOnlyList<CoordinateResponse> RoutePolyline);
+    IReadOnlyList<CoordinateResponse> RoutePolyline,
+    double? RouteDistanceMeters,
+    double? RouteDurationSeconds,
+    decimal? RouteCost);

@@ -42,6 +42,12 @@ public sealed class Delivery : BaseEntity
 	public int? UrgencyScore { get; private set; }
 	public DateTime? UrgencyScoreAt { get; private set; }
 
+	// Route economics — populated once OSRM returns a route for the assigned driver.
+	// Cost is in SYP, computed from distance + duration by the route-cost calculator.
+	public double? RouteDistanceMeters { get; private set; }
+	public double? RouteDurationSeconds { get; private set; }
+	public decimal? RouteCost { get; private set; }
+
 	public static Result<Delivery> Create(
 		Guid deliveryId,
 		Point currentLocation,
@@ -246,6 +252,17 @@ public sealed class Delivery : BaseEntity
 				DeliveryId, AnomalyType.EtaExceeded, anomalyReason, DistrictId));
 		}
 
+		return Result.Success();
+	}
+
+	public Result SetRoute(double distanceMeters, double durationSeconds, decimal cost)
+	{
+		if (distanceMeters < 0 || durationSeconds < 0 || cost < 0)
+			return Result.Failure(DeliveryErrors.InvalidRoute);
+
+		RouteDistanceMeters = distanceMeters;
+		RouteDurationSeconds = durationSeconds;
+		RouteCost = cost;
 		return Result.Success();
 	}
 
