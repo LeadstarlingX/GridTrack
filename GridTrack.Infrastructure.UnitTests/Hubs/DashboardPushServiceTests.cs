@@ -258,8 +258,17 @@ public class DashboardPushServiceTests
 
     private static (DashboardPushService Service, FakeHubContext Hub) Build()
     {
-        var hub = new FakeHubContext();
-        return (new DashboardPushService(hub), hub);
+        var hub   = new FakeHubContext();
+        var cache = new EmptyDistrictGroupCache();
+        return (new DashboardPushService(hub, cache), hub);
+    }
+
+    // Returns no groups so existing tests are unaffected by the fan-out path.
+    private sealed class EmptyDistrictGroupCache : IDistrictGroupCache
+    {
+        public Task<IReadOnlyList<Guid>> GetGroupIdsForDistrictAsync(string districtId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<Guid>>([]);
+        public void Invalidate() { }
     }
 
     /// <summary>Reads a named property from an anonymous object via reflection.</summary>
