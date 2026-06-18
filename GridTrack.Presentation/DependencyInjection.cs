@@ -19,9 +19,19 @@ public static class DependencyInjection
 
     private static IServiceCollection AddMyControllers(this IServiceCollection services)
     {
+        // Only the containerized load-test environment (Docker, no Clerk JWT available) runs
+        // anonymous so k6 can hit the endpoints. The integration-test environment KEEPS the
+        // global filter on — TestAuthHandler enforces auth there, and the 401 contract tests
+        // depend on it. Do NOT add "Testing" back here.
+        var aspEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "";
+        var requireAuth = !aspEnv.Equals("Docker", StringComparison.OrdinalIgnoreCase);
+
         services.AddControllers(o =>
-                o.Filters.Add(new AuthorizeFilter(
-                    new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())))
+            {
+                if (requireAuth)
+                    o.Filters.Add(new AuthorizeFilter(
+                        new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build()));
+            })
             .AddApplicationPart(typeof(DependencyInjection).Assembly)
             // Serialize enums as strings to match frontend string unions.
             .AddJsonOptions(o =>
