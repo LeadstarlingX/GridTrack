@@ -1,4 +1,5 @@
 using GridTrack.Application.IntegrationEvents;
+using GridTrack.Application.UseCases.Deliveries;
 using Wolverine;
 using Wolverine.RabbitMQ;
 
@@ -26,6 +27,13 @@ public class Program
             .UseWolverine(opts =>
             {
                 opts.Discovery.IncludeAssembly(typeof(Application.DependencyInjection).Assembly);
+
+                // OSRM route calculation runs off the HTTP thread via a capped local queue.
+                // Max 5 parallel calls so we don't flood the OSRM container.
+                opts.LocalQueue("route-calculation")
+                    .MaximumParallelMessages(5);
+                opts.PublishMessage<RouteCalculationMessage>()
+                    .ToLocalQueue("route-calculation");
 
                 if (!string.IsNullOrWhiteSpace(rabbit))
                 {

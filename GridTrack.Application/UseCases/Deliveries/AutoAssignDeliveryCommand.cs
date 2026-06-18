@@ -7,6 +7,7 @@ using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Deliveries;
 using Microsoft.Extensions.Options;
+using Wolverine;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -21,6 +22,7 @@ public sealed class AutoAssignDeliveryHandler
         IDeliveryRepository repository,
         IUnitOfWork unitOfWork,
         IOptions<DispatchWeightsOptions> weightsOpts,
+        IMessageBus bus,
         CancellationToken ct)
     {
         var delivery = await deliveryReadService.GetAggregateByIdAsync(command.DeliveryId, ct);
@@ -49,6 +51,10 @@ public sealed class AutoAssignDeliveryHandler
 
         var domainEvent = delivery.DomainEvents.OfType<DeliveryAssignedDomainEvent>().SingleOrDefault();
         delivery.ClearDomainEvents();
+
+        // Publish route calculation off the HTTP thread — OSRM is called async via Wolverine
+        // local queue so the HTTP response returns before route geometry is fetched.
+        await bus.PublishAsync(new RouteCalculationMessage(command.DeliveryId, candidates[0].DriverId));
 
         return (Result.Success(new AutoAssignResponse(true, candidates[0].DriverId, topThree)), domainEvent);
     }
