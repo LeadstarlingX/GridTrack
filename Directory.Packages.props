@@ -58,6 +58,8 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="4.8.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="4.8.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.8.0" />
+    <!-- ClickHouse -->
+    <PackageVersion Include="ClickHouse.Client" Version="7.4.0" />
     <!-- TestContainers -->
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.10.0" />
     <PackageVersion Include="Testcontainers.Redis" Version="4.10.0" />

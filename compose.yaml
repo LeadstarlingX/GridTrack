@@ -97,6 +97,31 @@ services:
           memory: 512M
     restart: unless-stopped
 
+  gridtrack.clickhouse:
+    image: clickhouse/clickhouse-server:25.1-alpine
+    container_name: GridTrack.ClickHouse
+    environment:
+      CLICKHOUSE_DB: gridtrack
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - ./.containers/clickhouse:/var/lib/clickhouse
+    ports:
+      - "8123:8123"   # HTTP interface — used by ClickHouse.Client
+      - "9000:9000"   # Native TCP interface
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    restart: unless-stopped
+
   gridtrack.api:
     image: gridtrack.api
     container_name: GridTrack.Api
@@ -109,8 +134,9 @@ services:
       Clerk__Authority: "${CLERK_AUTHORITY}"
       Python__BaseUrl: "http://gridtrack.python:8000"
       Osrm__BaseUrl: "http://gridtrack.osrm:5000"
+      ConnectionStrings__ClickHouse: "Host=gridtrack.clickhouse;Port=8123;Database=gridtrack"
       Simulation__Enabled: "true"
-      Simulation__PositionUpdateIntervalMs: "500"
+      Simulation__PositionUpdateIntervalMs: "1000"
       FORCE_RESEED: "true"  # Change to "true" and restart to force-reseed on next startup
     ports:
       - "5098:8080"   # same port as local dev — frontend .env.local needs no change
@@ -120,6 +146,8 @@ services:
       gridtrack.redis:
         condition: service_healthy
       gridtrack.rabbitmq:
+        condition: service_healthy
+      gridtrack.clickhouse:
         condition: service_healthy
       gridtrack.osrm:
         condition: service_started
