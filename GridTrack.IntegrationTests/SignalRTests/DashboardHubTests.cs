@@ -127,4 +127,56 @@ public class DashboardHubTests : BaseIntegrationTest
 
         await conn.StopAsync();
     }
+
+    [Test]
+    [NotInParallel(Order = 1005)]
+    public async Task JoinDistrictGroup_Allows_Client_To_Receive_DistrictGroup_Messages()
+    {
+        var groupId = Guid.NewGuid();
+        var conn    = BuildConnection(TestAuthHandler.ValidToken);
+        var received = new List<string>();
+        conn.On<object>("DriverPositionUpdated", payload => received.Add(payload.ToString()!));
+
+        await conn.StartAsync();
+        await conn.InvokeAsync("JoinDistrictGroup", groupId.ToString());
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<DashboardHub>>();
+
+        await hubContext.Clients.Group($"dg:{groupId}")
+            .SendCoreAsync("DriverPositionUpdated",
+                [new { driverId = Guid.NewGuid(), lat = 33.5, lng = 36.2 }]);
+
+        await Task.Delay(200);
+
+        received.Should().HaveCount(1);
+
+        await conn.StopAsync();
+    }
+
+    [Test]
+    [NotInParallel(Order = 1006)]
+    public async Task LeaveDistrictGroup_Stops_Receiving_DistrictGroup_Messages()
+    {
+        var groupId  = Guid.NewGuid();
+        var conn     = BuildConnection(TestAuthHandler.ValidToken);
+        var received = new List<string>();
+        conn.On<object>("DriverPositionUpdated", payload => received.Add(payload.ToString()!));
+
+        await conn.StartAsync();
+        await conn.InvokeAsync("JoinDistrictGroup", groupId.ToString());
+        await conn.InvokeAsync("LeaveDistrictGroup", groupId.ToString());
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<DashboardHub>>();
+
+        await hubContext.Clients.Group($"dg:{groupId}")
+            .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid() }]);
+
+        await Task.Delay(200);
+
+        received.Should().BeEmpty();
+
+        await conn.StopAsync();
+    }
 }

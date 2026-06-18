@@ -21,6 +21,10 @@ const BASE        = __ENV.BASE        || 'http://localhost:5000'
 // Local smoke:   DRIVER_VUS=10   (~10 events/s, verifies the pipeline works)
 // Stress test:   DRIVER_VUS=1000 (~1000 events/s, single-container limit test)
 const DRIVER_VUS  = parseInt(__ENV.DRIVER_VUS  || '50')
+// Optional Clerk JWT — required only for signalr_negotiate (hub is [Authorize]).
+// If omitted that scenario still runs but skips the HTTP request (no error inflation).
+// Obtain from browser DevTools: Network → dashboardHub/negotiate → Authorization header.
+const JWT_TOKEN   = __ENV.JWT_TOKEN   || ''
 
 // Seed data — replace with real IDs from your database before running remotely.
 // LOCAL: run the app, fetch /api/deliveries, copy a few IDs here.
@@ -202,10 +206,22 @@ export function signalrNegotiate() {
     // Negotiate is the HTTP handshake that precedes the WebSocket upgrade.
     // k6 can't maintain long-lived WebSocket connections in arrival-rate mode,
     // so we test the most expensive part: the negotiate POST.
+    //
+    // The hub has [Authorize] — without JWT_TOKEN the request returns 401,
+    // which is auth working correctly, not a pipeline error.
+    // Pass --env JWT_TOKEN=<clerk_jwt> to test authenticated negotiate latency.
+    if (!JWT_TOKEN) {
+        sleep(1)
+        return
+    }
+
     const res = http.post(
         `${BASE}/dashboardHub/negotiate?negotiateVersion=1`,
         null,
-        { tags: { name: 'signalr_negotiate' } },
+        {
+            headers: { 'Authorization': `Bearer ${JWT_TOKEN}` },
+            tags: { name: 'signalr_negotiate' },
+        },
     )
     signalrNegLatency.add(res.timings.duration)
     check(res, { 'negotiate 200': (r) => r.status === 200 })

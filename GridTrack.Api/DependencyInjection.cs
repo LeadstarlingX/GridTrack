@@ -61,13 +61,17 @@ public static class DependencyInjection
     {
         services.AddRateLimiter(options =>
         {
-            // 1. Global Limiter: 100 requests per minute per IP
+            // Global limiter: 100 req/min per IP.
+            // Loopback (127.0.0.1 / ::1) is exempt — load tests and dev tools run locally.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
-                var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                
+                var remoteIp = context.Connection.RemoteIpAddress;
+                if (remoteIp is not null && System.Net.IPAddress.IsLoopback(remoteIp))
+                    return RateLimitPartition.GetNoLimiter("loopback");
+
+                var key = remoteIp?.ToString() ?? "unknown";
                 return RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: remoteIp, 
+                    partitionKey: key,
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 100,
@@ -77,9 +81,7 @@ public static class DependencyInjection
                     });
             });
 
-            // 2. Handle Rejection (429 Too Many Requests)
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            
             options.OnRejected = async (context, token) =>
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
