@@ -69,6 +69,7 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
                 ["ConnectionStrings:DefaultConnection"] = _dbContainer.GetConnectionString(),
                 ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString() + ",allowAdmin=true",
                 ["ConnectionStrings:Queue"]             = null,
+                ["ConnectionStrings:ClickHouse"]        = null,
                 ["Clerk:Authority"]                     = "https://test.clerk.invalid",
             });
         });
