@@ -15,6 +15,7 @@ WORKDIR /src
 COPY GridTrack.Api/global.json ./
 COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
+COPY nuget.config ./
 COPY *.sln ./
 COPY */*.csproj ./
 
@@ -26,6 +27,9 @@ RUN for f in *.csproj; do \
 # Persist the NuGet package cache across builds via a BuildKit cache mount.
 # Without this, an invalidated restore layer re-downloads the whole graph from
 # nuget.org every time — slow, and a single transient EOF stalls the build.
+# Concurrency is capped via nuget.config (maxHttpRequestsPerSource) — bounded
+# parallelism is fast yet won't trip flaky/throttled links the way the unbounded
+# default does. Once this completes once, the cache mount serves every later build.
 RUN --mount=type=cache,target=/root/.nuget/packages \
     dotnet restore GridTrack.Api
 
