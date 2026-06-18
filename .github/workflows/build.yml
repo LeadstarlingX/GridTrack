@@ -86,6 +86,53 @@ jobs:
 #      - name: Trigger Render deploy
 #        run: curl -s "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" > /dev/null
 
+  # ----------------------------------------------------------------
+  # JOB 2: k6 load test (master only, free-tier friendly)
+  # ----------------------------------------------------------------
+  k6-load-test:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Check out .NET repo
+        uses: actions/checkout@v4
+
+      - name: Install Taskfile CLI
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update && sudo apt-get install -y k6
+
+      # Brings up compose.ci.yaml (db+redis+rabbitmq+api), runs k6 QUICK, tears down.
+      # continue-on-error: latency thresholds are environment-sensitive on a 2-vCPU
+      # shared runner — we surface the numbers but don't block master on perf noise.
+      # Functional health (error rate, 2xx) is still visible in the summary.
+      - name: Run k6 load test
+        run: task k6-ci
+        continue-on-error: true
+        env:
+          DRIVER_VUS: "300"
+
+      - name: Publish k6 summary
+        if: always()
+        run: |
+          if [ -f load-tests/results/latest-write-behind.md ]; then
+            cat load-tests/results/latest-write-behind.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No k6 summary produced — check the load test step logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results
+          path: load-tests/results/
+
   update-readme:
     runs-on: ubuntu-latest
     needs: build-and-test
