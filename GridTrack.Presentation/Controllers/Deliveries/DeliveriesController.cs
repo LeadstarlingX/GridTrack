@@ -69,6 +69,19 @@ public class DeliveriesController(IMessageBus bus) : ControllerBase
 
     // ── Commands ──────────────────────────────────────────────────────────
 
+    [HttpPost]
+    public async Task<IActionResult> CreateDelivery(
+        [FromBody] CreateDeliveryHttpRequest request, CancellationToken ct)
+    {
+        var location = GeoFactory.CreatePoint(new Coordinate(request.Lng, request.Lat));
+        var result = await bus.InvokeAsync<Result<DeliveryCreatedResponse>>(
+            new CreateDeliveryCommand(new CreateDeliveryRequest(
+                Guid.NewGuid(), location, 7, request.ExpectedEta, request.DistrictId)), ct);
+        if (result.IsFailure)
+            return UnprocessableEntity(new { error = result.Error.Message });
+        return CreatedAtAction(nameof(GetDelivery), new { id = result.Value.DeliveryId }, result.Value);
+    }
+
     [HttpPost("{id}/assign")]
     public async Task<IActionResult> AssignDriver(
         string id, [FromBody] AssignDriverHttpRequest request, CancellationToken ct)

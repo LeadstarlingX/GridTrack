@@ -3,6 +3,7 @@ using Dapper;
 using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
+using GridTrack.Application.Abstractions.Telemetry;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dispatch;
@@ -20,6 +21,7 @@ using GridTrack.Infrastructure.H3Service;
 using GridTrack.Infrastructure.Hubs;
 using GridTrack.Infrastructure.Seeding;
 using GridTrack.Infrastructure.Simulation;
+using GridTrack.Infrastructure.Telemetry;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +47,7 @@ public static class DependencyInjection
         AddExternalServices(services, configuration);
         AddSeeding(services);
         AddSimulation(services, configuration);
+        AddTelemetryPipeline(services);
 
         return services;
     }
@@ -62,6 +65,7 @@ public static class DependencyInjection
         // Register Repositories
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
+        services.AddScoped<IDistrictGroupRepository, DistrictGroupRepository>();
         
         // Register Read Services
         services.AddScoped<IAnomalyReadService, AnomalyReadService>();
@@ -137,7 +141,9 @@ public static class DependencyInjection
             .AddJsonProtocol(o =>
                 o.PayloadSerializerOptions.Converters.Add(
                     new System.Text.Json.Serialization.JsonStringEnumConverter()));
-        services.AddScoped<IDashboardPushService, DashboardPushService>();
+        services.AddSingleton<IDistrictGroupCache, DistrictGroupCache>();
+        // Singleton: DashboardPushService only wraps IHubContext (itself singleton).
+        services.AddSingleton<IDashboardPushService, DashboardPushService>();
         
 
         return services;
@@ -194,6 +200,15 @@ public static class DependencyInjection
         services.Configure<SimulatorOptions>(configuration.GetSection("Simulation"));
         services.AddHostedService<PositionSimulatorService>();
         services.AddHostedService<AnomalySimulatorService>();
+        return services;
+    }
+
+    private static IServiceCollection AddTelemetryPipeline(this IServiceCollection services)
+    {
+        services.AddSingleton<IPositionWriteBuffer, PositionWriteBuffer>();
+        services.AddSingleton<IPositionStreamPublisher, RedisPositionStreamPublisher>();
+        services.AddHostedService<PositionFlushService>();
+        services.AddHostedService<StreamPositionConsumer>();
         return services;
     }
 
