@@ -49,14 +49,17 @@ public class TelemetryHandlerIntegrationTests : BaseIntegrationTest
 
         result.IsSuccess.Should().BeTrue();
 
+        // Location is written by PositionFlushService (Write-Behind) up to 5 s after the command.
         var connectionFactory = Factory.Services.GetRequiredService<ISqlConnectionFactory>();
-        using var conn = connectionFactory.CreateConnection();
-        var row = await conn.QueryFirstAsync<(double X, double Y)>(
-            """SELECT ST_X("Location"::geometry), ST_Y("Location"::geometry) FROM public."Drivers" WHERE "DriverId" = @Id""",
-            new { Id = driverId });
-
-        row.X.Should().BeApproximately(newLng, 0.0001);
-        row.Y.Should().BeApproximately(newLat, 0.0001);
+        await AssertEventuallyAsync(async () =>
+        {
+            using var conn = connectionFactory.CreateConnection();
+            var row = await conn.QueryFirstAsync<(double X, double Y)>(
+                """SELECT ST_X("Location"::geometry), ST_Y("Location"::geometry) FROM public."Drivers" WHERE "DriverId" = @Id""",
+                new { Id = driverId });
+            row.X.Should().BeApproximately(newLng, 0.0001);
+            row.Y.Should().BeApproximately(newLat, 0.0001);
+        });
     }
 
     [Test]

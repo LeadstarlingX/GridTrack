@@ -1,8 +1,10 @@
+using GridTrack.Application.Errors;
 using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Application.UseCases.Drivers;
+using GridTrack.Domain.Abstractions;
 using Microsoft.AspNetCore.Mvc;
-using NetTopologySuite.Geometries;
 using NetTopologySuite;
+using NetTopologySuite.Geometries;
 using Wolverine;
 
 namespace GridTrack.Presentation.Controllers.Telemetry;
@@ -13,6 +15,21 @@ public class TelemetryController(IMessageBus bus) : ControllerBase
 {
     private static readonly GeometryFactory GeoFactory =
         NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+
+    [HttpPost("position")]
+    public async Task<IActionResult> UpdatePosition(
+        [FromBody] TelemetryPositionRequest request, CancellationToken ct)
+    {
+        var location = GeoFactory.CreatePoint(new Coordinate(request.Lng, request.Lat));
+        var result = await bus.InvokeAsync<Result>(
+            new UpdateDriverPositionCommand(new UpdatePositionRequest(
+                request.DriverId, location, request.Timestamp ?? DateTime.UtcNow)), ct);
+        if (result.IsFailure)
+            return result.Error == ApplicationErrors.DriverNotFound
+                ? NotFound(new { error = result.Error.Message })
+                : UnprocessableEntity(new { error = result.Error.Message });
+        return NoContent();
+    }
 
     [HttpPost("batch")]
     public async Task<IActionResult> IngestBatch(
