@@ -1,0 +1,33 @@
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Container data volumes (ClickHouse, Postgres, Redis runtime data)
+.containers/
+
+# Test projects — not needed in the API image
+GridTrack.IntegrationTests/
+GridTrack.Infrastructure.UnitTests/
+GridTrack.E2ETests/
+GridTrack.ArchitectureTests/
+GridTrack.NamingConventions/
+
+# Observability stack config (Grafana, Prometheus, Seq — not part of the API)
+observability/
+
+# Load tests
+load-tests/
+
+# Git and IDE
+.git/
+.vs/
+.vscode/
+.idea/
+*.user
+
+# Docs / misc
+*.md
+.gitignore
+docker-compose*.yml
