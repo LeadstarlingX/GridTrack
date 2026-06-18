@@ -1,11 +1,14 @@
+using System.Runtime.CompilerServices;
 using GridTrack.Api;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
+using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using GridTrack.Infrastructure.Seeding;
+using GridTrack.Infrastructure.Simulation;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
@@ -64,8 +67,9 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] = _dbContainer.GetConnectionString(),
-                ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString(),
+                ["ConnectionStrings:Cache"]             = _redisContainer.GetConnectionString() + ",allowAdmin=true",
                 ["ConnectionStrings:Queue"]             = null,
+                ["ConnectionStrings:ClickHouse"]        = null,
                 ["Clerk:Authority"]                     = "https://test.clerk.invalid",
             });
         });
@@ -95,9 +99,43 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
             var seed = services.SingleOrDefault(d => d.ImplementationType == typeof(SeedService));
             if (seed != null) services.Remove(seed);
 
+            var sim = services.SingleOrDefault(d => d.ImplementationType == typeof(PositionSimulatorService));
+            if (sim != null) services.Remove(sim);
+
             services.RemoveAll<IDashboardPushService>();
             services.AddSingleton(DashboardPushMock);
+
+            // Force the AI services into their "unavailable" state. Integration tests assert the
+            // degraded path (AiAvailable=false, null summary) and must not depend on whether a real
+            // Python/Groq service happens to be reachable on localhost:8000 (e.g. a running Docker stack).
+            services.RemoveAll<IAnalysisChatService>();
+            services.AddSingleton<IAnalysisChatService, UnavailableChatService>();
+            services.RemoveAll<IAiRecommendationService>();
+            services.AddSingleton<IAiRecommendationService, UnavailableRecommendationService>();
         });
+    }
+
+    // AI service stubs — always report "unavailable" so the degraded-path assertions are deterministic.
+    private sealed class UnavailableChatService : IAnalysisChatService
+    {
+        public Task<string?> AskAsync(string question, string csvContext, CancellationToken ct)
+            => Task.FromResult<string?>(null);
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            string question, string csvContext, [EnumeratorCancellation] CancellationToken ct)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public Task<string?> TranscribeAsync(Stream audio, string fileName, string contentType, CancellationToken ct)
+            => Task.FromResult<string?>(null);
+    }
+
+    private sealed class UnavailableRecommendationService : IAiRecommendationService
+    {
+        public Task<AiRecommendationResponse?> GetAsync(AiRecommendationRequestDto request, CancellationToken ct)
+            => Task.FromResult<AiRecommendationResponse?>(null);
     }
 
     public override async ValueTask DisposeAsync()

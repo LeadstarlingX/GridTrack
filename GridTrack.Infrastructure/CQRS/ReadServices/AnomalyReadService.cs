@@ -80,6 +80,22 @@ public sealed class AnomalyReadService : IAnomalyReadService
             where.Add("""d."DistrictId" = @DistrictId""");
             parameters.Add("DistrictId", districtId);
         }
+        if (!string.IsNullOrWhiteSpace(anomalyType))
+        {
+            var typeInt = anomalyType switch
+            {
+                "EtaExceeded"    => 0,
+                "RouteDeviation" => 1,
+                "StalePosition"  => 2,
+                "UnexpectedStop" => 3,
+                _ => -1,
+            };
+            if (typeInt >= 0)
+            {
+                where.Add("""d."AnomalyTypeValue" = @AnomalyTypeValue""");
+                parameters.Add("AnomalyTypeValue", typeInt);
+            }
+        }
 
         parameters.Add("FetchSize", fetchSize);
 
@@ -90,11 +106,11 @@ public sealed class AnomalyReadService : IAnomalyReadService
                        d."AssignedDriverId"                               AS "DriverId",
                        COALESCE(dr."Name", '')                           AS "DriverName",
                        CASE d."AnomalyTypeValue"
-                           WHEN 0 THEN 'Delay'
+                           WHEN 0 THEN 'EtaExceeded'
                            WHEN 1 THEN 'RouteDeviation'
-                           WHEN 2 THEN 'Stall'
-                           WHEN 3 THEN 'Stall'
-                           ELSE 'Stall'
+                           WHEN 2 THEN 'StalePosition'
+                           WHEN 3 THEN 'UnexpectedStop'
+                           ELSE 'EtaExceeded'
                        END                                                AS "AnomalyType",
                        COALESCE(d."AnomalyReason", '')                   AS "Reason",
                        d."DistrictId"                                     AS "DistrictId",

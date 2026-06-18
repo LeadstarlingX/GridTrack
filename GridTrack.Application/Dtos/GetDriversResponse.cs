@@ -12,7 +12,10 @@ public sealed record DriverListItemResponse(
     long ActiveDeliveries,
     long CompletedToday,
     bool HasAnomaly,
-    string? AnomalyReason);
+    string? AnomalyReason,
+    string? CarType,
+    string? LicensePlate,
+    string? PhoneNumber);
 
 public sealed record GetDriversResponse(
     IReadOnlyList<DriverListItemResponse> Items,

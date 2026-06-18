@@ -72,8 +72,23 @@ namespace GridTrack.Infrastructure.Migrations
                     b.Property<DateTime?>("PickedUpAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal?>("RouteCost")
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<double?>("RouteDistanceMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("RouteDurationSeconds")
+                        .HasColumnType("double precision");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
+
+                    b.Property<int?>("UrgencyScore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UrgencyScoreAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("DeliveryId");
 
@@ -86,11 +101,35 @@ namespace GridTrack.Infrastructure.Migrations
                     b.ToTable("Deliveries");
                 });
 
+            modelBuilder.Entity("GridTrack.Domain.DistrictGroups.DistrictGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<string[]>("DistrictIds")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("district_groups", (string)null);
+                });
+
             modelBuilder.Entity("GridTrack.Domain.Drivers.Driver", b =>
                 {
                     b.Property<Guid>("DriverId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CarType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("DistrictId")
                         .IsRequired()
@@ -105,6 +144,10 @@ namespace GridTrack.Infrastructure.Migrations
                     b.Property<DateTime>("LastSeen")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LicensePlate")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Point>("Location")
                         .IsRequired()
                         .HasColumnType("geometry (point)");
@@ -114,16 +157,33 @@ namespace GridTrack.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ShiftEndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ShiftStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ShortName")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<decimal?>("VehicleCapacityKg")
+                        .HasColumnType("numeric(10,2)");
 
                     b.HasKey("DriverId");
 
                     b.HasIndex("DistrictId");
 
                     b.HasIndex("IsActive");
+
+                    b.HasIndex("LicensePlate")
+                        .IsUnique()
+                        .HasFilter("\"LicensePlate\" IS NOT NULL");
 
                     b.ToTable("Drivers");
                 });

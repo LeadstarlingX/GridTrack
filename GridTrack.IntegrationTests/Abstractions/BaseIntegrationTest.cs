@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Domain.Deliveries;
@@ -6,6 +7,7 @@ using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 using Wolverine;
 
 namespace GridTrack.IntegrationTests.Abstractions;
@@ -42,11 +44,20 @@ public abstract class BaseIntegrationTest
         using var connection = connectionFactory.CreateConnection();
 
         const string sql = """
-                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District", delivery_routes
+                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District", delivery_routes, district_groups
                            RESTART IDENTITY CASCADE;
                            """;
 
         await connection.ExecuteAsync(sql);
+
+        // Flush Redis so cached analytics results don't bleed between tests.
+        var multiplexer = Factory.Services.GetRequiredService<IConnectionMultiplexer>();
+        foreach (var endpoint in multiplexer.GetEndPoints())
+        {
+            var server = multiplexer.GetServer(endpoint);
+            if (server.IsConnected)
+                await server.FlushDatabaseAsync();
+        }
     }
 
     protected static async Task SeedAsync(Func<AppDbContext, Task> seed, CancellationToken ct = default)
@@ -83,4 +94,20 @@ public abstract class BaseIntegrationTest
             ctx.Set<DeliveryRoute>().AddRange(routes);
             return Task.CompletedTask;
         }, ct);
+
+    // Polls until the assertion passes or the timeout expires.
+    // Use this for assertions that depend on background-service side-effects
+    // (e.g. PositionFlushService writing to Postgres, StreamPositionConsumer broadcasting).
+    protected static async Task AssertEventuallyAsync(Func<Task> assertion, int timeoutMs = 8000)
+    {
+        var sw = Stopwatch.StartNew();
+        while (true)
+        {
+            try { await assertion(); return; }
+            catch when (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                await Task.Delay(200);
+            }
+        }
+    }
 }

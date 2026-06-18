@@ -56,7 +56,7 @@ public class AlertsPaginationIntegrationTests : BaseIntegrationTest
 
         result.Items.Should().HaveCount(2);
         result.Items.Should().OnlyContain(a => a.Id != Guid.Empty);
-        result.Items.Should().OnlyContain(a => a.AnomalyType == "Delay");
+        result.Items.Should().OnlyContain(a => a.AnomalyType == "EtaExceeded");
     }
 
     [Test]

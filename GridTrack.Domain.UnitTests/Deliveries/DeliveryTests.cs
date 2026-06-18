@@ -184,7 +184,7 @@ public class DeliveryTests
         var result = delivery.MarkDelivered(DateTime.UtcNow);
 
         await Assert.That(result.IsFailure).IsTrue();
-        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidStatusForOperation);
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidStatusTransition);
     }
 
     [Test]
@@ -413,6 +413,115 @@ public class DeliveryTests
         await Assert.That(delivery.DeliveredAt.HasValue).IsTrue();
     }
     
+
+    // ── Regression: double-cancel bug ───────────────────────────────────────
+
+    [Test]
+    public async Task MarkCancelled_Should_Fail_When_Already_Cancelled()
+    {
+        // Arrange — cancel once successfully
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.MarkCancelled(DateTime.UtcNow, "first cancel");
+        delivery.ClearDomainEvents();
+
+        // Act — attempt second cancel (was silently succeeding via current==next short-circuit)
+        var result = delivery.MarkCancelled(DateTime.UtcNow.AddMinutes(1), "second cancel");
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.TerminalStatus);
+        // No extra events should have been raised
+        await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task MarkCancelled_Should_Fail_When_Already_Delivered()
+    {
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.MarkPickedUp(Factory.CreatePoint(new Coordinate(11, 11)), DateTime.UtcNow);
+        delivery.UpdateLocation(Factory.CreatePoint(new Coordinate(12, 12)), DateTime.UtcNow);
+        delivery.MarkDelivered(DateTime.UtcNow);
+        delivery.ClearDomainEvents();
+
+        var result = delivery.MarkCancelled(DateTime.UtcNow.AddMinutes(1), "too late");
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.TerminalStatus);
+        await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
+    }
+
+    // ── Regression: double-flag bug ─────────────────────────────────────────
+
+    [Test]
+    public async Task FlagAnomaly_Should_Fail_When_Already_Anomalous()
+    {
+        // Arrange — flag once
+        var delivery = CreateDelivery();
+        delivery.AssignDriver(Guid.NewGuid());
+        delivery.MarkPickedUp(Factory.CreatePoint(new Coordinate(11, 11)), DateTime.UtcNow);
+        delivery.FlagAnomaly(AnomalyType.RouteDeviation, "detour");
+        delivery.ClearDomainEvents();
+
+        // Act — re-flag (was silently overwriting type/reason and raising a second event)
+        var result = delivery.FlagAnomaly(AnomalyType.EtaExceeded, "now late too");
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.AlreadyFlagged);
+        // Original anomaly data must be unchanged
+        await Assert.That(delivery.AnomalyTypeValue).IsEqualTo(AnomalyType.RouteDeviation);
+        await Assert.That(delivery.AnomalyReason).IsEqualTo("detour");
+        await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
+    }
+
+    // ── SetUrgencyScore ──────────────────────────────────────────────────────
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Persist_Score_And_Timestamp()
+    {
+        var delivery = CreateDelivery();
+        var before = DateTime.UtcNow;
+
+        var result = delivery.SetUrgencyScore(7, before);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(delivery.UrgencyScore).IsEqualTo(7);
+        await Assert.That(delivery.UrgencyScoreAt).IsEqualTo(before);
+    }
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Fail_For_Score_Below_1()
+    {
+        var delivery = CreateDelivery();
+
+        var result = delivery.SetUrgencyScore(0, DateTime.UtcNow);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidUrgencyScore);
+    }
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Fail_For_Score_Above_10()
+    {
+        var delivery = CreateDelivery();
+
+        var result = delivery.SetUrgencyScore(11, DateTime.UtcNow);
+
+        await Assert.That(result.IsFailure).IsTrue();
+        await Assert.That(result.Error).IsEqualTo(DeliveryErrors.InvalidUrgencyScore);
+    }
+
+    [Test]
+    public async Task SetUrgencyScore_Should_Allow_Update()
+    {
+        var delivery = CreateDelivery();
+        delivery.SetUrgencyScore(3, DateTime.UtcNow);
+
+        var result = delivery.SetUrgencyScore(9, DateTime.UtcNow);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(delivery.UrgencyScore).IsEqualTo(9);
+    }
 
     private static Delivery CreateDelivery()
     {

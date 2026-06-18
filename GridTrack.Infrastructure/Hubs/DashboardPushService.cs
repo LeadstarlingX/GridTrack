@@ -5,19 +5,28 @@ using Microsoft.AspNetCore.SignalR;
 namespace GridTrack.Infrastructure.Hubs;
 
 
-internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDashboardPushService
+internal sealed class DashboardPushService(
+    IHubContext<DashboardHub> hub,
+    IDistrictGroupCache districtGroupCache) : IDashboardPushService
 {
-    public Task BroadcastDriverPositionAsync(string districtId, DriverDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendCoreAsync(
-            "DriverPositionUpdated",
-            [new
-            {
-                driverId   = payload.DriverId,
-                lat        = payload.Location.Coordinate.Y,
-                lng        = payload.Location.Coordinate.X,
-                districtId = payload.DistrictId,
-            }],
-            ct);
+    public async Task BroadcastDriverPositionAsync(string districtId, DriverDto payload, CancellationToken ct)
+    {
+        var message = new
+        {
+            driverId   = payload.DriverId,
+            lat        = payload.Location.Coordinate.Y,
+            lng        = payload.Location.Coordinate.X,
+            districtId = payload.DistrictId,
+        };
+
+        // Broadcast to subscribers of this specific district.
+        await hub.Clients.Group(districtId).SendCoreAsync("DriverPositionUpdated", [message], ct);
+
+        // Fan-out to any district groups that include this district.
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("DriverPositionUpdated", [message], ct);
+    }
 
     public Task BroadcastDeliveryUpdateAsync(string districtId, DeliveryDto payload, CancellationToken ct)
         => hub.Clients.Group(districtId).SendCoreAsync(
@@ -55,16 +64,30 @@ internal sealed class DashboardPushService(IHubContext<DashboardHub> hub) : IDas
             }],
             ct);
 
-    public Task BroadcastUrgencyUpdateAsync(Guid deliveryId, int urgencyScore, string aiNote, CancellationToken ct)
-        => hub.Clients.All.SendCoreAsync(
-            "UrgencyUpdated",
-            [new { deliveryId, urgencyScore, aiNote }],
-            ct);
+    public Task BroadcastUrgencyUpdateAsync(Guid deliveryId, string? districtId, int urgencyScore, string aiNote, CancellationToken ct)
+    {
+        var target = districtId is not null ? hub.Clients.Group(districtId) : hub.Clients.All;
+        return target.SendCoreAsync("UrgencyUpdated", [new { deliveryId, urgencyScore, aiNote }], ct);
+    }
 
     public Task BroadcastForecastResultAsync(
         string districtId, int forecastedDemand, DateTime updatedAt, CancellationToken ct)
         => hub.Clients.Group(districtId).SendCoreAsync(
             "ForecastOverlayUpdated",
             [new { districtId, forecastedDemand, updatedAt }],
+            ct);
+
+    public Task BroadcastDemandSurgeAsync(
+        string districtId, int currentCount, double historicalMean, double deviations, CancellationToken ct)
+        => hub.Clients.All.SendCoreAsync(
+            "DemandSurge",
+            [new { districtId, currentCount, historicalMean, deviations, detectedAt = DateTime.UtcNow }],
+            ct);
+
+    public Task BroadcastAnomalyIncidentAsync(
+        string districtId, int anomalyCount, string summary, CancellationToken ct)
+        => hub.Clients.All.SendCoreAsync(
+            "AnomalyIncident",
+            [new { districtId, anomalyCount, windowMinutes = 30, summary, detectedAt = DateTime.UtcNow }],
             ct);
 }

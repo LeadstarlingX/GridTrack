@@ -142,6 +142,23 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         result.AnomalyRate.Should().BeApproximately(0.5, precision: 0.001);
     }
 
+    [Test]
+    [NotInParallel(Order = 504)]
+    public async Task GetAnalyticsSummaryQuery_DateRange_Should_Exclude_Deliveries_Outside_Range()
+    {
+        await ResetDatabaseAsync();
+
+        var inRange  = CreateDelivery(createdAt: DateTime.UtcNow.AddDays(-3));
+        var outRange = CreateDelivery(createdAt: DateTime.UtcNow.AddDays(-10));
+        await SeedDeliveriesAsync([inRange, outRange]);
+
+        var from = DateTime.UtcNow.AddDays(-7).Date;
+        var to   = DateTime.UtcNow.Date;
+        var result = await InvokeAsync<GetAnalyticsSummaryResponse>(new GetAnalyticsSummaryQuery(from, to));
+
+        result.TotalDeliveriesToday.Should().Be(1);
+    }
+
     // ── GetH3DensityQuery ─────────────────────────────────────────────────
 
     [Test]

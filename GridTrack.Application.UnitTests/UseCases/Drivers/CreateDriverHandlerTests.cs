@@ -198,11 +198,11 @@ public class CreateDriverHandlerTests
 
         public FakeH3GridService(string index) => _index = index;
 
-        public Task<string> GetCellAsync(Point location, int resolution)
-            => Task.FromResult(_index);
+        public Task<Result<string>> GetCellAsync(Point location, int resolution)
+            => Task.FromResult(Result.Success(_index));
 
-        public Task<IEnumerable<string>> GetGridDiskAsync(string h3Index, int ringDistance)
-            => Task.FromResult<IEnumerable<string>>(Array.Empty<string>());
+        public Task<Result<IEnumerable<string>>> GetGridDiskAsync(string h3Index, int ringDistance)
+            => Task.FromResult(Result.Success<IEnumerable<string>>(Array.Empty<string>()));
 
         public Task<IEnumerable<string>> FillBoundingBoxAsync(
             double minLat, double maxLat, double minLng, double maxLng, int resolution)

@@ -39,6 +39,14 @@ public sealed class Delivery : BaseEntity
 	public DateTime? DeliveredAt { get; private set; }
 	public DateTime? CancelledAt { get; private set; }
 	public string? AnomalyReason { get; private set; }
+	public int? UrgencyScore { get; private set; }
+	public DateTime? UrgencyScoreAt { get; private set; }
+
+	// Route economics — populated once OSRM returns a route for the assigned driver.
+	// Cost is in SYP, computed from distance + duration by the route-cost calculator.
+	public double? RouteDistanceMeters { get; private set; }
+	public double? RouteDurationSeconds { get; private set; }
+	public decimal? RouteCost { get; private set; }
 
 	public static Result<Delivery> Create(
 		Guid deliveryId,
@@ -166,11 +174,6 @@ public sealed class Delivery : BaseEntity
 			return terminalCheck;
 		}
 
-		if (Status != DeliveryStatus.InTransit && Status != DeliveryStatus.PickedUp)
-		{
-			return Result.Failure(DeliveryErrors.InvalidStatusForOperation);
-		}
-
 		var transition = TransitionTo(DeliveryStatus.Delivered);
 		if (transition.IsFailure)
 		{
@@ -183,12 +186,17 @@ public sealed class Delivery : BaseEntity
 			? (ExpectedEta.Value - CreatedAt).TotalSeconds
 			: 0;
 		RaiseDomainEvent(new DeliveryCompletedDomainEvent(
-			DeliveryId, timestamp, AssignedDriverId, PickedUpAt, expectedSecs));
+			DeliveryId, DistrictId, timestamp, AssignedDriverId, PickedUpAt, expectedSecs));
 		return Result.Success();
 	}
 
 	public Result FlagAnomaly(AnomalyType type, string reason)
 	{
+		if (Status == DeliveryStatus.Anomalous)
+		{
+			return Result.Failure(DeliveryErrors.AlreadyFlagged);
+		}
+
 		if (string.IsNullOrWhiteSpace(reason))
 		{
 			return Result.Failure(DeliveryErrors.InvalidReason);
@@ -209,6 +217,12 @@ public sealed class Delivery : BaseEntity
 
 	public Result MarkCancelled(DateTime timestamp, string reason)
 	{
+		var terminalCheck = EnsureNotTerminal();
+		if (terminalCheck.IsFailure)
+		{
+			return terminalCheck;
+		}
+
 		if (string.IsNullOrWhiteSpace(reason))
 		{
 			return Result.Failure(DeliveryErrors.InvalidReason);
@@ -238,6 +252,27 @@ public sealed class Delivery : BaseEntity
 				DeliveryId, AnomalyType.EtaExceeded, anomalyReason, DistrictId));
 		}
 
+		return Result.Success();
+	}
+
+	public Result SetRoute(double distanceMeters, double durationSeconds, decimal cost)
+	{
+		if (distanceMeters < 0 || durationSeconds < 0 || cost < 0)
+			return Result.Failure(DeliveryErrors.InvalidRoute);
+
+		RouteDistanceMeters = distanceMeters;
+		RouteDurationSeconds = durationSeconds;
+		RouteCost = cost;
+		return Result.Success();
+	}
+
+	public Result SetUrgencyScore(int score, DateTime scoredAt)
+	{
+		if (score is < 1 or > 10)
+			return Result.Failure(DeliveryErrors.InvalidUrgencyScore);
+
+		UrgencyScore = score;
+		UrgencyScoreAt = scoredAt;
 		return Result.Success();
 	}
 

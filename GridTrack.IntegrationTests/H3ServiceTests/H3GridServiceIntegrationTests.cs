@@ -1,5 +1,7 @@
-﻿using FluentAssertions;
+using FluentAssertions;
+using GridTrack.Application.Errors;
 using GridTrack.Application.Interfaces;
+using GridTrack.Domain.Abstractions;
 using GridTrack.IntegrationTests.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
@@ -37,7 +39,7 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 8);
+        var cell = (await service.GetCellAsync(Damascus, 8)).Value;
 
         cell.Should().NotBeNullOrWhiteSpace();
         cell.Should().HaveLength(15);
@@ -51,7 +53,7 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Rio, 8);
+        var cell = (await service.GetCellAsync(Rio, 8)).Value;
 
         cell.Should().NotBeNullOrWhiteSpace();
         cell.Should().HaveLength(15);
@@ -64,8 +66,8 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell1 = await service.GetCellAsync(Damascus, 8);
-        var cell2 = await service.GetCellAsync(Damascus, 8);
+        var cell1 = (await service.GetCellAsync(Damascus, 8)).Value;
+        var cell2 = (await service.GetCellAsync(Damascus, 8)).Value;
 
         cell1.Should().Be(cell2);
     }
@@ -77,8 +79,8 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell8 = await service.GetCellAsync(Damascus, 8);
-        var cell9 = await service.GetCellAsync(Damascus, 9);
+        var cell8 = (await service.GetCellAsync(Damascus, 8)).Value;
+        var cell9 = (await service.GetCellAsync(Damascus, 9)).Value;
 
         cell8.Should().NotBe(cell9);
     }
@@ -90,8 +92,8 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var damascusCell = await service.GetCellAsync(Damascus, 8);
-        var aleppoCell = await service.GetCellAsync(Aleppo, 8);
+        var damascusCell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var aleppoCell = (await service.GetCellAsync(Aleppo, 8)).Value;
 
         damascusCell.Should().NotBe(aleppoCell);
     }
@@ -103,7 +105,7 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 0);
+        var cell = (await service.GetCellAsync(Damascus, 0)).Value;
 
         cell.Should().NotBeNullOrWhiteSpace();
     }
@@ -115,21 +117,22 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 15);
+        var cell = (await service.GetCellAsync(Damascus, 15)).Value;
 
         cell.Should().NotBeNullOrWhiteSpace();
     }
 
     [Test]
     [NotInParallel(Order = 57)]
-    public async Task GetCellAsync_NullPoint_Should_Throw_ArgumentNullException()
+    public async Task GetCellAsync_NullPoint_Should_Return_Failure()
     {
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
+        var result = await service.GetCellAsync(null!, 8);
 
-        await Assert.That(async () => await service.GetCellAsync(null!, 8))
-            .Throws<ArgumentNullException>();
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(H3ServiceErrors.LocationNotProvided);
     }
 
     // ── GetGridDiskAsync Integration Tests ────────────────────────────────
@@ -141,8 +144,8 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 8);
-        var neighbors = (await service.GetGridDiskAsync(cell, 1)).ToList();
+        var cell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var neighbors = (await service.GetGridDiskAsync(cell, 1)).Value.ToList();
 
         neighbors.Should().HaveCount(6);
     }
@@ -154,8 +157,8 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 8);
-        var neighbors = (await service.GetGridDiskAsync(cell, 2)).ToList();
+        var cell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var neighbors = (await service.GetGridDiskAsync(cell, 2)).Value.ToList();
 
         neighbors.Should().HaveCount(18);
     }
@@ -167,8 +170,8 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var originCell = await service.GetCellAsync(Damascus, 8);
-        var neighbors = (await service.GetGridDiskAsync(originCell, 1)).ToList();
+        var originCell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var neighbors = (await service.GetGridDiskAsync(originCell, 1)).Value.ToList();
 
         neighbors.Should().NotContain(originCell);
     }
@@ -180,8 +183,8 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 8);
-        var neighbors = await service.GetGridDiskAsync(cell, 1);
+        var cell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var neighbors = (await service.GetGridDiskAsync(cell, 1)).Value;
 
         foreach (var neighbor in neighbors)
         {
@@ -193,40 +196,43 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
 
     [Test]
     [NotInParallel(Order = 62)]
-    public async Task GetGridDiskAsync_EmptyIndex_Should_Throw_ArgumentException()
+    public async Task GetGridDiskAsync_EmptyIndex_Should_Return_Failure()
     {
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
+        var result = await service.GetGridDiskAsync("", 1);
 
-        await Assert.That(async () => await service.GetGridDiskAsync("", 1))
-            .Throws<ArgumentException>();
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(H3ServiceErrors.InvalidCellIndex);
     }
 
     [Test]
     [NotInParallel(Order = 63)]
-    public async Task GetGridDiskAsync_ZeroRing_Should_Throw_ArgumentOutOfRangeException()
+    public async Task GetGridDiskAsync_ZeroRing_Should_Return_Failure()
     {
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 8);
+        var cell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var result = await service.GetGridDiskAsync(cell, 0);
 
-        await Assert.That(async () => await service.GetGridDiskAsync(cell, 0))
-            .Throws<ArgumentOutOfRangeException>();
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(H3ServiceErrors.InvalidRingDistance);
     }
 
     [Test]
     [NotInParallel(Order = 64)]
-    public async Task GetGridDiskAsync_NegativeRing_Should_Throw_ArgumentOutOfRangeException()
+    public async Task GetGridDiskAsync_NegativeRing_Should_Return_Failure()
     {
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 8);
+        var cell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var result = await service.GetGridDiskAsync(cell, -1);
 
-        await Assert.That(async () => await service.GetGridDiskAsync(cell, -1))
-            .Throws<ArgumentOutOfRangeException>();
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(H3ServiceErrors.InvalidRingDistance);
     }
 
     [Test]
@@ -236,11 +242,11 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var originCell = await service.GetCellAsync(Damascus, 8);
-        var ring1 = (await service.GetGridDiskAsync(originCell, 1)).ToList();
+        var originCell = (await service.GetCellAsync(Damascus, 8)).Value;
+        var ring1 = (await service.GetGridDiskAsync(originCell, 1)).Value.ToList();
         var firstNeighbor = ring1.First();
 
-        var neighborRing1 = (await service.GetGridDiskAsync(firstNeighbor, 1)).ToList();
+        var neighborRing1 = (await service.GetGridDiskAsync(firstNeighbor, 1)).Value.ToList();
         neighborRing1.Should().Contain(originCell);
     }
 
@@ -308,7 +314,7 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Damascus, 8);
+        var cell = (await service.GetCellAsync(Damascus, 8)).Value;
         var cells = await service.FillBoundingBoxAsync(33.40, 33.60, 36.20, 36.40, 8);
 
         cells.Should().Contain(cell);
@@ -346,7 +352,7 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var cell = await service.GetCellAsync(Rio, 8);
+        var cell = (await service.GetCellAsync(Rio, 8)).Value;
         var cells = await service.FillBoundingBoxAsync(-23.00, -22.80, -43.30, -43.00, 8);
 
         cells.Should().Contain(cell);
@@ -359,7 +365,7 @@ public class H3GridServiceIntegrationTests : BaseIntegrationTest
         await ResetDatabaseAsync();
 
         var service = GetH3Service();
-        var aleppoCell = await service.GetCellAsync(Aleppo, 8);
+        var aleppoCell = (await service.GetCellAsync(Aleppo, 8)).Value;
         var damascusBoxCells = await service.FillBoundingBoxAsync(33.40, 33.60, 36.20, 36.40, 8);
 
         damascusBoxCells.Should().NotContain(aleppoCell);

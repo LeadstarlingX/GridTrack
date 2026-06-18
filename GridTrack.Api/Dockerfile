@@ -1,5 +1,7 @@
+# syntax=docker/dockerfile:1
+
 # ------- 1. Runtime layer (smallest) -------
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS base
 WORKDIR /app
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
@@ -13,6 +15,7 @@ WORKDIR /src
 COPY GridTrack.Api/global.json ./
 COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
+COPY nuget.config ./
 COPY *.sln ./
 COPY */*.csproj ./
 
@@ -21,11 +24,20 @@ RUN for f in *.csproj; do \
       mkdir -p "${f%.*}" && mv "$f" "${f%.*}/"; \
     done
 
-RUN dotnet restore GridTrack.Api
+# Persist the NuGet package cache across builds via a BuildKit cache mount.
+# Without this, an invalidated restore layer re-downloads the whole graph from
+# nuget.org every time — slow, and a single transient EOF stalls the build.
+# Concurrency is capped via nuget.config (maxHttpRequestsPerSource) — bounded
+# parallelism is fast yet won't trip flaky/throttled links the way the unbounded
+# default does. Once this completes once, the cache mount serves every later build.
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet restore GridTrack.Api
 
-# copy everything else & build
+# copy everything else & build (publish re-resolves packages — same cache mount
+# keeps it offline/fast instead of hitting nuget.org again)
 COPY . .
-RUN dotnet publish GridTrack.Api/GridTrack.Api.csproj \
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet publish GridTrack.Api/GridTrack.Api.csproj \
     -c $BUILD_CONFIGURATION \
     -o /app/publish \
     /p:UseAppHost=false

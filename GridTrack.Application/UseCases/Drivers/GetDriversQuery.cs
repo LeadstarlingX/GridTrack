@@ -7,6 +7,7 @@ public sealed record GetDriversQuery(
     string? Cursor,
     string? DistrictId,
     string? Status,
+    string? Search,
     int PageSize);
 
 public sealed class GetDriversHandler
@@ -15,5 +16,5 @@ public sealed class GetDriversHandler
         GetDriversQuery query,
         IDriverReadService readService,
         CancellationToken ct)
-        => readService.GetAllAsync(query.Cursor, query.DistrictId, query.Status, query.PageSize, ct);
+        => readService.GetAllAsync(query.Cursor, query.DistrictId, query.Status, query.Search, query.PageSize, ct);
 }

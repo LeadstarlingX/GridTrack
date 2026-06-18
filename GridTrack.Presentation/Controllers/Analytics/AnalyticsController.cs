@@ -10,10 +10,12 @@ namespace GridTrack.Presentation.Controllers.Analytics;
 public class AnalyticsController(IMessageBus bus) : ControllerBase
 {
     [HttpGet("summary")]
-    public async Task<IActionResult> GetSummary(CancellationToken ct)
+    public async Task<IActionResult> GetSummary(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
     {
         var result = await bus.InvokeAsync<GetAnalyticsSummaryResponse>(
-            new GetAnalyticsSummaryQuery(),
+            new GetAnalyticsSummaryQuery(request.From, request.To),
             ct);
 
         return Ok(result);
@@ -96,6 +98,18 @@ public class AnalyticsController(IMessageBus bus) : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("status-breakdown")]
+    public async Task<IActionResult> GetStatusBreakdown(
+        [FromQuery] AnalyticsRangeRequest request,
+        CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetStatusBreakdownResponse>(
+            new GetStatusBreakdownQuery(request.From, request.To),
+            ct);
+
+        return Ok(result);
+    }
+
     [HttpGet("anomaly-breakdown")]
     public async Task<IActionResult> GetAnomalyBreakdown(
         [FromQuery] AnalyticsRangeRequest request,
@@ -103,6 +117,16 @@ public class AnalyticsController(IMessageBus bus) : ControllerBase
     {
         var result = await bus.InvokeAsync<GetAnomalyBreakdownResponse>(
             new GetAnomalyBreakdownQuery(request.From, request.To),
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpGet("drivers")]
+    public async Task<IActionResult> GetDriverAnalytics(CancellationToken ct)
+    {
+        var result = await bus.InvokeAsync<GetDriverAnalyticsResponse>(
+            new GetDriverAnalyticsQuery(),
             ct);
 
         return Ok(result);

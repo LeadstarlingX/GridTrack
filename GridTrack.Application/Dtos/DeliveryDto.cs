@@ -13,9 +13,13 @@ public sealed class DeliveryDto
     public DateTime? ActualEta { get; init; }
     public string DistrictId { get; init; } = string.Empty;
     public bool AnomalyFlag { get; init; }
+    public AnomalyType? AnomalyTypeValue { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime? PickedUpAt { get; init; }
     public DateTime? DeliveredAt { get; init; }
     public DateTime? CancelledAt { get; init; }
     public string? AnomalyReason { get; init; }
+    public double? RouteDistanceMeters { get; init; }
+    public double? RouteDurationSeconds { get; init; }
+    public decimal? RouteCost { get; init; }
 }

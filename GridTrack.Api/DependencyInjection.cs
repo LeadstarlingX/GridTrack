@@ -57,17 +57,33 @@ public static class DependencyInjection
         return services;
     }
     
+    // Loopback + all RFC1918 ranges (Docker gateway, LAN) bypass the rate limiter.
+    // Rate limiting is only meaningful for external internet traffic.
+    private static bool IsInternalIp(System.Net.IPAddress ip)
+    {
+        if (System.Net.IPAddress.IsLoopback(ip)) return true;
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+        var b = ip.GetAddressBytes();
+        return b[0] == 10
+            || (b[0] == 172 && b[1] is >= 16 and <= 31)
+            || (b[0] == 192 && b[1] == 168);
+    }
+
     private static IServiceCollection AddRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
         {
-            // 1. Global Limiter: 100 requests per minute per IP
+            // Global limiter: 100 req/min per IP, internal traffic exempt.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
-                var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                
+                var remoteIp = context.Connection.RemoteIpAddress;
+                if (remoteIp is not null && IsInternalIp(remoteIp))
+                    return RateLimitPartition.GetNoLimiter("internal");
+
+                var key = remoteIp?.ToString() ?? "unknown";
                 return RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: remoteIp, 
+                    partitionKey: key,
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 100,
@@ -77,9 +93,7 @@ public static class DependencyInjection
                     });
             });
 
-            // 2. Handle Rejection (429 Too Many Requests)
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            
             options.OnRejected = async (context, token) =>
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;

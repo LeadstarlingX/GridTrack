@@ -9,14 +9,14 @@ public class DistrictHandlerIntegrationTests : BaseIntegrationTest
 {
     [Test]
     [NotInParallel(Order = 600)]
-    public async Task GetDistrictsQuery_Should_Return_Empty_When_No_Districts()
+    public async Task GetDistrictsQuery_Should_Return_Districts_From_GeoJson()
     {
         await ResetDatabaseAsync();
 
         var result = await InvokeAsync<GetDistrictsResponse>(new GetDistrictsQuery());
 
         result.Should().NotBeNull();
-        result.Items.Should().BeEmpty();
+        result.Items.Should().NotBeEmpty();
     }
 
     [Test]

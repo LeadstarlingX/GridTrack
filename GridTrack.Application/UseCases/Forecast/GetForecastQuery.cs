@@ -15,12 +15,10 @@ public sealed class GetForecastHandler
         IForecastReadService readService,
         CancellationToken ct)
     {
-        // Redis-first: return Python ML result if available
         var cached = await cache.GetAsync<ForecastResultMessage>($"forecast:{query.DistrictId}", ct);
         if (cached is not null)
             return MapFromMessage(cached);
 
-        // DB fallback: count deliveries created within the last hour
         var forecast = await readService.GetForecastAsync(query.DistrictId, DateTime.UtcNow.AddHours(-1), ct);
         if (forecast is null)
             return null;
@@ -30,8 +28,6 @@ public sealed class GetForecastHandler
             ? (double)driversNeeded / forecast.ExpectedDeliveries
             : 1.0;
 
-        // Cache DB-derived result for 1 minute so rapid re-reads don't hammer Postgres;
-        // Python's async result (5-min TTL) will overwrite this when it arrives.
         var fallbackMessage = new ForecastResultMessage(
             DistrictId: forecast.DistrictId,
             ExpectedDeliveries: forecast.ExpectedDeliveries,

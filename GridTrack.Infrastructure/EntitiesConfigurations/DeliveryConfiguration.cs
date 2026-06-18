@@ -41,11 +41,27 @@ public sealed class DeliveryConfiguration : IEntityTypeConfiguration<Delivery>
         builder.Property(d => d.AnomalyReason)
             .HasMaxLength(500);
 
+        builder.Property(d => d.UrgencyScore)
+            .IsRequired(false);
+
+        builder.Property(d => d.UrgencyScoreAt)
+            .IsRequired(false);
+
+        builder.Property(d => d.RouteDistanceMeters)
+            .IsRequired(false);
+
+        builder.Property(d => d.RouteDurationSeconds)
+            .IsRequired(false);
+
+        builder.Property(d => d.RouteCost)
+            .HasColumnType("numeric(12,2)")
+            .IsRequired(false);
+
         builder.HasIndex(d => d.Status);
 
         builder.HasIndex(d => d.DistrictId);
 
         builder.HasIndex(d => d.AssignedDriverId);
-        
+
     }
 }

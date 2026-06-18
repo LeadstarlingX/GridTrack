@@ -1,6 +1,7 @@
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dtos;
+using GridTrack.Application.Errors;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Drivers;
 
@@ -11,7 +12,7 @@ public sealed record ToggleDriverAvailabilityCommand(Guid DriverId, bool IsActiv
 
 public sealed class ToggleDriverAvailabilityHandler
 {
-    public async Task<(DriverAvailabilityResponse? Response, DriverAvailabilityChangedDomainEvent? Event)> Handle(
+    public async Task<(Result<DriverAvailabilityResponse> Result, DriverAvailabilityChangedDomainEvent? Event)> Handle(
         ToggleDriverAvailabilityCommand command,
         IDriverReadService readService,
         IDriverRepository repository,
@@ -20,11 +21,11 @@ public sealed class ToggleDriverAvailabilityHandler
     {
         var driver = await readService.GetAggregateByIdAsync(command.DriverId, ct);
         if (driver is null)
-            return (null, null);
+            return (Result.Failure<DriverAvailabilityResponse>(ApplicationErrors.DriverNotFound), null);
 
-        var result = driver.SetAvailability(command.IsActive);
-        if (result.IsFailure)
-            return (null, null);
+        var setResult = driver.SetAvailability(command.IsActive);
+        if (setResult.IsFailure)
+            return (Result.Failure<DriverAvailabilityResponse>(setResult.Error), null);
 
         await repository.UpdateAsync(driver, ct);
         await unitOfWork.SaveChangesAsync(ct);
@@ -40,6 +41,6 @@ public sealed class ToggleDriverAvailabilityHandler
             status,
             DateTime.UtcNow);
 
-        return (response, domainEvent);
+        return (Result.Success(response), domainEvent);
     }
 }

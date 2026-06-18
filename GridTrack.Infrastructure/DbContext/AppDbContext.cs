@@ -1,5 +1,6 @@
 ﻿using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Deliveries;
+using GridTrack.Domain.DistrictGroups;
 using GridTrack.Domain.Drivers;
 using GridTrack.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ public class AppDbContext : Microsoft.EntityFrameworkCore.DbContext, IUnitOfWork
     public DbSet<Delivery> Deliveries => Set<Delivery>();
     public DbSet<Driver> Drivers => Set<Driver>();
     public DbSet<DeliveryRoute> DeliveryRoutes => Set<DeliveryRoute>();
+    public DbSet<DistrictGroup> DistrictGroups => Set<DistrictGroup>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

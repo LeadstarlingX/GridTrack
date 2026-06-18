@@ -14,21 +14,25 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         _sqlConnectionFactory = sqlConnectionFactory;
     }
 
-    public async Task<GetAnalyticsSummaryResponse> GetSummaryAsync(CancellationToken ct)
+    public async Task<GetAnalyticsSummaryResponse> GetSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct)
     {
         using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // When no range is given fall back to today (UTC). The "to" bound is exclusive end-of-day.
+        var rangeFrom = from ?? DateTime.UtcNow.Date;
+        var rangeTo   = (to ?? DateTime.UtcNow.Date).Date.AddDays(1);
 
         const string sql = """
                            SELECT
                                (SELECT COUNT(*)::int
                                 FROM public."Deliveries"
-                                WHERE DATE("CreatedAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "TotalDeliveriesToday",
+                                WHERE "CreatedAt" >= @From AND "CreatedAt" < @To) AS "TotalDeliveriesToday",
 
                                (SELECT CASE WHEN COUNT(*) = 0 THEN 0.0
                                             ELSE COUNT(*) FILTER (WHERE "Status" = 4)::float / COUNT(*)::float
                                        END
                                 FROM public."Deliveries"
-                                WHERE DATE("CreatedAt" AT TIME ZONE 'UTC') = CURRENT_DATE) AS "CompletionRate",
+                                WHERE "CreatedAt" >= @From AND "CreatedAt" < @To) AS "CompletionRate",
 
                                (SELECT COUNT(*)::int
                                 FROM public."Drivers"
@@ -37,12 +41,34 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                                (SELECT CASE WHEN COUNT(*) = 0 THEN 0.0
                                             ELSE COUNT(*) FILTER (WHERE "AnomalyFlag" = true)::float / COUNT(*)::float
                                        END
-                                FROM public."Deliveries") AS "AnomalyRate",
+                                FROM public."Deliveries"
+                                WHERE "CreatedAt" >= @From AND "CreatedAt" < @To) AS "AnomalyRate",
+
+                               (SELECT COUNT(*)::int
+                                FROM public."Deliveries"
+                                WHERE "Status" = 0) AS "PendingDeliveries",
+
+                               (SELECT COALESCE(
+                                    AVG(EXTRACT(EPOCH FROM ("DeliveredAt" - "PickedUpAt")) / 60.0), 0)::float
+                                FROM public."Deliveries"
+                                WHERE "Status" = 4
+                                  AND "DeliveredAt" IS NOT NULL
+                                  AND "PickedUpAt" IS NOT NULL
+                                  AND "DeliveredAt" >= @From AND "DeliveredAt" < @To) AS "AvgDeliveryMinutes",
+
+                               (SELECT CASE
+                                    WHEN COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL) = 0 THEN 0.0
+                                    ELSE COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL AND "DeliveredAt" <= "ExpectedEta")::float
+                                         / COUNT(*) FILTER (WHERE "ExpectedEta" IS NOT NULL)::float * 100.0
+                                    END
+                                FROM public."Deliveries"
+                                WHERE "Status" = 4
+                                  AND "DeliveredAt" >= @From AND "DeliveredAt" < @To) AS "OnTimeRatePct",
 
                                NOW() AS "UpdatedAt"
                            """;
 
-        var row = await connection.QueryFirstAsync<GetAnalyticsSummaryResponse>(sql);
+        var row = await connection.QueryFirstAsync<GetAnalyticsSummaryResponse>(sql, new { From = rangeFrom, To = rangeTo });
         return row;
     }
 
@@ -120,12 +146,25 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                           ORDER BY 1
                           """;
 
+        var urgencySql = $"""
+                          SELECT
+                              date_trunc('{safeTrunc}', "UrgencyScoreAt" AT TIME ZONE 'UTC')::text AS "Bucket",
+                              AVG("UrgencyScore")::float                                            AS "Value"
+                          FROM public."Deliveries"
+                          WHERE "UrgencyScore" IS NOT NULL
+                            AND "UrgencyScoreAt" IS NOT NULL
+                            AND "UrgencyScoreAt" >= @From AND "UrgencyScoreAt" <= @To
+                          GROUP BY 1
+                          ORDER BY 1
+                          """;
+
         var param = new { From = from, To = to };
 
         var deliveries = (await connection.QueryAsync<TrendPointResponse>(deliverySql, param)).ToList();
-        var anomalies  = (await connection.QueryAsync<TrendPointResponse>(anomalySql,  param)).ToList();
+        var anomalies  = (await connection.QueryAsync<TrendPointResponse>(anomalySql, param)).ToList();
+        var urgency    = (await connection.QueryAsync<TrendPointResponse>(urgencySql, param)).ToList();
 
-        return new GetTrendsResponse(deliveries, anomalies);
+        return new GetTrendsResponse(deliveries, anomalies, urgency);
     }
 
     public async Task<GetDistrictVolumeResponse> GetDistrictVolumeAsync(
@@ -317,6 +356,148 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         return new GetAnomalyBreakdownResponse(byType, byDistrict);
     }
 
+    public async Task<GetDriverAnalyticsResponse> GetDriverAnalyticsAsync(CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // ── Per-driver aggregate stats (7-day rolling window) ──────────────
+        const string mainSql = """
+            SELECT
+                d."DriverId",
+                d."Name",
+                d."CarType",
+                d."DistrictId",
+                COUNT(del."DeliveryId") FILTER (
+                    WHERE del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                )::int AS "TotalLast7Days",
+                COUNT(del."DeliveryId") FILTER (
+                    WHERE del."Status" = 4
+                      AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                )::int AS "CompletedLast7Days",
+                CASE
+                    WHEN COUNT(del."DeliveryId") FILTER (
+                        WHERE del."Status" = 4
+                          AND del."ExpectedEta" IS NOT NULL
+                          AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                    ) = 0 THEN NULL
+                    ELSE COUNT(del."DeliveryId") FILTER (
+                             WHERE del."Status" = 4
+                               AND del."ExpectedEta" IS NOT NULL
+                               AND del."DeliveredAt" <= del."ExpectedEta"
+                               AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                         / COUNT(del."DeliveryId") FILTER (
+                             WHERE del."Status" = 4
+                               AND del."ExpectedEta" IS NOT NULL
+                               AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                END AS "OnTimeRatePct",
+                CASE
+                    WHEN COUNT(del."DeliveryId") FILTER (
+                        WHERE del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                    ) = 0 THEN 0.0
+                    ELSE COUNT(del."DeliveryId") FILTER (
+                             WHERE del."AnomalyFlag" = true
+                               AND del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                         / COUNT(del."DeliveryId") FILTER (
+                             WHERE del."CreatedAt" >= NOW() - INTERVAL '7 days'
+                         )::float
+                END AS "AnomalyRate",
+                COALESCE(AVG(
+                    EXTRACT(EPOCH FROM (del."DeliveredAt" - del."PickedUpAt"))
+                ) FILTER (
+                    WHERE del."Status" = 4
+                      AND del."DeliveredAt" IS NOT NULL
+                      AND del."PickedUpAt"  IS NOT NULL
+                      AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+                ), 0)::float AS "AvgDurationSeconds"
+            FROM "Drivers" d
+            LEFT JOIN "Deliveries" del ON del."AssignedDriverId" = d."DriverId"
+            GROUP BY d."DriverId", d."Name", d."CarType", d."DistrictId"
+            ORDER BY "TotalLast7Days" DESC, d."Name"
+            """;
+
+        // ── District-average duration (7-day) for comparison ───────────────
+        const string districtSql = """
+            SELECT
+                "DistrictId",
+                COALESCE(AVG(EXTRACT(EPOCH FROM ("DeliveredAt" - "PickedUpAt"))), 0)::float AS "AvgDurationSeconds"
+            FROM "Deliveries"
+            WHERE "Status" = 4
+              AND "DeliveredAt" IS NOT NULL
+              AND "PickedUpAt"  IS NOT NULL
+              AND "DeliveredAt" >= NOW() - INTERVAL '7 days'
+            GROUP BY "DistrictId"
+            """;
+
+        // ── Hourly on-time rate per driver (7-day) ─────────────────────────
+        const string hourlySql = """
+            SELECT
+                del."AssignedDriverId" AS "DriverId",
+                EXTRACT(HOUR FROM del."DeliveredAt" AT TIME ZONE 'UTC')::int AS "Hour",
+                COUNT(*) FILTER (WHERE del."DeliveredAt" <= del."ExpectedEta")::float
+                    / NULLIF(COUNT(*)::float, 0) AS "OnTimeRatePct",
+                COUNT(*)::int AS "SampleCount"
+            FROM "Deliveries" del
+            WHERE del."Status" = 4
+              AND del."AssignedDriverId" IS NOT NULL
+              AND del."ExpectedEta" IS NOT NULL
+              AND del."DeliveredAt" IS NOT NULL
+              AND del."DeliveredAt" >= NOW() - INTERVAL '7 days'
+            GROUP BY del."AssignedDriverId",
+                     EXTRACT(HOUR FROM del."DeliveredAt" AT TIME ZONE 'UTC')
+            ORDER BY del."AssignedDriverId", "Hour"
+            """;
+
+        var mainRows    = (await connection.QueryAsync<DriverStatsRow>(mainSql)).ToList();
+        var districtAvg = (await connection.QueryAsync<DistrictAvgRow>(districtSql))
+                              .ToDictionary(r => r.DistrictId, r => r.AvgDurationSeconds);
+        var hourlyRows  = (await connection.QueryAsync<HourlyRow>(hourlySql))
+                              .GroupBy(r => r.DriverId)
+                              .ToDictionary(g => g.Key, g => g.ToList());
+
+        var drivers = mainRows
+            .Select(r =>
+            {
+                var hourly = hourlyRows.TryGetValue(r.DriverId, out var h)
+                    ? h.Select(p => new HourlyOnTimePointDto(p.Hour, p.OnTimeRatePct, p.SampleCount))
+                       .ToList()
+                    : [];
+
+                return new DriverAnalyticsItemResponse(
+                    r.DriverId,
+                    r.Name,
+                    r.CarType,
+                    r.DistrictId,
+                    r.TotalLast7Days,
+                    r.CompletedLast7Days,
+                    r.OnTimeRatePct,
+                    r.AnomalyRate,
+                    r.AvgDurationSeconds,
+                    districtAvg.GetValueOrDefault(r.DistrictId, 0),
+                    hourly);
+            })
+            .ToList();
+
+        return new GetDriverAnalyticsResponse(drivers);
+    }
+
+    private sealed record DriverStatsRow(
+        Guid DriverId,
+        string Name,
+        string? CarType,
+        string DistrictId,
+        int TotalLast7Days,
+        int CompletedLast7Days,
+        double? OnTimeRatePct,
+        double AnomalyRate,
+        double AvgDurationSeconds);
+
+    private sealed record DistrictAvgRow(string DistrictId, double AvgDurationSeconds);
+
+    private sealed record HourlyRow(Guid DriverId, int Hour, double OnTimeRatePct, int SampleCount);
+
     private sealed record PerformanceRow(
         string DistrictId,
         int DeliveredCount,
@@ -330,4 +511,25 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         bool IsActive,
         int CompletedToday,
         int ActiveDeliveries);
+
+    public async Task<double> GetHistoricalHourlyDeliveryAvgAsync(
+        string districtId, int dayOfWeek, int hour, CancellationToken ct)
+    {
+        using var connection = _sqlConnectionFactory.CreateConnection();
+        const string sql = """
+            SELECT COALESCE(AVG(cnt), 0)
+            FROM (
+                SELECT DATE("CreatedAt") AS day, COUNT(*)::int AS cnt
+                FROM public."Deliveries"
+                WHERE "DistrictId" = @DistrictId
+                  AND EXTRACT(DOW FROM "CreatedAt") = @DayOfWeek
+                  AND EXTRACT(HOUR FROM "CreatedAt") = @Hour
+                  AND "CreatedAt" >= NOW() - INTERVAL '28 days'
+                GROUP BY DATE("CreatedAt")
+            ) sub
+            """;
+        var result = await connection.ExecuteScalarAsync<double>(sql,
+            new { DistrictId = districtId, DayOfWeek = dayOfWeek, Hour = hour });
+        return result;
+    }
 }

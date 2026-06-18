@@ -4,7 +4,7 @@ namespace GridTrack.Application.CQRS.ReadServices;
 
 public interface IAnalyticsReadService
 {
-    Task<GetAnalyticsSummaryResponse> GetSummaryAsync(CancellationToken ct);
+    Task<GetAnalyticsSummaryResponse> GetSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct);
 
     Task<GetH3DensityResponse> GetH3DensityAsync(
         DateTime from,
@@ -42,5 +42,14 @@ public interface IAnalyticsReadService
     Task<GetAnomalyBreakdownResponse> GetAnomalyBreakdownAsync(
         DateTime? from,
         DateTime? to,
+        CancellationToken ct);
+
+    Task<GetDriverAnalyticsResponse> GetDriverAnalyticsAsync(CancellationToken ct);
+
+    /// <summary>Average deliveries created at the given hour/day-of-week over the past 28 days.</summary>
+    Task<double> GetHistoricalHourlyDeliveryAvgAsync(
+        string districtId,
+        int    dayOfWeek,
+        int    hour,
         CancellationToken ct);
 }

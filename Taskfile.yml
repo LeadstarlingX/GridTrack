@@ -64,9 +64,44 @@ tasks:
     cmds:
       - dotnet run --project ./GridTrack.E2ETests/GridTrack.E2ETests.csproj --configuration Release -- --report-trx --report-trx-filename e2e-test-results.trx --results-directory ./TestResults/E2E
 
+  # ============================================
+  # LOAD TEST (k6)
+  # ============================================
+
+  k6:
+    desc: Run the k6 load test (QUICK, write-behind) against a running stack on :5098. Override load with DRIVER_VUS=N.
+    cmds:
+      - |
+        echo "Waiting for API + seeded drivers on :5098 ..."
+        for i in $(seq 1 40); do
+          if curl -sf "http://localhost:5098/api/drivers?pageSize=5" | grep -q '"id"'; then echo "  ready"; break; fi
+          echo "  ($i/40) not ready"; sleep 5
+        done
+      - |
+        IDS=$(curl -sf "http://localhost:5098/api/drivers?pageSize=200" \
+          | python3 -c "import sys,json; print(','.join(d['id'] for d in json.load(sys.stdin).get('items',[])))")
+        k6 run \
+          --env BASE=http://localhost:5098 \
+          --env DRIVER_VUS=${DRIVER_VUS:-300} \
+          --env WRITE_BEHIND=true \
+          --env QUICK=true \
+          --env DRIVER_IDS="$IDS" \
+          load-tests/gridtrack.js
+
+  k6-ci:
+    desc: CI load test — bring up the minimal stack (compose.ci.yaml), run k6, tear down.
+    cmds:
+      - docker compose -f compose.ci.yaml up -d --build
+      - defer: docker compose -f compose.ci.yaml down -v
+      - task: k6
+
   test-all:
     desc: Run all tests
     deps: [ test-architecture, test-domain, test-namingconventions, test-application, test-infrastructure-unit, test-integration, test-e2e ]
+    
+  test-without-coverage:
+    desc: Run all tests without coverage
+    deps: [ test-architecture, test-namingconventions ]
 
   # ============================================
   # COVERAGE TASKS
@@ -169,6 +204,7 @@ tasks:
     desc: Run CI pipeline (build + tests)
     cmds:
       - task: build
+      - task: test-without-coverage
       - task: coverage
       - task: update-readme-coverage
 

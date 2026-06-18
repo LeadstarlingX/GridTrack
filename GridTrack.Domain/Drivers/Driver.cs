@@ -10,7 +10,8 @@ public sealed class Driver : BaseEntity
 	}
 
 	private Driver(Guid driverId, Point location, bool isActive, DateTime lastSeen, string districtId,
-	               string name, string shortName)
+	               string name, string shortName, CarType? carType, string? licensePlate, string? phoneNumber,
+	               decimal? vehicleCapacityKg, DateTime? shiftStartedAt, DateTime? shiftEndsAt)
 	{
 		DriverId = driverId;
 		Location = location;
@@ -19,6 +20,12 @@ public sealed class Driver : BaseEntity
 		DistrictId = districtId;
 		Name = name;
 		ShortName = shortName;
+		CarType = carType;
+		LicensePlate = licensePlate;
+		PhoneNumber = phoneNumber;
+		VehicleCapacityKg = vehicleCapacityKg;
+		ShiftStartedAt = shiftStartedAt;
+		ShiftEndsAt = shiftEndsAt;
 	}
 
 	public Guid DriverId { get; private set; }
@@ -28,6 +35,12 @@ public sealed class Driver : BaseEntity
 	public string DistrictId { get; private set; } = string.Empty;
 	public string Name { get; private set; } = string.Empty;
 	public string ShortName { get; private set; } = string.Empty;
+	public CarType? CarType { get; private set; }
+	public string? LicensePlate { get; private set; }
+	public string? PhoneNumber { get; private set; }
+	public decimal? VehicleCapacityKg { get; private set; }
+	public DateTime? ShiftStartedAt { get; private set; }
+	public DateTime? ShiftEndsAt { get; private set; }
 
 	public static Result<Driver> Create(
 		Guid driverId,
@@ -36,7 +49,13 @@ public sealed class Driver : BaseEntity
 		DateTime lastSeen,
 		string name,
 		string shortName,
-		bool isActive = true)
+		bool isActive = true,
+		CarType? carType = null,
+		string? licensePlate = null,
+		string? phoneNumber = null,
+		decimal? vehicleCapacityKg = null,
+		DateTime? shiftStartedAt = null,
+		DateTime? shiftEndsAt = null)
 	{
 		if (driverId == Guid.Empty)
 		{
@@ -58,7 +77,7 @@ public sealed class Driver : BaseEntity
 			return Result.Failure<Driver>(DriverErrors.InvalidName);
 		}
 
-		var driver = new Driver(driverId, location, isActive, lastSeen, districtId, name, shortName);
+		var driver = new Driver(driverId, location, isActive, lastSeen, districtId, name, shortName, carType, licensePlate, phoneNumber, vehicleCapacityKg, shiftStartedAt, shiftEndsAt);
 		driver.RaiseDomainEvent(new DriverEnteredDistrictDomainEvent(driverId, districtId));
 		return Result.Success(driver);
 	}

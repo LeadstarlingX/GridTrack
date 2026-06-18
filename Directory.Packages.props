@@ -2,6 +2,7 @@
   <ItemGroup>
     <!-- ASP.NET Core & EF Core -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="9.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.15" />
@@ -36,7 +37,7 @@
     <!-- Utility & Patterns -->
     <PackageVersion Include="WolverineFx" Version="5.39.0" />
     <PackageVersion Include="WolverineFx.RabbitMQ" Version="5.39.0" />
-<!--    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.0.0" />-->
+    <!--    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.0.0" />-->
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
     <PackageVersion Include="Dapper" Version="2.1.35" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
@@ -58,6 +59,8 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="4.8.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="4.8.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.8.0" />
+    <!-- ClickHouse -->
+    <PackageVersion Include="ClickHouse.Client" Version="7.4.0" />
     <!-- TestContainers -->
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.10.0" />
     <PackageVersion Include="Testcontainers.Redis" Version="4.10.0" />

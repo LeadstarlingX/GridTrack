@@ -11,4 +11,11 @@ public interface ICacheService
         CancellationToken cancellationToken = default);
 
     Task RemoveAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns cached value if present; otherwise invokes <paramref name="factory"/>, caches the result, and returns it.</summary>
+    Task<T> GetOrSetAsync<T>(
+        string key,
+        Func<CancellationToken, Task<T>> factory,
+        TimeSpan expiration,
+        CancellationToken cancellationToken = default);
 }

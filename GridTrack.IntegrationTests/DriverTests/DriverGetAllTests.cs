@@ -59,7 +59,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         var driver = MakeDriver();
         await SeedDriversAsync([driver]);
 
-        var result = await GetReadService().GetAllAsync(null, null, null, 10, CancellationToken.None);
+        var result = await GetReadService().GetAllAsync(null, null, null, null, 10, CancellationToken.None);
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be("available");
@@ -78,7 +78,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         await SeedDriversAsync([driver]);
         await SeedDeliveriesAsync([delivery]);
 
-        var result = await GetReadService().GetAllAsync(null, null, null, 10, CancellationToken.None);
+        var result = await GetReadService().GetAllAsync(null, null, null, null, 10, CancellationToken.None);
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be("in-transit");
@@ -96,7 +96,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         await SeedDriversAsync([driver]);
         await SeedDeliveriesAsync([delivery]);
 
-        var result = await GetReadService().GetAllAsync(null, null, null, 10, CancellationToken.None);
+        var result = await GetReadService().GetAllAsync(null, null, null, null, 10, CancellationToken.None);
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be("stalled");
@@ -113,7 +113,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         var driver = MakeDriver(isActive: false);
         await SeedDriversAsync([driver]);
 
-        var result = await GetReadService().GetAllAsync(null, null, null, 10, CancellationToken.None);
+        var result = await GetReadService().GetAllAsync(null, null, null, null, 10, CancellationToken.None);
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be("offline");
@@ -131,7 +131,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         var b = MakeDriver(name: "Sami Karimi", shortName: "Sami", district: "malki");
         await SeedDriversAsync([a, b]);
 
-        var result = await GetReadService().GetAllAsync(null, "mezzeh", null, 10, CancellationToken.None);
+        var result = await GetReadService().GetAllAsync(null, "mezzeh", null, null, 10, CancellationToken.None);
 
         result.Items.Should().HaveCount(1);
         result.Items[0].DistrictId.Should().Be("mezzeh");
@@ -147,7 +147,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         var offline = MakeDriver(name: "Offline Driver", shortName: "FD", isActive: false);
         await SeedDriversAsync([online, offline]);
 
-        var result = await GetReadService().GetAllAsync(null, null, "offline", 10, CancellationToken.None);
+        var result = await GetReadService().GetAllAsync(null, null, "offline", null, 10, CancellationToken.None);
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be("offline");
@@ -166,15 +166,75 @@ public class DriverGetAllTests : BaseIntegrationTest
             .ToList();
         await SeedDriversAsync(drivers);
 
-        var page1 = await GetReadService().GetAllAsync(null, null, null, 3, CancellationToken.None);
+        var page1 = await GetReadService().GetAllAsync(null, null, null, null, 3, CancellationToken.None);
 
         page1.Items.Should().HaveCount(3);
         page1.NextCursor.Should().NotBeNull();
 
-        var page2 = await GetReadService().GetAllAsync(page1.NextCursor, null, null, 3, CancellationToken.None);
+        var page2 = await GetReadService().GetAllAsync(page1.NextCursor, null, null, null, 3, CancellationToken.None);
 
         page2.Items.Should().HaveCount(2);
         page2.NextCursor.Should().BeNull();
+    }
+
+    // ── VehicleAndContactInfo ─────────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 68)]
+    public async Task GetAllAsync_Returns_CarType_LicensePlate_PhoneNumber_When_Set()
+    {
+        await ResetDatabaseAsync();
+
+        var d = Driver.Create(
+            Guid.NewGuid(), Damascus, "mezzeh", DateTime.UtcNow,
+            "Ahmad Hassan", "Ahmad", true,
+            carType: CarType.Sedan, licensePlate: "AHM-9901", phoneNumber: "+963-911-990001").Value;
+        d.ClearDomainEvents();
+        await SeedDriversAsync([d]);
+
+        var result = await GetReadService().GetAllAsync(null, null, null, null, 10, CancellationToken.None);
+
+        result.Items.Should().HaveCount(1);
+        result.Items[0].CarType.Should().Be("Sedan");
+        result.Items[0].LicensePlate.Should().Be("AHM-9901");
+        result.Items[0].PhoneNumber.Should().Be("+963-911-990001");
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 69)]
+    public async Task GetAllAsync_Searches_By_Name_Phone_And_LicensePlate()
+    {
+        await ResetDatabaseAsync();
+
+        var target = Driver.Create(
+            Guid.NewGuid(), Damascus, "mezzeh", DateTime.UtcNow,
+            "Ahmad Hassan", "Ahmad", true,
+            carType: CarType.Sedan, licensePlate: "AHM-9901", phoneNumber: "+963-911-990001").Value;
+        target.ClearDomainEvents();
+        var other = Driver.Create(
+            Guid.NewGuid(), Damascus, "mezzeh", DateTime.UtcNow,
+            "Sami Karimi", "Sami", true,
+            carType: CarType.Sedan, licensePlate: "SAM-1234", phoneNumber: "+963-933-110022").Value;
+        other.ClearDomainEvents();
+        await SeedDriversAsync([target, other]);
+
+        // by name (case-insensitive, partial)
+        var byName = await GetReadService().GetAllAsync(null, null, null, "ahmad", 10, CancellationToken.None);
+        byName.Items.Should().ContainSingle().Which.Name.Should().Be("Ahmad Hassan");
+
+        // by license plate (partial)
+        var byPlate = await GetReadService().GetAllAsync(null, null, null, "AHM-99", 10, CancellationToken.None);
+        byPlate.Items.Should().ContainSingle().Which.LicensePlate.Should().Be("AHM-9901");
+
+        // by phone number (partial)
+        var byPhone = await GetReadService().GetAllAsync(null, null, null, "990001", 10, CancellationToken.None);
+        byPhone.Items.Should().ContainSingle().Which.PhoneNumber.Should().Be("+963-911-990001");
+
+        // no match
+        var noMatch = await GetReadService().GetAllAsync(null, null, null, "zzz-no-match", 10, CancellationToken.None);
+        noMatch.Items.Should().BeEmpty();
     }
 
     // ── CompletedToday ────────────────────────────────────────────────────
@@ -190,7 +250,7 @@ public class DriverGetAllTests : BaseIntegrationTest
         await SeedDriversAsync([driver]);
         await SeedDeliveriesAsync([delivered]);
 
-        var result = await GetReadService().GetAllAsync(null, null, null, 10, CancellationToken.None);
+        var result = await GetReadService().GetAllAsync(null, null, null, null, 10, CancellationToken.None);
 
         result.Items.Should().HaveCount(1);
         result.Items[0].CompletedToday.Should().Be(1);

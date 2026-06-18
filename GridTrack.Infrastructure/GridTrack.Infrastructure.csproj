@@ -2,6 +2,8 @@
 
     <ItemGroup>
 
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
+
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
@@ -16,7 +18,8 @@
         <PackageReference Include="Microsoft.Data.SqlClient" />
         <PackageReference Include="pocketken.H3" />
         <PackageReference Include="WolverineFx.RabbitMQ" />
-        
+        <PackageReference Include="ClickHouse.Client" />
+
     </ItemGroup>
 
 
