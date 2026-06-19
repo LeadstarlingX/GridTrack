@@ -6,6 +6,7 @@ import sys
 DEFAULT_COMPARISON_WB_FILE     = "load-tests/results/comparison-write-behind.json"
 DEFAULT_COMPARISON_DIRECT_FILE = "load-tests/results/comparison-direct-postgres.json"
 DEFAULT_STRESS_FILE            = "load-tests/results/stress-write-behind.json"
+DEFAULT_THROUGHPUT_FILE        = "load-tests/results/throughput-write-behind.json"
 
 PATH_LABELS = {
     "gridtrack_driver_tel_latency": "Driver telemetry",
@@ -279,6 +280,45 @@ def parse_comparison(wb_path, direct_path):
         "all_passed": all_passed,
     }
 
+def generate_throughput_md(filepath):
+    """Parse throughput JSON and return a Markdown string."""
+    try:
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+            
+        m = data.get('metrics', {})
+        vus_max = m.get('vus_max', {}).get('values', {}).get('max', '?')
+        reqs = m.get('http_reqs', {}).get('values', {}).get('count', '?')
+        rps = m.get('http_reqs', {}).get('values', {}).get('rate', 0)
+        err_rate = m.get('http_req_failed', {}).get('values', {}).get('rate', 0)
+        
+        # Throughput uses a different metric name
+        tel_m = m.get('gridtrack_driver_tel_throughput_latency', {}).get('values', {})
+        
+        return f"""### Throughput Ceiling Test
+
+> Measures maximum sustained RPS before degradation. Uses a constant-arrival-rate executor (up to 3,000 target RPS) with no sleep, pushing the API to its absolute limit.
+
+**Latest run:**
+
+| Result | Value |
+|--------|-------|
+| Peak RPS | **{rps:.1f}/s** |
+| Peak concurrent VUs | **{vus_max}** |
+| Total HTTP requests | **{reqs:,}** |
+| Error rate | **{err_rate * 100:.2f}%** |
+
+**Telemetry Latency at Peak:**
+
+| Avg | Median | p90 | p95 | Max |
+|----:|-------:|----:|----:|----:|
+| {tel_m.get('avg', 0):.1f} ms | {tel_m.get('med', 0):.1f} ms | {tel_m.get('p(90)', 0):.1f} ms | {tel_m.get('p(95)', 0):.1f} ms | {tel_m.get('max', 0) / 1000:.2f} s |
+<!-- K6_THROUGHPUT_END -->"""
+        return md
+    except Exception as e:
+        print(f"Warning: Could not generate throughput md: {e}")
+        return "<!-- K6_THROUGHPUT_START -->\n<!-- K6_THROUGHPUT_END -->"
+
 
 def generate_comparison_section(results):
     if results is None:
@@ -321,29 +361,48 @@ def update_readme(wb_file, direct_file, stress_file):
 
     comparison_results = parse_comparison(wb_file, direct_file)
     stress_results = parse_stress_results(stress_file)
+    throughput_section = generate_throughput_md(DEFAULT_THROUGHPUT_FILE)
 
     print("Checking for k6 results files:")
     print(f"  - Comparison write-behind ({wb_file}): {'FOUND' if pathlib.Path(wb_file).exists() else 'NOT FOUND'}")
     print(f"  - Comparison direct-postgres ({direct_file}): {'FOUND' if pathlib.Path(direct_file).exists() else 'NOT FOUND'}")
     print(f"  - Stress ({stress_file}): {'FOUND' if stress_results else 'NOT FOUND'}")
+    print(f"  - Throughput ({DEFAULT_THROUGHPUT_FILE}): {'FOUND' if pathlib.Path(DEFAULT_THROUGHPUT_FILE).exists() else 'NOT FOUND'}")
 
     comparison_section = generate_comparison_section(comparison_results)
     stress_section = generate_stress_section(stress_results)
 
+    payload_start, payload_end = "<!-- K6_PAYLOAD_START -->", "<!-- K6_PAYLOAD_END -->"
     comparison_start, comparison_end = "<!-- K6_COMPARISON_START -->", "<!-- K6_COMPARISON_END -->"
+    throughput_start, throughput_end = "<!-- K6_THROUGHPUT_START -->", "<!-- K6_THROUGHPUT_END -->"
     stress_start, stress_end = "<!-- K6_STRESS_START -->", "<!-- K6_STRESS_END -->"
 
-    if comparison_start not in content:
-        match = re.search(r"(## Load Test Results\n)", content)
-        if match:
-            pos = match.end()
-            content = (content[:pos]
-                       + f"\n{comparison_start}\n{comparison_end}\n\n{stress_start}\n{stress_end}\n"
-                       + content[pos:])
+    # Fallback: create tags if they don't exist in the README so the regex doesn't fail
+    if payload_start not in content:
+        content = content.replace(comparison_start, f"{payload_start}\n{payload_end}\n\n{comparison_start}")
+    if throughput_start not in content:
+        content = content.replace(stress_start, f"{throughput_start}\n{throughput_end}\n\n{stress_start}")
 
+    payload_context = """### Test Context
+    | Setting | Value |
+    |---------|-------|
+    | **Payload Endpoint** | `/api/telemetry/position` |
+    | **Payload Size** | `52 bytes` |
+    | **Payload Structure** | `{ "driverId": "uuid", "lat": float, "lng": float }` |"""
+    
+    content = re.sub(
+        rf"({re.escape(payload_start)}\n).*?({re.escape(payload_end)})",
+        f"{payload_start}\n{payload_context}{payload_end}",
+        content, flags=re.DOTALL,
+    )
     content = re.sub(
         rf"({re.escape(comparison_start)}\n).*?({re.escape(comparison_end)})",
         f"{comparison_start}\n{comparison_section}{comparison_end}",
+        content, flags=re.DOTALL,
+    )
+    content = re.sub(
+        rf"({re.escape(throughput_start)}\n).*?({re.escape(throughput_end)})",
+        f"{throughput_start}\n{throughput_section}{throughput_end}",
         content, flags=re.DOTALL,
     )
     content = re.sub(
