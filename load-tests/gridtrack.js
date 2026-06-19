@@ -435,10 +435,37 @@ export function handleSummary(data) {
     const rps   = data.metrics?.http_reqs?.values?.rate?.toFixed(1) ?? '?'
     const errR  = pct('http_req_failed')
 
+    const payloadExample = JSON.stringify({
+        driverId: DRIVER_IDS.length > 0 ? DRIVER_IDS[0] : "00000000-0000-0000-0000-000000000000",
+        lat: 33.5138,
+        lng: 36.2765
+    }, null, 2)
+
+    const contextBlock = `
+    ### Test Context
+    | Setting | Value |
+    |---------|-------|
+    | **Endpoint** | \`${TEL_URL}\` |
+    | **Write-Behind** | \`${WRITE_BEHIND}\` |
+    | **Payload Size** | \`${new Blob([JSON.stringify({ driverId: "uuid", lat: 33.5, lng: 36.2 })]).size} bytes\` |
+    | **Payload Structure** | \`{ driverId: "uuid", lat: float, lng: float }\` |
+    
+    <details>
+    <summary>Example Payload</summary>
+    
+    \`\`\`json
+     ${payloadExample}
+    \`\`\`
+    </details>
+    `
+        // -----------------------------------
+
     const md = `## GridTrack Load Test — \`${MODE_LABEL}\`
 
 > **VUs:** ${vus} &nbsp;|&nbsp; **Requests:** ${reqs} &nbsp;|&nbsp; **RPS:** ${rps} &nbsp;|&nbsp; **Error rate:** ${errR}
-
+    
+    ${contextBlock}
+    
 ### Latency by path (ms)
 
 | Path | p(50) | p(90) | p(95) | p(99) |
@@ -463,7 +490,11 @@ export function handleSummary(data) {
 `
 
     const outDir  = 'load-tests/results'
-    const RUN_TYPE = THRESHOLD_PROFILE === 'compare' ? 'comparison' : 'stress'
+    const RUN_TYPE = THRESHOLD_PROFILE === 'compare'
+        ? 'comparison'
+        : THRESHOLD_PROFILE === 'ceiling'
+            ? 'throughput'
+            : 'stress'
     const outBase  = `${outDir}/${RUN_TYPE}-${MODE_LABEL}`
 
     return {
