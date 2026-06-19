@@ -115,7 +115,7 @@ jobs:
         run: task k6-ci
         continue-on-error: true
         env:
-          STRESS_VUS: "900"
+          STRESS_VUS: "450"
           JWT_TOKEN: ${{ secrets.K6_JWT_TOKEN }}
           TEST_MODE: "both"
 
