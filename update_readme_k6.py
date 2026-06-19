@@ -140,7 +140,7 @@ summary_table = f"""| Result | Value |
 | Total HTTP requests | **{fmt_count(http_reqs)}** |
 | Request throughput | **{fmt_rate(http_reqs_rate)}** |
 | Iterations | **{fmt_count(iterations)} ({fmt_rate(iterations_rate)})** |
-| Checks passed | **{fmt_count(checks_passed)} / {fmt_count(checks_total)} ({checks_pass_pct:.0f}%)** |
+| Checks passed | **{fmt_count(checks_passed)} / {fmt_count(checks_total)} ({checks_pass_pct:.0f if checks_pass_pct is not None else 'N/A'}%)** |
 | Error rate | **{fmt_pct(error_rate)}** |
 | Data received | **{fmt_bytes_per_sec(data_received)}** |
 | Data sent | **{fmt_bytes_per_sec(data_sent)}** |"""
