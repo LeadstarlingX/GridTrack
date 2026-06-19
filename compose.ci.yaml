@@ -55,6 +55,13 @@ services:
       timeout: 10s
       retries: 6
       start_period: 30s
+      
+  gridtrack.seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:80"
 
   gridtrack.api:
     image: gridtrack.api
@@ -81,7 +88,7 @@ services:
       gridtrack.osrm:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null || exit 1" ]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1" ]
       interval: 5s
       timeout: 5s
       retries: 20

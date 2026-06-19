@@ -74,20 +74,24 @@ tasks:
       - |
         echo "Waiting for API + seeded drivers on :5098 ..."
         for i in $(seq 1 60); do
-        # 1. Is the health endpoint responding?
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5098/health" || true)
-        if [ "$http_code" != "200" ]; then
-        echo "  ($i/60) health=$http_code"; sleep 5; continue
+        # Fast-fail: container crashed?
+        if [ "$(docker compose -f compose.ci.yaml ps -q gridtrack.api | wc -l)" -eq 0 ]; then
+        echo "ERROR: API container crashed!"
+        docker compose -f compose.ci.yaml logs --tail=50 gridtrack.api
+        exit 1
         fi
       
-        # 2. Are drivers seeded yet?
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5098/health" || true)
+        if [ "$http_code" = "200" ]; then
         body=$(curl -sf "http://localhost:5098/api/drivers?pageSize=5" || true)
         if echo "$body" | grep -q '"id"'; then
-        echo "  ready ($(echo "$body" | grep -o '"id"' | wc -l) drivers visible)"
+        echo "  ready"
         break
         fi
-      
-        echo "  ($i/60) health OK but no drivers seeded yet"
+        echo "  ($i/60) health OK, seeding..."
+        else
+        echo "  ($i/60) health=$http_code"
+        fi
         sleep 5
         done
       - |
