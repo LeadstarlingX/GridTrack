@@ -132,8 +132,8 @@ def parse_k6_results(json_path):
 
     latency_table = "\n".join(latency_rows)
 
-# Build summary table
-summary_table = f"""| Result | Value |
+    # Build summary table
+    summary_table = f"""| Result | Value |
 |--------|-------|
 | Peak concurrent VUs | **{fmt_count(vus_max)}** |
 | Duration | **{duration_str}** |
