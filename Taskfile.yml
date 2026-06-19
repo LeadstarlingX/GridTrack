@@ -116,12 +116,12 @@ tasks:
   k6-compare:
     desc: "Write-behind vs direct-postgres comparison (QUICK), FULL reset between arms."
     cmds:
-      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-300} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-400} task k6-run
         ignore_error: true
       # FULL tear-down, not just Redis flush
       - docker compose -f compose.ci.yaml down -v
       - docker compose -f compose.ci.yaml up -d --build --wait
-      - cmd: TEST_MODE=latency WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-300} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-400} task k6-run
         ignore_error: true
   
   reset-between-arms:
