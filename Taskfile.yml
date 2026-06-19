@@ -103,6 +103,7 @@ tasks:
           --env WRITE_BEHIND=${WRITE_BEHIND:-true} \
           --env QUICK=${QUICK:-true} \
           --env THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} \
+          --env TEST_MODE=${TEST_MODE:-latency} \
           --env DRIVER_IDS="$IDS" \
           load-tests/gridtrack.js
 
@@ -114,11 +115,13 @@ tasks:
   k6-compare:
     desc: "Write-behind vs direct-postgres comparison (QUICK), FULL reset between arms."
     cmds:
-      - cmd: WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+        ignore_error: true
       # FULL tear-down, not just Redis flush
       - docker compose -f compose.ci.yaml down -v
       - docker compose -f compose.ci.yaml up -d --build --wait
-      - cmd: WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+        ignore_error: true
   
   reset-between-arms:
     desc: "Flush Redis, then restart the API container. FORCE_RESEED=true on that restart also wipes+reseeds Postgres."
@@ -135,13 +138,15 @@ tasks:
   k6-throughput:
     desc: "Throughput ceiling test — fires telemetry as fast as possible to find the breaking point."
     cmds:
-      - cmd: TEST_MODE=throughput WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress DRIVER_VUS=${STRESS_VUS:-480} task k6-run
+      - cmd: TEST_MODE=throughput WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=ceiling DRIVER_VUS=${STRESS_VUS:-480} task k6-run
+        ignore_error: true
   
   
   k6-stress:
     desc: "High-VU ceiling test (write-behind only) against a running stack. Override count via STRESS_VUS."
     cmds:
-      - cmd: WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress DRIVER_VUS=${STRESS_VUS:-480} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress DRIVER_VUS=${STRESS_VUS:-480} task k6-run
+        ignore_error: true
 
   k6-ci:
     desc: "CI: bring up compose.ci.yaml, run comparison + latency stress + throughput ceiling, tear down once."

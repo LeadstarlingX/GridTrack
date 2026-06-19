@@ -117,7 +117,6 @@ jobs:
         env:
           STRESS_VUS: "450"
           JWT_TOKEN: ${{ secrets.K6_JWT_TOKEN }}
-          TEST_MODE: "both"
 
       - name: Publish k6 summary
         if: always()

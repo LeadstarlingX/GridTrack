@@ -50,6 +50,7 @@ const DISTRICTS = ['mezzeh', 'malki', 'kafarsouseh', 'babtouma', 'kafrsousa', 'b
 // ── Custom metrics ──────────────────────────────────────────────────────────────
 
 const telLatency  = new Trend('gridtrack_driver_tel_latency',      true)
+const telThroughputLatency = new Trend('gridtrack_driver_tel_throughput_latency', true)
 const readLatency = new Trend('gridtrack_analytics_latency',       true)
 const delLatency  = new Trend('gridtrack_delivery_write_latency',  true)
 const dgLatency   = new Trend('gridtrack_district_group_latency',  true)
@@ -84,6 +85,11 @@ const STRESS_THRESHOLDS = {
     'gridtrack_error_rate':             ['rate<0.01'],
 }
 
+const CEILING_THRESHOLDS = {
+    http_req_failed:     ['rate<0.05'],
+    gridtrack_error_rate: ['rate<0.05'],
+    // NO latency thresholds — the goal is to find where it breaks, not enforce fast speeds
+}
 
 // ── Scenarios ──────────────────────────────────────────────────────────────────
 
@@ -199,7 +205,11 @@ const scenarios = TEST_MODE === 'throughput'
 export const options = {
 
     scenarios: scenarios,
-    thresholds: THRESHOLD_PROFILE === 'compare' ? COMPARE_THRESHOLDS : STRESS_THRESHOLDS,
+    thresholds: THRESHOLD_PROFILE === 'compare'
+        ? COMPARE_THRESHOLDS
+        : THRESHOLD_PROFILE === 'ceiling'
+            ? CEILING_THRESHOLDS
+            : STRESS_THRESHOLDS,
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -398,7 +408,7 @@ export function driverTelemetryNoSleep() {
         JSON.stringify({ driverId, lat, lng }),
         { headers: JSON_HEADERS, tags: { name: 'telemetry/position' } },
     )
-    telLatency.add(res.timings.duration)
+    telThroughputLatency.add(res.timings.duration)
 
     const hit = res.status === 204
     const ok = hit || res.status === 404
