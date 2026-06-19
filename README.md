@@ -8,13 +8,13 @@ Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
 <!-- K6_COMPARISON_START -->
 ### Comparison Test
 
-*No results available yet. Run the comparison test first.*
+*No results available yet. Run the comparison test test first.*
 <!-- K6_COMPARISON_END -->
 
 <!-- K6_STRESS_START -->
 ### Stress Test
 
-*No results available yet. Run the stress test first.*
+*No results available yet. Run the stress test test first.*
 <!-- K6_STRESS_END -->
 
 ## Code Coverage
@@ -26,7 +26,7 @@ We are proud of our high code coverage for the core layers of project.
 |-------|---------------|
 | Domain | 97.1% |
 | Application | 87.6% |
-| Infrastructure | 75.7% |
+| Infrastructure | 75.9% |
 <!-- COVERAGE_END -->
 
 
