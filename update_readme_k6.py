@@ -4,7 +4,7 @@ import re
 import sys
 
 # Default file paths for k6 JSON results
-DEFAULT_COMPARISON_FILE = "load-tests/results/latest-write-behind.json"
+DEFAULT_COMPARISON_FILE = "load-tests/results/comparison-write-behind.json"
 DEFAULT_STRESS_FILE = "load-tests/results/latest-write-behind.json"
 
 # Threshold definitions for pass/fail checking (matches gridtrack.js)
@@ -265,12 +265,13 @@ def update_readme(comparison_file, stress_file):
     # Generate sections
     comparison_note = ""
     if comparison_results:
-        comparison_note = """> Compared to the previous direct-Postgres baseline (which collapsed at 47–60 s timeouts
-> under load), the current architecture maintains stable latency across all paths."""
+        comparison_note = """> The comparison test runs two k6 tests back-to-back with identical stress levels:
+        > **Postgre + write-behind buffer** (improved architecture) vs **direct Postgres** (baseline).
+        > The write-behind pattern shows significantly lower telemetry latency and higher throughput."""
 
     comparison_section = generate_section(
         "Comparison Test",
-        "Latest run — Comparison (pre vs post architecture)",
+        "Latest run — Write-behind vs Direct Postgres comparison",
         comparison_results,
         comparison_note
     )

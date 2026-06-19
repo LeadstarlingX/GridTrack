@@ -65,7 +65,15 @@ function Run-K6([bool]$WriteBehind) {
 }
 
 Run-K6 -WriteBehind $true
+# Copy the write-behind result as the comparison baseline
+Copy-Item -Force 'load-tests/results/latest-write-behind.json' 'load-tests/results/comparison-write-behind.json'
+Copy-Item -Force 'load-tests/results/latest-write-behind.md' 'load-tests/results/comparison-write-behind.md'
+
 Run-K6 -WriteBehind $false
+# Copy the direct-postgres result as the comparison baseline
+Copy-Item -Force 'load-tests/results/latest-direct-postgres.json' 'load-tests/results/comparison-direct-postgres.json'
+Copy-Item -Force 'load-tests/results/latest-direct-postgres.md' 'load-tests/results/comparison-direct-postgres.md'
+
 
 # Parse results and emit comparison table
 
@@ -102,8 +110,8 @@ function Fmt([object]$v) {
     return "${v} ms"
 }
 
-$wbJson = 'load-tests/results/latest-write-behind.json'
-$dpJson = 'load-tests/results/latest-direct-postgres.json'
+$wbJson = 'load-tests/results/comparison-write-behind.json'
+$dpJson = 'load-tests/results/comparison-direct-postgres.json'
 
 # Telemetry POST latency
 $telP50Wb  = Get-Stat $wbJson 'gridtrack_driver_tel_latency' 'med'

@@ -1,6 +1,6 @@
 # Usage: .\load-tests\stress.ps1 [DRIVER_VUS] [BASE_URL]
 #   .\load-tests\stress.ps1              # 100 VUs, localhost:5098 (write-behind)
-#   .\load-tests\stress.ps1 500          # 500 VUs
+#   .\load-tests\stress.ps1 1000          # 1000 VUs
 #   .\load-tests\stress.ps1 500 -Sync    # baseline: direct Postgres, no buffer
 #
 # Assumes: API + all infra containers are already running.
@@ -8,7 +8,7 @@
 #   $env:Simulation__Enabled='false'; dotnet run --project GridTrack.Api --launch-profile http
 
 param(
-    [int]$DriverVus = 100,
+    [int]$DriverVus = 500,
     [string]$Base   = 'http://localhost:5098',
     [switch]$Sync
 )
@@ -43,7 +43,7 @@ if (-not $ready) {
 
 $modeLabel = if ($Sync) { 'direct-postgres (baseline)' } else { 'write-behind' }
 Write-Host ""
-Write-Host "Running k6 | mode=$modeLabel | $DriverVus driver VUs -> $Base" -ForegroundColor Cyan
+Write-Host "Running k6 | mode=$modeLabel | $DriverVus driver VUs -> $Base (HIGH STRESS)" -ForegroundColor Cyan
 Write-Host ""
 
 $k6Args = @(

@@ -95,9 +95,9 @@ export const options = {
                     { duration: '15s', target: 0   },
                 ]
                 : [
-                    { duration: '30s', target: 50  },
-                    { duration: '30s', target: 150 },
-                    { duration: '2m',  target: 150 },
+                    { duration: '30s', target: 100  },
+                    { duration: '30s', target: 300 },
+                    { duration: '2m',  target: 300 },
                     { duration: '20s', target: 0   },
                 ],
             gracefulRampDown: '10s',
