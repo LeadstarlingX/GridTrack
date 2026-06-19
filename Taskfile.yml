@@ -176,6 +176,15 @@ tasks:
     desc: Parse Cobertura.xml and update README.md coverage table
     cmds:
       - python3 update_readme_coverage.py
+        
+  update-readme-k6:
+    desc: Parse k6 JSON results and update README.md load test table
+    cmds:
+      - python3 update_readme_k6.py
+
+  update-readme:
+    desc: Update README with both coverage and k6 results
+    deps: [ update-readme-coverage, update-readme-k6 ]
 
   # ============================================
   # DOCKER COMPOSE TASKS

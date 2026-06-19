@@ -1,38 +1,42 @@
 # GridTrack
 
-Real-time fleet tracking & dispatch for a Damascus delivery fleet — write-behind GPS
-ingest, PostGIS dispatch, Redis Streams → SignalR live map, ClickHouse history, and a
-Python AI pipeline (urgency / demand-surge / forecast).
+Real-time fleet tracking & dispatch for a Damascus delivery fleet — PostGIS dispatch,
+Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
+(urgency / demand-surge / forecast).
 
 ## Load Test Results
 
-Single-instance Docker stack, write-behind hot path, k6. Each VU = one driver POSTing
-1 GPS update/second.
+Single-instance Docker stack, k6. Each VU = one driver POSTing 1 GPS update/second.
 
-**Headline run — 5,000 concurrent drivers (~3.5 min sustained):**
+**Latest run — CI stress test:**
 
 | Result | Value |
 |--------|-------|
-| Peak concurrent VUs | **5,195** |
-| Checks passed | **914,538 / 914,538 (100%)** |
+| Peak concurrent VUs | **480** |
+| Duration | **1m 46s** |
+| Total HTTP requests | **64,694** |
+| Request throughput | **606.8/s** |
+| Iterations | **26,738 (250.8/s)** |
+| Checks passed | **64,694 / 64,694 (100%)** |
 | Error rate | **0.00%** |
-| Telemetry writes accepted | **764,572 (~3,614/s)** |
-| Data transferred | 912 MB |
+| Data received | **212 MB (2.0 MB/s)** |
+| Data sent | **9.9 MB (93 kB/s)** |
 
-**Latency by path (ms):**
+**Latency by path:**
 
-| Path | p50 | p90 | p95 |
-|------|----:|----:|----:|
-| Telemetry POST (write-behind) | 3.7 | 18.3 | 35.7 |
-| Analytics reads | 2.8 | 14.1 | 31.4 |
-| Delivery writes | 5.4 | 26.1 | 44.9 |
-| District-group CRUD | 5.3 | 33.2 | 55.1 |
+| Path | Avg | Median | p90 | p95 | Max |
+|------|----:|-------:|----:|----:|----:|
+| Driver telemetry | 77.17 ms | 47.28 ms | 184.51 ms | 259.17 ms | 899.9 ms |
+| Analytics reads | 58.71 ms | 34.10 ms | 132.56 ms | 199.65 ms | 2.37 s |
+| Delivery lifecycle | 104.12 ms | 41.09 ms | 261.68 ms | 445.85 ms | 1.89 s |
+| District-group CRUD | 89.85 ms | 42.06 ms | 194.30 ms | 340.45 ms | 1.01 s |
+| SignalR negotiate | 0 ms | 0 ms | 0 ms | 0 ms | 0 ms |
+| **Overall HTTP** | **65.03 ms** | **37.97 ms** | **150.83 ms** | **223.52 ms** | **2.37 s** |
 
-> At 150 VUs every path sits at **1–13 ms p95** with 100% checks passing. The write-behind
-> buffer + per-key cache single-flight keep latency flat as load grows; the direct-Postgres
-> baseline collapses (47–60 s, timeouts) under the same load. See
-> `load-tests/results/comparison.md` for the side-by-side. CI re-runs a QUICK k6 pass on
-> every push to `master` (`task k6-ci`).
+> Compared to the previous direct-Postgres baseline (which collapsed at 47–60 s timeouts
+> under load), the current architecture maintains stable latency across all paths.
+> See `load-tests/results/comparison.md` for the side-by-side. CI re-runs a QUICK k6
+> pass on every push to `master` (`task k6-ci`).
 
 ## Code Coverage
 

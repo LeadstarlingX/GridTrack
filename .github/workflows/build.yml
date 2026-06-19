@@ -135,7 +135,7 @@ jobs:
 
   update-readme:
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [ build-and-test, k6-load-test ]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/development')
     permissions:
       contents: write
@@ -150,17 +150,24 @@ jobs:
         with:
           name: coverage-report
           path: ./TestResults/CoverageReport
+      
+
+      - name: Download k6 results
+        uses: actions/download-artifact@v4
+        with:
+          name: k6-results
+          path: load-tests/results/
 
       - name: Install Taskfile CLI
         run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
-      - name: Update README coverage table
-        run: task update-readme-coverage
+      - name: Update README coverage and k6 tables
+        run: task update-readme
 
       - name: Commit README
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git diff --cached --quiet || git commit -m "ci: update coverage table [without ci]"
+          git diff --cached --quiet || git commit -m "ci: update coverage and k6 tables [without ci]"
           git push
