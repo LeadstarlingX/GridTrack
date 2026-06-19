@@ -87,7 +87,7 @@ const STRESS_THRESHOLDS = {
 
 // ── Scenarios ──────────────────────────────────────────────────────────────────
 
-const scenarios = {
+const baseScenarios = {
 
     // 1. Driver GPS telemetry — the write-behind hot path (or direct-postgres baseline).
     //    Each VU = one driver posting 1 position/s.
