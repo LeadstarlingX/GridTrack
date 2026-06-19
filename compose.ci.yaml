@@ -91,6 +91,7 @@ services:
       gridtrack.osrm:
         condition: service_healthy
       gridtrack.seq:
+        condition: service_started
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1" ]
       interval: 5s
