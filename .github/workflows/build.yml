@@ -115,16 +115,19 @@ jobs:
         run: task k6-ci
         continue-on-error: true
         env:
-          DRIVER_VUS: "300"
+          STRESS_VUS: "480"
 
       - name: Publish k6 summary
         if: always()
         run: |
-          if [ -f load-tests/results/latest-write-behind.md ]; then
-            cat load-tests/results/latest-write-behind.md >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "No k6 summary produced — check the load test step logs." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for f in load-tests/results/comparison-write-behind.md \
+                   load-tests/results/comparison-direct-postgres.md \
+                   load-tests/results/stress-write-behind.md; do
+            if [ -f "$f" ]; then
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload k6 results
         if: always()

@@ -68,8 +68,8 @@ tasks:
   # LOAD TEST (k6)
   # ============================================
 
-  k6:
-    desc: Run the k6 load test (QUICK, write-behind) against a running stack on :5098. Override load with DRIVER_VUS=N.
+  k6-run:
+    desc: "Single k6 pass against a running stack on :5098. Env: WRITE_BEHIND, QUICK, THRESHOLD_PROFILE, DRIVER_VUS."
     cmds:
       - |
         echo "Waiting for API + seeded drivers on :5098 ..."
@@ -83,17 +83,41 @@ tasks:
         k6 run \
           --env BASE=http://localhost:5098 \
           --env DRIVER_VUS=${DRIVER_VUS:-300} \
-          --env WRITE_BEHIND=true \
-          --env QUICK=true \
+          --env WRITE_BEHIND=${WRITE_BEHIND:-true} \
+          --env QUICK=${QUICK:-true} \
+          --env THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} \
           --env DRIVER_IDS="$IDS" \
           load-tests/gridtrack.js
 
+  k6:
+    desc: "Local convenience: single QUICK write-behind pass (old default behavior)."
+    cmds:
+      - cmd: WRITE_BEHIND=${WRITE_BEHIND:-true} QUICK=${QUICK:-true} THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} DRIVER_VUS=${DRIVER_VUS:-300} task k6-run
+
+  k6-compare:
+    desc: "Write-behind vs direct-postgres comparison (QUICK) against a running stack. Override count via COMPARE_VUS."
+    cmds:
+      - cmd: WRITE_BEHIND=true  QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+      - cmd: WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+
+  k6-stress:
+    desc: "High-VU ceiling test (write-behind only) against a running stack. Override count via STRESS_VUS."
+    cmds:
+      - cmd: WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress DRIVER_VUS=${STRESS_VUS:-480} task k6-run
+
   k6-ci:
-    desc: CI load test — bring up the minimal stack (compose.ci.yaml), run k6, tear down.
+    desc: "CI: bring up compose.ci.yaml (incl. ClickHouse), run comparison + stress, tear down once."
     cmds:
       - docker compose -f compose.ci.yaml up -d --build
       - defer: docker compose -f compose.ci.yaml down -v
-      - task: k6
+      - task: k6-compare
+      - task: k6-stress
+
+
+  # ============================================
+  # Test ALL TASKS
+  # ============================================
+
 
   test-all:
     desc: Run all tests

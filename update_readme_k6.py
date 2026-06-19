@@ -3,19 +3,9 @@ import pathlib
 import re
 import sys
 
-# Default file paths for k6 JSON results
-DEFAULT_COMPARISON_FILE = "load-tests/results/comparison-write-behind.json"
-DEFAULT_STRESS_FILE = "load-tests/results/latest-write-behind.json"
-
-# Threshold definitions for pass/fail checking (matches gridtrack.js)
-THRESHOLDS = {
-    "gridtrack_driver_tel_latency": {"p(95)": 20, "p(99)": 100},
-    "gridtrack_analytics_latency": {"p(95)": 500, "p(99)": 2000},
-    "gridtrack_delivery_write_latency": {"p(95)": 500},
-    "gridtrack_district_group_latency": {"p(95)": 300},
-    "gridtrack_signalr_neg_latency": {"p(95)": 100},
-    "http_req_failed": {"rate": 0.01},
-}
+DEFAULT_COMPARISON_WB_FILE     = "load-tests/results/comparison-write-behind.json"
+DEFAULT_COMPARISON_DIRECT_FILE = "load-tests/results/comparison-direct-postgres.json"
+DEFAULT_STRESS_FILE            = "load-tests/results/stress-write-behind.json"
 
 PATH_LABELS = {
     "gridtrack_driver_tel_latency": "Driver telemetry",
@@ -26,313 +16,354 @@ PATH_LABELS = {
     "http_req_duration": "**Overall HTTP**",
 }
 
+COMPARISON_METRICS = {
+    "gridtrack_driver_tel_latency":     "Telemetry POST",
+    "gridtrack_analytics_latency":      "Analytics reads",
+    "gridtrack_delivery_write_latency": "Delivery writes",
+    "gridtrack_district_group_latency": "District-group CRUD",
+}
 
-def parse_k6_results(json_path):
-    """Parse a k6 JSON result file and extract metrics with threshold status."""
-    if not pathlib.Path(json_path).exists():
+
+# ── shared helpers ────────────────────────────────────────────────────────────
+
+def _load(path):
+    p = pathlib.Path(path)
+    if not p.exists():
+        return None
+    with open(p) as f:
+        return json.load(f)
+
+
+def _get(data, metric, stat="avg"):
+    if data is None:
+        return None
+    return data.get("metrics", {}).get(metric, {}).get("values", {}).get(stat)
+
+
+def _split_threshold_expr(expr):
+    # "p(95)<300" -> ("p(95)", "<", 300.0) ; "rate<0.01" -> ("rate", "<", 0.01)
+    m = re.match(r"([a-zA-Z0-9_().]+)\s*(<=|>=|<|>|==)\s*([\d.]+)", expr)
+    if not m:
+        return None, None, None
+    return m.group(1), m.group(2), float(m.group(3))
+
+
+def _threshold_results(metric_obj):
+    """
+    (expr, ok, stat, limit) tuples from a k6 metric's embedded threshold results.
+    Defensive: k6's summary JSON shape for `thresholds` has shifted across versions
+    (object map vs list). Unrecognized shapes degrade to an empty list (shown as N/A)
+    rather than crashing the script.
+    """
+    raw = (metric_obj or {}).get("thresholds")
+    out = []
+    if raw is None:
+        return out
+    try:
+        items = raw.items() if isinstance(raw, dict) else (
+            [(t.get("source", t.get("name", "?")), t) for t in raw] if isinstance(raw, list) else []
+        )
+        for expr, result in items:
+            ok = result.get("ok") if isinstance(result, dict) else None
+            stat, _, limit = _split_threshold_expr(expr)
+            out.append((expr, ok, stat, limit))
+    except Exception as e:
+        print(f"  ! couldn't parse thresholds shape: {e}")
+    return out
+
+
+def _fmt_ms(v):
+    if v is None: return "N/A"
+    if v >= 1000: return f"{v / 1000:.2f} s"
+    if v >= 100:  return f"{v:.0f} ms"
+    if v >= 10:   return f"{v:.1f} ms"
+    if v >= 1:    return f"{v:.2f} ms"
+    return f"{v * 1000:.0f} \u00b5s"
+
+
+def _fmt_count(v):
+    return "N/A" if v is None else f"{int(v):,}"
+
+
+def _fmt_rate(v):
+    return "N/A" if v is None else f"{v:.1f}/s"
+
+
+def _fmt_pct(v):
+    return "N/A" if v is None else f"{v * 100:.2f}%"
+
+
+def _fmt_bytes_per_sec(v):
+    if v is None: return "N/A"
+    if v >= 1_000_000: return f"{v / 1_000_000:.1f} MB/s"
+    if v >= 1_000: return f"{v / 1_000:.1f} kB/s"
+    return f"{v:.0f} B/s"
+
+
+def _speedup(wb, direct):
+    if wb is None or direct is None or wb == 0:
+        return "N/A"
+    ratio = direct / wb
+    if ratio >= 1.05:
+        return f"{ratio:.1f}x faster"
+    if ratio <= 0.95:
+        return f"{(1 / ratio):.1f}x slower"
+    return "~same"
+
+
+# ── stress (ceiling) test ───────────────────────────────────────────────────────
+
+def parse_stress_results(json_path):
+    data = _load(json_path)
+    if data is None:
         return None
 
-    with open(json_path) as f:
-        data = json.load(f)
-        
     metrics = data.get("metrics", {})
 
+    vus_max         = _get(data, "vus_max", "max")
+    http_reqs        = _get(data, "http_reqs", "count")
+    http_reqs_rate   = _get(data, "http_reqs", "rate")
+    iterations       = _get(data, "iterations", "count")
+    iterations_rate  = _get(data, "iterations", "rate")
+    checks_total     = _get(data, "checks", "count")
+    checks_passed    = _get(data, "checks", "passed")
+    error_rate       = _get(data, "http_req_failed", "rate")
+    data_received    = _get(data, "data_received", "rate")
+    data_sent        = _get(data, "data_sent", "rate")
 
-    def get_metric(name, stat="avg"):
-        """Extract a metric value from k6 JSON data."""
-        m = metrics.get(name, {})
-        values = m.get("values", {})
-        v = values.get(stat)
-        if v is None:
-            return None
-        return v
-    
-    def fmt_ms(val):
-        """Format milliseconds with appropriate precision."""
-        if val is None:
-            return "N/A"
-        if val >= 1000:
-            return f"{val / 1000:.2f} s"
-        elif val >= 100:
-            return f"{val:.0f} ms"
-        elif val >= 10:
-            return f"{val:.1f} ms"
-        elif val >= 1:
-            return f"{val:.2f} ms"
-        else:
-            return f"{val * 1000:.0f} µs"
+    checks_pass_pct = (checks_passed / checks_total * 100) if checks_total else None
+    duration = data.get("root_group", {}).get("duration", 0) / 1000
+    duration_str = f"{int(duration // 60)}m {int(duration % 60)}s" if duration >= 60 else f"{duration:.1f}s"
 
-
-
-    def fmt_count(val):
-        """Format count with thousands separator."""
-        if val is None:
-            return "N/A"
-        return f"{int(val):,}"
-
-
-    def fmt_rate(val):
-        """Format rate (per second)."""
-        if val is None:
-            return "N/A"
-        return f"{val:.1f}/s"
-
-
-    def fmt_pct(val):
-        """Format percentage."""
-        if val is None:
-            return "N/A"
-        return f"{val * 100:.2f}%"
-
-
-    def fmt_bytes_per_sec(val):
-        """Format bytes per second."""
-        if val is None:
-            return "N/A"
-        # Convert to MB/s or kB/s based on magnitude
-        if val >= 1_000_000:
-            return f"{val / 1_000_000:.1f} MB/s"
-        elif val >= 1_000:
-            return f"{val / 1_000:.1f} kB/s"
-        else:
-            return f"{val:.0f} B/s"
-
-
-    # Extract overall test stats
-    vus_max = get_metric("vus_max", "max")
-    http_reqs = get_metric("http_reqs", "count")
-    http_reqs_rate = get_metric("http_reqs", "rate")
-    iterations = get_metric("iterations", "count")
-    iterations_rate = get_metric("iterations", "rate")
-    checks_total = get_metric("checks", "count")
-    checks_passed = get_metric("checks", "passed")
-    error_rate = get_metric("http_req_failed", "rate")
-    data_received = get_metric("data_received", "rate")
-    data_sent = get_metric("data_sent", "rate")
-
-    # Calculate checks pass rate
-    if checks_total and checks_total > 0:
-        checks_pass_pct = (checks_passed / checks_total) * 100 if checks_passed else 0
-    else:
-        checks_pass_pct = None
-
-
-    # Extract duration from root level
-    duration = data.get("root_group", {}).get("duration", 0) / 1000  # ms to seconds
-    if duration >= 60:
-        duration_str = f"{int(duration // 60)}m {int(duration % 60)}s"
-    else:
-        duration_str = f"{duration:.1f}s"
-
-
-    # Check thresholds and build status info
-        threshold_status = []
-        all_passed = True
-        for metric_name, limits in THRESHOLDS.items():
-            if metric_name not in metrics:
+    # Pass/fail comes straight from k6's own evaluation — no second hardcoded limits
+    # table to drift out of sync with gridtrack.js.
+    threshold_status = []
+    all_passed = True
+    for metric_name, label in PATH_LABELS.items():
+        m = metrics.get(metric_name)
+        if not m:
+            continue
+        for expr, ok, stat, limit in _threshold_results(m):
+            if ok is None:
                 continue
-            label = PATH_LABELS.get(metric_name, metric_name)
-            for stat, limit in limits.items():
-                actual = get_metric(metric_name, stat)
-                if actual is not None:
-                    passed = actual < limit if stat != "rate" else actual <= limit
-                    if not passed:
-                        all_passed = False
-                    symbol = "✓" if passed else "✗"
-                    unit = "ms" if stat.startswith("p(") else "%" if stat == "rate" else ""
-                    threshold_status.append({
-                        "metric": label,
-                        "stat": stat,
-                        "actual": actual,
-                        "limit": limit,
-                        "passed": passed,
-                        "symbol": symbol,
-                        "unit": unit,
-                    })
+            if not ok:
+                all_passed = False
+            actual = _get(data, metric_name, stat) if stat else None
+            is_rate = stat == "rate"
+            disp_actual = actual * 100 if (is_rate and actual is not None) else actual
+            disp_limit = limit * 100 if (is_rate and limit is not None) else limit
+            unit = "%" if is_rate else ("ms" if stat and stat.startswith("p(") else "")
+            threshold_status.append({
+                "metric": label, "stat": stat, "actual": disp_actual,
+                "limit": disp_limit, "passed": ok,
+                "symbol": "\u2713" if ok else "\u2717", "unit": unit,
+            })
 
-    
-
-    # Build latency table rows
     latency_rows = []
     for metric_name, label in PATH_LABELS.items():
         if metric_name not in metrics:
             continue
-        avg = get_metric(metric_name, "avg")
-        med = get_metric(metric_name, "med")
-        p90 = get_metric(metric_name, "p(90)")
-        p95 = get_metric(metric_name, "p(95)")
-        max_val = get_metric(metric_name, "max")
-
-        # Add pass/fail indicator based on p95 threshold
+        avg = _get(data, metric_name, "avg")
+        med = _get(data, metric_name, "med")
+        p90 = _get(data, metric_name, "p(90)")
+        p95 = _get(data, metric_name, "p(95)")
+        max_val = _get(data, metric_name, "max")
+        p95_oks = [ok for expr, ok, stat, _ in _threshold_results(metrics.get(metric_name, {}))
+                   if stat == "p(95)" and ok is not None]
         status_symbol = ""
-        if metric_name in THRESHOLDS and "p(95)" in THRESHOLDS[metric_name]:
-            limit = THRESHOLDS[metric_name]["p(95)"]
-            if p95 is not None:
-                status_symbol = " ✓" if p95 < limit else " ✗"
-
-        row = (
-            f"| {label}{status_symbol} | {fmt_ms(avg)} | {fmt_ms(med)} | "
-            f"{fmt_ms(p90)} | {fmt_ms(p95)} | {fmt_ms(max_val)} |"
+        if p95_oks:
+            status_symbol = " \u2713" if all(p95_oks) else " \u2717"
+        latency_rows.append(
+            f"| {label}{status_symbol} | {_fmt_ms(avg)} | {_fmt_ms(med)} | {_fmt_ms(p90)} | {_fmt_ms(p95)} | {_fmt_ms(max_val)} |"
         )
-        latency_rows.append(row)
 
-    latency_table = "\n".join(latency_rows)
-    
-    # Format checks pass percentage
     checks_pass_str = f"{checks_pass_pct:.0f}%" if checks_pass_pct is not None else "N/A"
-        
-    
-    # Build summary table
     summary_table = f"""| Result | Value |
 |--------|-------|
-| Peak concurrent VUs | **{fmt_count(vus_max)}** |
+| Peak concurrent VUs | **{_fmt_count(vus_max)}** |
 | Duration | **{duration_str}** |
-| Total HTTP requests | **{fmt_count(http_reqs)}** |
-| Request throughput | **{fmt_rate(http_reqs_rate)}** |
-| Iterations | **{fmt_count(iterations)} ({fmt_rate(iterations_rate)})** |
-| Checks passed | **{fmt_count(checks_passed)} / {fmt_count(checks_total)} ({checks_pass_str})** |
-| Error rate | **{fmt_pct(error_rate)}** |
-| Data received | **{fmt_bytes_per_sec(data_received)}** |
-| Data sent | **{fmt_bytes_per_sec(data_sent)}** |"""
-    
-    # Build threshold status table
+| Total HTTP requests | **{_fmt_count(http_reqs)}** |
+| Request throughput | **{_fmt_rate(http_reqs_rate)}** |
+| Iterations | **{_fmt_count(iterations)} ({_fmt_rate(iterations_rate)})** |
+| Checks passed | **{_fmt_count(checks_passed)} / {_fmt_count(checks_total)} ({checks_pass_str})** |
+| Error rate | **{_fmt_pct(error_rate)}** |
+| Data received | **{_fmt_bytes_per_sec(data_received)}** |
+| Data sent | **{_fmt_bytes_per_sec(data_sent)}** |"""
+
     threshold_rows = []
     for ts in threshold_status:
-        threshold_rows.append(
-            f"| {ts['symbol']} {ts['metric']} {ts['stat']} | {ts['actual']:.2f} {ts['unit']} | < {ts['limit']} {ts['unit']} |"
-        )
-    threshold_table = "\n".join(threshold_rows)
-    
+        a = f"{ts['actual']:.2f}" if ts['actual'] is not None else "N/A"
+        l = f"{ts['limit']:.2f}" if ts['limit'] is not None else "N/A"
+        threshold_rows.append(f"| {ts['symbol']} {ts['metric']} {ts['stat']} | {a} {ts['unit']} | < {l} {ts['unit']} |")
+
     return {
-            "summary_table": summary_table,
-            "latency_table": latency_table,
-            "threshold_table": threshold_table,
-            "all_passed": all_passed,
-            "threshold_status": threshold_status,
-        }
+        "summary_table": summary_table,
+        "latency_table": "\n".join(latency_rows),
+        "threshold_table": "\n".join(threshold_rows),
+        "all_passed": all_passed,
+        "threshold_status": threshold_status,
+    }
 
 
-def generate_section(title, run_label, results, note=""):
-    """Generate a markdown section for k6 results."""
+def generate_stress_section(results):
     if results is None:
-        return f"""### {title}
+        return """### Stress Test
 
-*No results available yet. Run the {title.lower()} test first.*
+*No results available yet. Run `task k6-stress` first.*
 """
+    badge = "**\u2713 ALL PASSED**" if results["all_passed"] else "**\u2717 SOME FAILED**"
+    return f"""### Stress Test {badge}
 
-    latency_header = "| Path | Avg | Median | p90 | p95 | Max |\n|------|----:|-------:|----:|----:|----:|"
-    latency_full = f"{latency_header}\n{results['latency_table']}"
-    
-    threshold_header = "| Status | Metric | Actual | Threshold |"
-    threshold_full = f"{threshold_header}\n|--------|--------|--------|-----------|\n{results['threshold_table']}"
+> Ceiling test — thresholds are informational regression markers (see Taskfile/gridtrack.js comments
+> for derivation), not a contractual SLA. The goal here is finding where the system actually breaks.
 
-    # Overall status badge
-    status_badge = "**✓ ALL PASSED**" if results["all_passed"] else "**✗ SOME FAILED**"
+**Latest run — CI ceiling test:**
 
-    section = f"""### {title} {status_badge}
-
-**{run_label}:**
-
-{results["summary_table"]}
+{results['summary_table']}
 
 **Latency by path:**
 
-{latency_full}
+| Path | Avg | Median | p90 | p95 | Max |
+|------|----:|-------:|----:|----:|----:|
+{results['latency_table']}
 
 **Threshold compliance:**
 
-{threshold_full}
+| Status | Metric | Actual | Threshold |
+|--------|--------|--------|-----------|
+{results['threshold_table']}
 """
-    if note:
-        section += f"\n{note}\n"
-    return section
 
 
-def update_readme(comparison_file, stress_file):
-    """Update README.md with k6 results from comparison and stress tests."""
+# ── comparison test ──────────────────────────────────────────────────────────
+
+def parse_comparison(wb_path, direct_path):
+    wb = _load(wb_path)
+    direct = _load(direct_path)
+    if wb is None or direct is None:
+        return None
+
+    rows = []
+    all_passed = True
+    for metric, label in COMPARISON_METRICS.items():
+        wb_p50, dp_p50 = _get(wb, metric, "med"), _get(direct, metric, "med")
+        wb_p90, dp_p90 = _get(wb, metric, "p(90)"), _get(direct, metric, "p(90)")
+        wb_p95, dp_p95 = _get(wb, metric, "p(95)"), _get(direct, metric, "p(95)")
+
+        # Pass = write-behind matched or beat the direct-postgres baseline at p95.
+        # That's the entire premise of the buffer + ClickHouse split — if it doesn't
+        # hold, the optimization regressed on this path.
+        passed = wb_p95 is not None and dp_p95 is not None and wb_p95 <= dp_p95
+        if not passed:
+            all_passed = False
+        symbol = "\u2713" if passed else "\u2717"
+
+        rows.append(
+            f"| {label} {symbol} | {_fmt_ms(wb_p50)} | {_fmt_ms(dp_p50)} | {_speedup(wb_p50, dp_p50)} "
+            f"| {_fmt_ms(wb_p90)} | {_fmt_ms(dp_p90)} | {_speedup(wb_p90, dp_p90)} "
+            f"| {_fmt_ms(wb_p95)} | {_fmt_ms(dp_p95)} | {_speedup(wb_p95, dp_p95)} |"
+        )
+
+    wb_rps, dp_rps = _get(wb, "http_reqs", "rate"), _get(direct, "http_reqs", "rate")
+    wb_err, dp_err = _get(wb, "http_req_failed", "rate"), _get(direct, "http_req_failed", "rate")
+
+    if (wb_err is not None and wb_err >= 0.01) or (dp_err is not None and dp_err >= 0.01):
+        all_passed = False
+
+    return {
+        "table": "\n".join(rows),
+        "wb_rps": wb_rps, "dp_rps": dp_rps,
+        "wb_err": wb_err, "dp_err": dp_err,
+        "all_passed": all_passed,
+    }
+
+
+def generate_comparison_section(results):
+    if results is None:
+        return """### Comparison Test
+
+*No results available yet. Run `task k6-compare` first.*
+"""
+    badge = "**\u2713 WRITE-BEHIND WINS ACROSS THE BOARD**" if results["all_passed"] \
+        else "**\u2717 WRITE-BEHIND REGRESSED ON SOME PATHS**"
+
+    rps_line = (f"**Throughput:** write-behind {results['wb_rps']:.1f} req/s vs "
+                f"direct-postgres {results['dp_rps']:.1f} req/s"
+                if results["wb_rps"] is not None and results["dp_rps"] is not None else "")
+    err_line = (f"**Error rate:** write-behind {results['wb_err']*100:.2f}% / "
+                f"direct-postgres {results['dp_err']*100:.2f}%"
+                if results["wb_err"] is not None and results["dp_err"] is not None else "")
+
+    return f"""### Comparison Test {badge}
+
+> ClickHouse + Postgres + write-behind buffer (`write-behind`) vs Postgres-only synchronous
+> writes (`direct-postgres`). \u2713/\u2717 marks whether write-behind matched or beat the direct-postgres
+> baseline at p95 \u2014 this is a relative check, not an absolute SLA (direct-postgres is meant
+> to be the slower arm).
+
+| Path | p50 WB | p50 Direct | p50 | p90 WB | p90 Direct | p90 | p95 WB | p95 Direct | p95 |
+|------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|
+{results['table']}
+
+{rps_line}
+
+{err_line}
+"""
+
+
+# ── README orchestration ─────────────────────────────────────────────────────
+
+def update_readme(wb_file, direct_file, stress_file):
     readme = pathlib.Path("README.md")
     content = readme.read_text()
 
-    # Parse results from both test files
-    comparison_results = parse_k6_results(comparison_file)
-    stress_results = parse_k6_results(stress_file)
-    
-    # Log what we found for debugging
-    print(f"Checking for k6 results files:")
-    print(f"  - Comparison file ({comparison_file}): {'FOUND' if comparison_results else 'NOT FOUND'}")
-    print(f"  - Stress file ({stress_file}): {'FOUND' if stress_results else 'NOT FOUND'}")
+    comparison_results = parse_comparison(wb_file, direct_file)
+    stress_results = parse_stress_results(stress_file)
 
-    # Generate sections
-    comparison_note = ""
-    if comparison_results:
-        comparison_note = """> The comparison test runs two k6 tests back-to-back with identical stress levels:
-        > **Postgre + write-behind buffer** (improved architecture) vs **direct Postgres** (baseline).
-        > The write-behind pattern shows significantly lower telemetry latency and higher throughput."""
+    print("Checking for k6 results files:")
+    print(f"  - Comparison write-behind ({wb_file}): {'FOUND' if pathlib.Path(wb_file).exists() else 'NOT FOUND'}")
+    print(f"  - Comparison direct-postgres ({direct_file}): {'FOUND' if pathlib.Path(direct_file).exists() else 'NOT FOUND'}")
+    print(f"  - Stress ({stress_file}): {'FOUND' if stress_results else 'NOT FOUND'}")
 
-    comparison_section = generate_section(
-        "Comparison Test",
-        "Latest run — Write-behind vs Direct Postgres comparison",
-        comparison_results,
-        comparison_note
-    )
+    comparison_section = generate_comparison_section(comparison_results)
+    stress_section = generate_stress_section(stress_results)
 
-    stress_section = generate_section(
-        "Stress Test",
-        "Latest run — CI stress test",
-        stress_results
-    )
+    comparison_start, comparison_end = "<!-- K6_COMPARISON_START -->", "<!-- K6_COMPARISON_END -->"
+    stress_start, stress_end = "<!-- K6_STRESS_START -->", "<!-- K6_STRESS_END -->"
 
-    # Define markers for comparison test
-    comparison_start = "<!-- K6_COMPARISON_START -->"
-    comparison_end = "<!-- K6_COMPARISON_END -->"
-
-    # Define markers for stress test
-    stress_start = "<!-- K6_STRESS_START -->"
-    stress_end = "<!-- K6_STRESS_END -->"
-
-    # Check if markers exist for comparison, if not add them
     if comparison_start not in content:
-        # Find the Load Test Results section and insert markers
-        pattern = r"(## Load Test Results\n)"
-        match = re.search(pattern, content)
+        match = re.search(r"(## Load Test Results\n)", content)
         if match:
-            insert_pos = match.end()
-            content = content[:insert_pos] + f"\n{comparison_start}\n{comparison_end}\n\n{stress_start}\n{stress_end}\n" + content[insert_pos:]
+            pos = match.end()
+            content = (content[:pos]
+                       + f"\n{comparison_start}\n{comparison_end}\n\n{stress_start}\n{stress_end}\n"
+                       + content[pos:])
 
-    # Update comparison section between markers
-    comparison_pattern = rf"({re.escape(comparison_start)}\n).*?({re.escape(comparison_end)})"
-    comparison_replacement = f"{comparison_start}\n{comparison_section}{comparison_end}"
-    content = re.sub(comparison_pattern, comparison_replacement, content, flags=re.DOTALL)
-
-    # Update stress section between markers
-    stress_pattern = rf"({re.escape(stress_start)}\n).*?({re.escape(stress_end)})"
-    stress_replacement = f"{stress_start}\n{stress_section}{stress_end}"
-    content = re.sub(stress_pattern, stress_replacement, content, flags=re.DOTALL)
+    content = re.sub(
+        rf"({re.escape(comparison_start)}\n).*?({re.escape(comparison_end)})",
+        f"{comparison_start}\n{comparison_section}{comparison_end}",
+        content, flags=re.DOTALL,
+    )
+    content = re.sub(
+        rf"({re.escape(stress_start)}\n).*?({re.escape(stress_end)})",
+        f"{stress_start}\n{stress_section}{stress_end}",
+        content, flags=re.DOTALL,
+    )
 
     readme.write_text(content)
-    print(f"\nREADME.md updated with k6 results")
+    print("\nREADME.md updated")
+
     if comparison_results:
-        print(f"  ✓ Comparison test results included")
-        status = "PASSED" if comparison_results["all_passed"] else "FAILED"
-        print(f"    Status: {status}")
-    else:
-        print(f"  ✗ Comparison test results NOT FOUND - check if test ran")
+        print(f"  Comparison: {'PASSED' if comparison_results['all_passed'] else 'SOME PATHS REGRESSED'}")
     if stress_results:
-        print(f"  ✓ Stress test results included")
-        status = "PASSED" if stress_results["all_passed"] else "FAILED"
-        print(f"    Status: {status}")
-        # Print failed metrics for quick diagnosis
-        failed = [ts for ts in stress_results["threshold_status"] if not ts["passed"]]
-        if failed:
-            print(f"\n--- Failed Thresholds ---")
-            for ts in failed:
-                print(f"  ✗ {ts['metric']} {ts['stat']}: {ts['actual']:.2f} {ts['unit']} (limit: < {ts['limit']} {ts['unit']})")
-    else:
-        print(f"  ✗ Stress test results NOT FOUND - check if test ran")
+        print(f"  Stress: {'PASSED' if stress_results['all_passed'] else 'SOME THRESHOLDS FAILED'}")
+        failed = [t for t in stress_results["threshold_status"] if not t["passed"]]
+        for t in failed:
+            print(f"    \u2717 {t['metric']} {t['stat']}: {t['actual']:.2f}{t['unit']} (limit < {t['limit']:.2f}{t['unit']})")
 
 
 if __name__ == "__main__":
-    comparison_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_COMPARISON_FILE
-    stress_file = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_STRESS_FILE
-
-    update_readme(comparison_file, stress_file)
+    wb_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_COMPARISON_WB_FILE
+    direct_file = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_COMPARISON_DIRECT_FILE
+    stress_file = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_STRESS_FILE
+    update_readme(wb_file, direct_file, stress_file)
