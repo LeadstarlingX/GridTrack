@@ -125,14 +125,16 @@ def parse_stress_results(json_path):
     http_reqs_rate   = _get(data, "http_reqs", "rate")
     iterations       = _get(data, "iterations", "count")
     iterations_rate  = _get(data, "iterations", "rate")
-    checks_total     = _get(data, "checks", "count")
-    checks_passed    = _get(data, "checks", "passed")
+    checks_vals      = (data.get("metrics", {}).get("checks") or {}).get("values", {})
+    checks_passed    = checks_vals.get("passes")
+    checks_total     = (checks_passed or 0) + (checks_vals.get("fails") or 0)
     error_rate       = _get(data, "http_req_failed", "rate")
     data_received    = _get(data, "data_received", "rate")
     data_sent        = _get(data, "data_sent", "rate")
 
     checks_pass_pct = (checks_passed / checks_total * 100) if checks_total else None
-    duration = data.get("root_group", {}).get("duration", 0) / 1000
+    duration_ms = data.get("state", {}).get("testRunDurationMs", 0)
+    duration = duration_ms / 1000.0
     duration_str = f"{int(duration // 60)}m {int(duration % 60)}s" if duration >= 60 else f"{duration:.1f}s"
 
     # Pass/fail comes straight from k6's own evaluation — no second hardcoded limits

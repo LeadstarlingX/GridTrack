@@ -80,6 +80,12 @@ services:
         condition: service_healthy
       gridtrack.osrm:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s   
         
         
   

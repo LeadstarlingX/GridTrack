@@ -73,9 +73,22 @@ tasks:
     cmds:
       - |
         echo "Waiting for API + seeded drivers on :5098 ..."
-        for i in $(seq 1 40); do
-          if curl -sf "http://localhost:5098/api/drivers?pageSize=5" | grep -q '"id"'; then echo "  ready"; break; fi
-          echo "  ($i/40) not ready"; sleep 5
+        for i in $(seq 1 60); do
+        # 1. Is the health endpoint responding?
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5098/health" || true)
+        if [ "$http_code" != "200" ]; then
+        echo "  ($i/60) health=$http_code"; sleep 5; continue
+        fi
+      
+        # 2. Are drivers seeded yet?
+        body=$(curl -sf "http://localhost:5098/api/drivers?pageSize=5" || true)
+        if echo "$body" | grep -q '"id"'; then
+        echo "  ready ($(echo "$body" | grep -o '"id"' | wc -l) drivers visible)"
+        break
+        fi
+      
+        echo "  ($i/60) health OK but no drivers seeded yet"
+        sleep 5
         done
       - |
         IDS=$(curl -sf "http://localhost:5098/api/drivers?pageSize=200" \
