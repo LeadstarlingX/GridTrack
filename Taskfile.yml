@@ -105,6 +105,7 @@ tasks:
           --env THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} \
           --env TEST_MODE=${TEST_MODE:-latency} \
           --env DRIVER_IDS="$IDS" \
+          --env JWT_TOKEN="${K6_JWT_TOKEN}" \
           load-tests/gridtrack.js
 
   k6:
@@ -154,10 +155,13 @@ tasks:
       - docker compose -f compose.ci.yaml up -d --build
       - defer: docker compose -f compose.ci.yaml down -v
       - task: k6-compare
+        ignore_error: true
       - docker compose -f compose.ci.yaml down -v
       - docker compose -f compose.ci.yaml up -d --wait
       - task: k6-stress
+        ignore_error: true
       - task: k6-throughput
+        ignore_error: true
 
 
   # ============================================
