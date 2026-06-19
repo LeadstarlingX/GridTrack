@@ -60,8 +60,15 @@ services:
     image: datalust/seq:latest
     environment:
       ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "True"
     ports:
-      - "5341:80"
+      - "5341:5341"
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:5341/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   gridtrack.api:
     image: gridtrack.api
@@ -86,6 +93,8 @@ services:
       gridtrack.clickhouse:
         condition: service_healthy
       gridtrack.osrm:
+        condition: service_healthy
+      gridtrack-seq:
         condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1" ]

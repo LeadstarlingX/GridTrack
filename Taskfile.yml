@@ -117,7 +117,7 @@ tasks:
       - cmd: WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
       # FULL tear-down, not just Redis flush
       - docker compose -f compose.ci.yaml down -v
-      - docker compose -f compose.ci.yaml up -d --wait
+      - docker compose -f compose.ci.yaml up -d --build --wait
       - cmd: WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
   
   reset-between-arms:
