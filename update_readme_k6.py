@@ -361,8 +361,10 @@ def update_readme(wb_file, direct_file, stress_file):
         print(f"  Stress: {'PASSED' if stress_results['all_passed'] else 'SOME THRESHOLDS FAILED'}")
         failed = [t for t in stress_results["threshold_status"] if not t["passed"]]
         for t in failed:
-            print(f"    \u2717 {t['metric']} {t['stat']}: {t['actual']:.2f}{t['unit']} (limit < {t['limit']:.2f}{t['unit']})")
-
+            actual_str = f"{t['actual']:.2f}" if t['actual'] is not None else "N/A"
+            limit_str = f"{t['limit']:.2f}" if t['limit'] is not None else "N/A"
+            print(f"    \u2717 {t['metric']} {t['stat']}: {actual_str}{t['unit']} (limit < {limit_str}{t['unit']})")
+                        
 
 if __name__ == "__main__":
     wb_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_COMPARISON_WB_FILE
