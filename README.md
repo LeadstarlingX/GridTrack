@@ -1,9 +1,16 @@
+I'm too lazy to write a real README, currently this is a draft,so here are some k6 test results instead.
+
+
 # GridTrack
 
 Real-time fleet tracking & dispatch for a Damascus delivery fleet — PostGIS dispatch,
 Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
 (urgency / demand-surge / forecast).
 
+## Related Repositories
+
+- [gridtrack-forecast](https://github.com/LeadstarlingX/gridtrack-forecasting) - AI/ML pipeline for urgency detection, demand surge prediction, and forecasting
+- [GridTrack.Web](https://github.com/LeadstarlingX/GridTrack.Web) - Web frontend with real-time SignalR map visualization
 
 > **Test environment:** GitHub Actions `ubuntu-latest` (2 vCPU, 7 GB RAM).  
 > These results measure behavior under shared-runner constraints, not bare-metal performance.  
