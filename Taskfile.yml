@@ -95,11 +95,26 @@ tasks:
       - cmd: WRITE_BEHIND=${WRITE_BEHIND:-true} QUICK=${QUICK:-true} THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} DRIVER_VUS=${DRIVER_VUS:-300} task k6-run
 
   k6-compare:
-    desc: "Write-behind vs direct-postgres comparison (QUICK) against a running stack. Override count via COMPARE_VUS."
+    desc: "Write-behind vs direct-postgres comparison (QUICK), app-level reset between arms."
     cmds:
       - cmd: WRITE_BEHIND=true  QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+      - task: reset-between-arms
       - cmd: WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
-
+  
+  reset-between-arms:
+    desc: "Flush Redis, then restart the API container. FORCE_RESEED=true on that restart also wipes+reseeds Postgres."
+    cmds:
+      - docker compose -f compose.ci.yaml exec -T gridtrack.redis redis-cli FLUSHALL
+      - docker compose -f compose.ci.yaml restart gridtrack.api
+      - |
+        echo "Waiting for API + reseed..."
+        for i in $(seq 1 40); do
+          if curl -sf "http://localhost:5098/api/drivers?pageSize=5" | grep -q '"id"'; then echo "  ready"; break; fi
+          echo "  ($i/40) not ready"; sleep 5
+        done
+  
+  
+  
   k6-stress:
     desc: "High-VU ceiling test (write-behind only) against a running stack. Override count via STRESS_VUS."
     cmds:

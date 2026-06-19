@@ -63,9 +63,10 @@ services:
       dockerfile: GridTrack.Api/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__ClickHouse: "Host=gridtrack.clickhouse;Port=8123;Database=gridtrack"   # disable cold-path flush — ClickHouse not in CI
+      ConnectionStrings__ClickHouse: "Host=gridtrack.clickhouse;Port=8123;Database=gridtrack"
       Simulation__Enabled: "false"        # k6 is the only load source
       FORCE_RESEED: "true"                # fresh seeded drivers each run
+      Osrm__BaseUrl: "http://gridtrack.osrm:5000"
     ports:
       - "5098:8080"
     depends_on:
@@ -77,3 +78,61 @@ services:
         condition: service_healthy
       gridtrack.clickhouse:
         condition: service_healthy
+      gridtrack.osrm:
+        condition: service_healthy
+        
+        
+  
+  gridtrack.osrm:
+    # Trivial stub that returns a fixed canned route for any request — no Dockerfile needed
+    # Response shape matches OsrmService.cs expectations: routes[0].geometry.coordinates as GeoJSON [lng,lat]
+    image: python:3.12-alpine
+    command:
+      - "python"
+      - "-c"
+      - |
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import json
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                r = {
+                    "code": "Ok",
+                    "routes": [{
+                        "legs": [{
+                            "steps": [],
+                            "weight": 100.0,
+                            "summary": "",
+                            "duration": 100.0,
+                            "distance": 500.0
+                        }],
+                        "weight_name": "routability",
+                        "weight": 100.0,
+                        "duration": 100.0,
+                        "distance": 500.0,
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                [36.0, 33.0],
+                                [36.05, 33.05],
+                                [36.1, 33.1]
+                            ]
+                        }
+                    }],
+                    "waypoints": [
+                        {"location": [36.0, 33.0], "name": "", "distance": 0.0},
+                        {"location": [36.1, 33.1], "name": "", "distance": 0.0}
+                    ]
+                }
+                self.send_response(200)
+                self.send_header("Content-Type","application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(r).encode())
+        HTTPServer(("0.0.0.0",5000),H).serve_forever()
+    ports:
+      - "5001:5000"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/route/v1/driving/0,0;1,1')" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

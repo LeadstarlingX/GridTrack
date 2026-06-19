@@ -1,5 +1,6 @@
 using GridTrack.Application.IntegrationEvents;
 using GridTrack.Application.UseCases.Deliveries;
+using Serilog;
 using Wolverine;
 using Wolverine.RabbitMQ;
 
@@ -23,6 +24,7 @@ public class Program
             {
                 rabbit = ctx.Configuration.GetConnectionString("Queue");
             })
+            .UseSerilog((ctx, services, cfg) => cfg.ReadFrom.Configuration(ctx.Configuration))
             .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); })
             .UseWolverine(opts =>
             {
