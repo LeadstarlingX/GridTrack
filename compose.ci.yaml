@@ -62,13 +62,13 @@ services:
       ACCEPT_EULA: "Y"
       SEQ_FIRSTRUN_NOAUTHENTICATION: "True"
     ports:
-      - "5341:5341"
+      - "5341:80"
     healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://localhost:5341/health" ]
+      test: [ "CMD", "wget", "-qO-", "http://localhost:80/health || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   gridtrack.api:
     image: gridtrack.api
