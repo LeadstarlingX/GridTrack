@@ -14,7 +14,7 @@
         <PackageReference Include="Testcontainers.PostgreSql" />
         <PackageReference Include="Testcontainers.RabbitMq" />
         <PackageReference Include="NSubstitute" />
-        <PackageReference Include="Serilog.AspNetCore" />
+        <PackageReference Include="Serilog.Sinks.Seq" />
     </ItemGroup>
 
     <ItemGroup>
