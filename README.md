@@ -5,6 +5,11 @@ Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
 (urgency / demand-surge / forecast).
 
 
+> **Test environment:** GitHub Actions `ubuntu-latest` (2 vCPU, 7 GB RAM).  
+> These results measure behavior under shared-runner constraints, not bare-metal performance.  
+> For production capacity planning, run `task k6-stress` on hardware matching your deployment target.
+
+
 <!-- K6_COMPARISON_START -->
 ### Comparison Test **✗ WRITE-BEHIND REGRESSED ON SOME PATHS**
 

@@ -112,10 +112,12 @@ tasks:
       - cmd: WRITE_BEHIND=${WRITE_BEHIND:-true} QUICK=${QUICK:-true} THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} DRIVER_VUS=${DRIVER_VUS:-300} task k6-run
 
   k6-compare:
-    desc: "Write-behind vs direct-postgres comparison (QUICK), app-level reset between arms."
+    desc: "Write-behind vs direct-postgres comparison (QUICK), FULL reset between arms."
     cmds:
-      - cmd: WRITE_BEHIND=true  QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
-      - task: reset-between-arms
+      - cmd: WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
+      # FULL tear-down, not just Redis flush
+      - docker compose -f compose.ci.yaml down -v
+      - docker compose -f compose.ci.yaml up -d --wait
       - cmd: WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${COMPARE_VUS:-150} task k6-run
   
   reset-between-arms:
@@ -129,7 +131,11 @@ tasks:
           if curl -sf "http://localhost:5098/api/drivers?pageSize=5" | grep -q '"id"'; then echo "  ready"; break; fi
           echo "  ($i/40) not ready"; sleep 5
         done
-  
+
+  k6-throughput:
+    desc: "Throughput ceiling test — fires telemetry as fast as possible to find the breaking point."
+    cmds:
+      - cmd: TEST_MODE=throughput WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress DRIVER_VUS=${STRESS_VUS:-480} task k6-run
   
   
   k6-stress:
@@ -138,12 +144,15 @@ tasks:
       - cmd: WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress DRIVER_VUS=${STRESS_VUS:-480} task k6-run
 
   k6-ci:
-    desc: "CI: bring up compose.ci.yaml (incl. ClickHouse), run comparison + stress, tear down once."
+    desc: "CI: bring up compose.ci.yaml, run comparison + latency stress + throughput ceiling, tear down once."
     cmds:
       - docker compose -f compose.ci.yaml up -d --build
       - defer: docker compose -f compose.ci.yaml down -v
       - task: k6-compare
+      - docker compose -f compose.ci.yaml down -v
+      - docker compose -f compose.ci.yaml up -d --wait
       - task: k6-stress
+      - task: k6-throughput
 
 
   # ============================================

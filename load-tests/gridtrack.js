@@ -36,6 +36,8 @@ const WRITE_BEHIND = (__ENV.WRITE_BEHIND ?? 'true') !== 'false'
 // QUICK=true  → shorter stages for side-by-side comparison runs
 const QUICK        = __ENV.QUICK === 'true'
 const THRESHOLD_PROFILE = __ENV.THRESHOLD_PROFILE || 'stress'
+const TEST_MODE = __ENV.TEST_MODE || 'latency'  // 'latency' | 'throughput' | 'both'
+
 
 const TEL_URL = WRITE_BEHIND
     ? `${BASE}/api/telemetry/position`
@@ -85,78 +87,77 @@ const STRESS_THRESHOLDS = {
 
 // ── Scenarios ──────────────────────────────────────────────────────────────────
 
-export const options = {
-    scenarios: {
+const scenarios = {
 
-        // 1. Driver GPS telemetry — the write-behind hot path (or direct-postgres baseline).
-        //    Each VU = one driver posting 1 position/s.
-        //    Ramps up to DRIVER_VUS, holds for 2 min to measure sustained throughput,
-        //    then cools down. Use DRIVER_VUS=2000-5000 to find the throughput ceiling.
-        driver_telemetry: {
-            executor: 'ramping-vus',
+    // 1. Driver GPS telemetry — the write-behind hot path (or direct-postgres baseline).
+    //    Each VU = one driver posting 1 position/s.
+    //    Ramps up to DRIVER_VUS, holds for 2 min to measure sustained throughput,
+    //    then cools down. Use DRIVER_VUS=2000-5000 to find the throughput ceiling.
+    driver_telemetry: {
+        executor: 'ramping-vus',
             startVUs: 0,
             stages: QUICK
-                ? [
-                    { duration: '15s', target: Math.floor(DRIVER_VUS * 0.25) },
-                    { duration: '15s', target: DRIVER_VUS },
-                    { duration: '45s', target: DRIVER_VUS },
-                    { duration: '15s', target: 0 },
-                ]
-                : [
-                    { duration: '30s', target: Math.floor(DRIVER_VUS * 0.25) },
-                    { duration: '30s', target: DRIVER_VUS },
-                    { duration: '2m',  target: DRIVER_VUS },
-                    { duration: '20s', target: 0 },
-                ],
+            ? [
+                { duration: '15s', target: Math.floor(DRIVER_VUS * 0.25) },
+                { duration: '15s', target: DRIVER_VUS },
+                { duration: '45s', target: DRIVER_VUS },
+                { duration: '15s', target: 0 },
+            ]
+            : [
+                { duration: '30s', target: Math.floor(DRIVER_VUS * 0.25) },
+                { duration: '30s', target: DRIVER_VUS },
+                { duration: '2m',  target: DRIVER_VUS },
+                { duration: '20s', target: 0 },
+            ],
             gracefulRampDown: '15s',
             exec: 'driverTelemetry',
-        },
+    },
 
-        // 2. Concurrent dashboard observers hitting all analytics endpoints.
-        analytics_read: {
-            executor: 'ramping-vus',
+    // 2. Concurrent dashboard observers hitting all analytics endpoints.
+    analytics_read: {
+        executor: 'ramping-vus',
             startVUs: 0,
             stages: QUICK
-                ? [
-                    { duration: '15s', target: 50  },
-                    { duration: '15s', target: 150 },
-                    { duration: '45s', target: 150 },
-                    { duration: '15s', target: 0   },
-                ]
-                : [
-                    { duration: '30s', target: 100  },
-                    { duration: '30s', target: 300 },
-                    { duration: '2m',  target: 300 },
-                    { duration: '20s', target: 0   },
-                ],
+            ? [
+                { duration: '15s', target: 50  },
+                { duration: '15s', target: 150 },
+                { duration: '45s', target: 150 },
+                { duration: '15s', target: 0   },
+            ]
+            : [
+                { duration: '30s', target: 100  },
+                { duration: '30s', target: 300 },
+                { duration: '2m',  target: 300 },
+                { duration: '20s', target: 0   },
+            ],
             gracefulRampDown: '10s',
             exec: 'analyticsRead',
-        },
+    },
 
-        // 3. Delivery lifecycle: create → auto-assign → cancel.
-        //    Reduced to 5 VUs in QUICK mode — OSRM route calc is the bottleneck here,
-        //    not the write-behind architecture. Full stress.ps1 uses 20.
-        delivery_lifecycle: {
-            executor: 'constant-vus',
+    // 3. Delivery lifecycle: create → auto-assign → cancel.
+    //    Reduced to 5 VUs in QUICK mode — OSRM route calc is the bottleneck here,
+    //    not the write-behind architecture. Full stress.ps1 uses 20.
+    delivery_lifecycle: {
+        executor: 'constant-vus',
             vus: QUICK ? 5 : 20,
             duration: QUICK ? '90s' : '3m',
             startTime: QUICK ? '15s' : '30s',
             exec: 'deliveryLifecycle',
-        },
+    },
 
-        // 4. District group CRUD — exercises the new endpoints end-to-end.
-        district_group_crud: {
-            executor: 'constant-vus',
+    // 4. District group CRUD — exercises the new endpoints end-to-end.
+    district_group_crud: {
+        executor: 'constant-vus',
             vus: 5,
             duration: QUICK ? '75s' : '2m30s',
             startTime: QUICK ? '15s' : '30s',
             exec: 'districtGroupCrud',
-        },
+    },
 
-        // 5. SignalR negotiate — needs a Clerk JWT to reach the hub.
-        //    Skipped (VU sleeps) when JWT_TOKEN is not provided.
-        signalr_negotiate: {
-            executor: 'constant-arrival-rate',
+    // 5. SignalR negotiate — needs a Clerk JWT to reach the hub.
+    //    Skipped (VU sleeps) when JWT_TOKEN is not provided.
+    signalr_negotiate: {
+        executor: 'constant-arrival-rate',
             rate: 10,
             timeUnit: '1s',
             duration: QUICK ? '90s' : '3m',
@@ -164,9 +165,40 @@ export const options = {
             maxVUs: 40,
             startTime: QUICK ? '15s' : '30s',
             exec: 'signalrNegotiate',
-        },
     },
+}
 
+
+const throughputScenario = {
+    // 6. Measures maximum requests per second before errors or degradation.
+    //    Uses constant arrival rate with no sleep.
+    driver_telemetry_throughput: {
+        executor: 'ramping-arrival-rate',
+        startRate: 100,
+        timeUnit: '1s',
+        preAllocatedVUs: 100,
+        maxVUs: 1000,
+        stages: [
+            { duration: '30s', target: 500 },
+            { duration: '30s', target: 1000 },
+            { duration: '30s', target: 2000 },
+            { duration: '30s', target: 3000 },
+            { duration: '30s', target: 0 },
+        ],
+        exec: 'driverTelemetryNoSleep',
+    },
+}
+
+const scenarios = TEST_MODE === 'throughput'
+    ? throughputScenario
+    : TEST_MODE === 'both'
+        ? { ...baseScenarios, ...throughputScenario }
+        : baseScenarios
+
+
+export const options = {
+
+    scenarios: scenarios,
     thresholds: THRESHOLD_PROFILE === 'compare' ? COMPARE_THRESHOLDS : STRESS_THRESHOLDS,
 }
 
@@ -350,6 +382,30 @@ export function signalrNegotiate() {
     check(res, { 'negotiate 200': (r) => r.status === 200 })
     errorRate.add(res.status !== 200)
     sleep(0.1)
+}
+
+// ── 6. System's Throughput ──────────────────────────────────────────────────────
+
+export function driverTelemetryNoSleep() {
+    const driverId = DRIVER_IDS.length > 0
+        ? DRIVER_IDS[__VU % DRIVER_IDS.length]
+        : `00000000-0000-0000-0000-${String(__VU).padStart(12, '0')}`
+
+    const { lat, lng } = pos()
+
+    const res = http.post(
+        TEL_URL,
+        JSON.stringify({ driverId, lat, lng }),
+        { headers: JSON_HEADERS, tags: { name: 'telemetry/position' } },
+    )
+    telLatency.add(res.timings.duration)
+
+    const hit = res.status === 204
+    const ok = hit || res.status === 404
+    if (hit) accepted.add(1)
+    check(res, { 'telemetry 204|404': () => ok })
+    errorRate.add(!ok)
+    // NO sleep — fire as fast as the arrival rate dictates
 }
 
 // ── handleSummary — writes results/latest-{mode}.{md,json} ───────────────────
