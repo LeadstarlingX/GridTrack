@@ -63,12 +63,8 @@ services:
       SEQ_FIRSTRUN_NOAUTHENTICATION: "True"
     ports:
       - "5341:80"
-    healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://localhost:80/health || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+    volumes:
+      - seq-data:/data
 
   gridtrack.api:
     image: gridtrack.api
@@ -95,7 +91,6 @@ services:
       gridtrack.osrm:
         condition: service_healthy
       gridtrack.seq:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1" ]
       interval: 5s
@@ -174,3 +169,6 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+volumes:
+  seq-data:
