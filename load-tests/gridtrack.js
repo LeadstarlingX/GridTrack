@@ -436,7 +436,7 @@ export function handleSummary(data) {
     const errR  = pct('http_req_failed')
 
     const payloadStr = JSON.stringify({ driverId: "uuid", lat: 33.5, lng: 36.2 });
-    const payloadBytes = new TextEncoder().encode(payloadStr).length;
+    const payloadBytes = payloadStr.length;
 
     const contextBlock = `
     ### Test Context
