@@ -82,6 +82,7 @@ def _threshold_results(metric_obj):
 
 def _fmt_ms(v):
     if v is None: return "N/A"
+    if v >= 59000: return "≥60 s (k6 client timeout — true latency unmeasured)"
     if v >= 1000: return f"{v / 1000:.2f} s"
     if v >= 100:  return f"{v:.0f} ms"
     if v >= 10:   return f"{v:.1f} ms"
@@ -110,12 +111,12 @@ def _fmt_bytes_per_sec(v):
 
 def _speedup(wb, direct):
     if wb is None or direct is None or wb == 0:
-        return "N/A"
+            return "N/A"
+    if wb >= 59000 or direct >= 59000:
+        return "≥timeout (unmeasurable, not a real ratio)"
     ratio = direct / wb
-    if ratio >= 1.05:
-        return f"{ratio:.1f}x faster"
-    if ratio <= 0.95:
-        return f"{(1 / ratio):.1f}x slower"
+    if ratio >= 1.05: return f"{ratio:.1f}x faster"
+    if ratio <= 0.95: return f"{(1/ratio):.1f}x slower"
     return "~same"
 
 
@@ -408,7 +409,9 @@ def generate_comparison_chart(results):
         wb_val = _get(_load(DEFAULT_COMPARISON_WB_FILE), metric, "p(95)")
         dp_val = _get(_load(DEFAULT_COMPARISON_DIRECT_FILE), metric, "p(95)")
         if wb_val is not None and dp_val is not None:
-            labels.append(label.replace(" ", "<br/>")) # Mermaid needs <br/> for multi-line x-axis
+            # Short labels to fit xychart-beta x-axis (no <br/> support)
+            short = label.replace("Telemetry POST", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery writes", "Deliveries").replace("District-group CRUD", "Districts")
+            labels.append(short)
             wb_p95s.append(round(wb_val, 1))
             dp_p95s.append(round(dp_val, 1))
 
@@ -418,7 +421,7 @@ def generate_comparison_chart(results):
     return f"""```mermaid
 xychart-beta
     title "Comparison Test: p95 Latency (ms) — Lower is better"
-    x-axis {labels}
+    x-axis {json.dumps(labels)}
     line "Write-Behind" {wb_p95s}
     line "Direct-Postgres" {dp_p95s}
 ```"""
@@ -445,7 +448,8 @@ def generate_stress_chart(results):
         max_val = _get(data, metric, "max")
         
         if p50 is not None:
-            labels.append(label.replace(" ", "<br/>"))
+            short = label.replace("Driver telemetry", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery lifecycle", "Deliveries").replace("District-group CRUD", "Districts")
+            labels.append(short)
             p50s.append(round(p50, 1))
             p95s.append(round(p95, 1))
             maxs.append(round(max_val / 1000, 2) if max_val and max_val > 1000 else round(max_val, 1) if max_val else 0)
@@ -456,7 +460,7 @@ def generate_stress_chart(results):
     return f"""```mermaid
 xychart-beta
     title "Stress Test Latency Distribution (ms) — Lower is better"
-    x-axis {labels}
+    x-axis {json.dumps(labels)}
     line "Median (p50)" {p50s}
     line "p95" {p95s}
     line "Max" {maxs}
@@ -475,7 +479,8 @@ def generate_stress_mix_chart(results):
         if count:
             duration = _test_duration_s(data)
             rate = count / duration if duration > 0 else 0
-            labels.append(label.replace(" ", "<br/>"))
+            short = label.replace("Driver telemetry", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery lifecycle", "Deliveries").replace("District-group CRUD", "Districts")
+            labels.append(short)
             rates.append(round(rate, 1))
 
     if not labels: return ""
@@ -483,7 +488,7 @@ def generate_stress_mix_chart(results):
     return f"""```mermaid
 xychart-beta
     title "Stress Test: Measured Traffic Mix (req/s)"
-    x-axis {labels}
+    x-axis {json.dumps(labels)}
     bar "Requests/s" {rates}
 ```"""
 
