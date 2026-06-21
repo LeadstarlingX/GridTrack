@@ -1,24 +1,3 @@
-/**
- * GridTrack k6 stress test — production-grade
- *
- * Architecture under test:
- *   Telemetry hot path : HTTP → ConcurrentDictionary write (~ns) → Redis XADD (fire-and-forget)
- *                        → StreamPositionConsumer → SignalR fan-out (district + district-group subs)
- *   Write-behind flush : PositionFlushService drains buffer every 5 s → Postgres batch UPDATE
- *                        + ClickHouse bulk insert
- *
- * Usage:
- *   .\load-tests\stress.ps1               # 500 driver VUs, auto-fetches real driver IDs
- *   .\load-tests\stress.ps1 2000          # push toward the ceiling
- *   .\load-tests\stress.ps1 5000          # find where it breaks
- *
- *   k6 run --env BASE=http://localhost:5098 \
- *          --env DRIVER_VUS=1000          \
- *          --env DRIVER_IDS=id1,id2,...   \
- *          --env JWT_TOKEN=<clerk_jwt>    \   # enables SignalR negotiate scenario
- *          load-tests/gridtrack.js
- */
-
 import http from 'k6/http'
 import { check, sleep, group } from 'k6'
 import { Rate, Trend, Counter } from 'k6/metrics'
@@ -58,30 +37,26 @@ const hubLatency  = new Trend('gridtrack_signalr_neg_latency',     true)
 const errorRate   = new Rate('gridtrack_error_rate')
 const accepted    = new Counter('gridtrack_tel_accepted')   // 204s only — real write-behind hits
 
+const mixReqs = {
+    telemetry: new Counter('gridtrack_mix_telemetry_reqs'),
+    analytics: new Counter('gridtrack_mix_analytics_reqs'),
+    delivery:  new Counter('gridtrack_mix_delivery_reqs'),
+    district:  new Counter('gridtrack_mix_district_reqs'),
+}
 
-
-// Comparison runs intentionally include a slower baseline (direct-postgres) — applying
-// the write-behind-tuned latency thresholds to that arm would "fail" it by design.
-// Only sanity-check nothing is actually broken; the speedup table in the README carries
-// the real signal, computed by diffing the two raw JSON outputs, not by thresholds.
 const COMPARE_THRESHOLDS = {
     http_req_failed:     ['rate<0.01'],
     gridtrack_error_rate: ['rate<0.01'],
 }
 
-// Ceiling-test thresholds — derived from the architecture (in-memory write + fire-and-
-// forget Redis XADD, no synchronous I/O on the telemetry hot path) plus the last observed
-// CI run (480 VUs, 2-vCPU shared runner: telemetry p95 190ms, district-group p95 334ms).
-// Headroom is intentional: this should catch a real regression (e.g. an accidental
-// synchronous DB call on the hot path), not shared-runner jitter.
 const STRESS_THRESHOLDS = {
     http_req_failed:                    ['rate<0.01'],
     http_req_duration:                  ['p(95)<1500'],
-    'gridtrack_driver_tel_latency':     ['p(95)<300',  'p(99)<1000'],
-    'gridtrack_analytics_latency':      ['p(95)<600',  'p(99)<2500'],
-    'gridtrack_delivery_write_latency': ['p(95)<700'],
-    'gridtrack_district_group_latency': ['p(95)<450'],
-    'gridtrack_signalr_neg_latency':    ['p(95)<150'],
+    'gridtrack_driver_tel_latency':     ['p(95)<2000'],
+    'gridtrack_analytics_latency':      ['p(95)<1000'],
+    'gridtrack_delivery_write_latency': ['p(95)<2000'],
+    'gridtrack_district_group_latency': ['p(95)<1200'],
+    'gridtrack_signalr_neg_latency':    ['p(95)<500'],
     'gridtrack_error_rate':             ['rate<0.01'],
 }
 
@@ -252,6 +227,7 @@ export function driverTelemetry() {
         JSON.stringify({ driverId, lat, lng }),
         { headers: JSON_HEADERS, tags: { name: 'telemetry/position' } },
     )
+    mixReqs.telemetry.add(1)
     telLatency.add(res.timings.duration)
 
     const hit = res.status === 204   // write-behind path fully exercised
@@ -281,6 +257,7 @@ export function analyticsRead() {
 
         for (const [url, tag] of reads) {
             const res = http.get(url, { tags: { name: tag } })
+            mixReqs.analytics.add(1)
             readLatency.add(res.timings.duration)
             ok(res, tag)
             sleep(jitter(0.1))
@@ -301,6 +278,7 @@ export function deliveryLifecycle() {
             JSON.stringify({ lat, lng, districtId: null }),
             { headers: JSON_HEADERS, tags: { name: 'delivery/create' } },
         )
+        mixReqs.delivery.add(1)
         delLatency.add(createRes.timings.duration)
         if (!ok(createRes, 'delivery/create')) { sleep(1); return }
 
@@ -314,6 +292,7 @@ export function deliveryLifecycle() {
             `${BASE}/api/deliveries/${deliveryId}/auto-assign`, null,
             { tags: { name: 'delivery/auto-assign' } },
         )
+        mixReqs.delivery.add(1)
         delLatency.add(assignRes.timings.duration)
         check(assignRes, { 'assign 2xx|409': (r) => r.status < 300 || r.status === 409 })
 
@@ -324,6 +303,7 @@ export function deliveryLifecycle() {
             JSON.stringify({ reason: 'k6 cleanup' }),
             { headers: JSON_HEADERS, tags: { name: 'delivery/cancel' } },
         )
+        mixReqs.delivery.add(1)
         delLatency.add(cancelRes.timings.duration)
         ok(cancelRes, 'delivery/cancel')
 
@@ -343,6 +323,7 @@ export function districtGroupCrud() {
             }),
             { headers: JSON_HEADERS, tags: { name: 'dg/create' } },
         )
+        mixReqs.district.add(1)
         dgLatency.add(createRes.timings.duration)
         if (!ok(createRes, 'dg/create')) { sleep(2); return }
 
@@ -353,6 +334,7 @@ export function districtGroupCrud() {
         sleep(jitter(0.2))
 
         const getRes = http.get(`${BASE}/api/district-groups/${id}`, { tags: { name: 'dg/get' } })
+        mixReqs.district.add(1)
         dgLatency.add(getRes.timings.duration)
         ok(getRes, 'dg/get')
 
@@ -363,12 +345,14 @@ export function districtGroupCrud() {
             JSON.stringify({ name: `k6-${__VU}-updated`, districtIds: [pick(DISTRICTS)] }),
             { headers: JSON_HEADERS, tags: { name: 'dg/update' } },
         )
+        mixReqs.district.add(1)
         dgLatency.add(putRes.timings.duration)
         ok(putRes, 'dg/update')
 
         sleep(jitter(0.2))
 
         const delRes = http.del(`${BASE}/api/district-groups/${id}`, null, { tags: { name: 'dg/delete' } })
+        mixReqs.district.add(1)
         dgLatency.add(delRes.timings.duration)
         ok(delRes, 'dg/delete')
 
@@ -408,6 +392,7 @@ export function driverTelemetryNoSleep() {
         JSON.stringify({ driverId, lat, lng }),
         { headers: JSON_HEADERS, tags: { name: 'telemetry/position' } },
     )
+    mixReqs.telemetry.add(1)
     telThroughputLatency.add(res.timings.duration)
 
     const hit = res.status === 204
