@@ -1,4 +1,6 @@
 ﻿using Asp.Versioning;
+using FluentValidation;
+using GridTrack.Presentation.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,11 +28,17 @@ public static class DependencyInjection
         var aspEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "";
         var requireAuth = !aspEnv.Equals("Docker", StringComparison.OrdinalIgnoreCase);
 
+        // FluentValidation validators for the HTTP request DTOs, run by ValidationActionFilter.
+        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+
         services.AddControllers(o =>
             {
                 if (requireAuth)
                     o.Filters.Add(new AuthorizeFilter(
                         new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build()));
+
+                // Validates action arguments → throws ValidationException (→ 400) on failure.
+                o.Filters.Add<ValidationActionFilter>();
             })
             .AddApplicationPart(typeof(DependencyInjection).Assembly)
             // Serialize enums as strings to match frontend string unions.

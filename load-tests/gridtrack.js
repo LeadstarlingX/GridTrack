@@ -138,9 +138,45 @@ const baseScenarios = {
         exec: 'districtGroupCrud',
     },
 
-    // 5. SignalR negotiate — DISABLED until Clerk JWT authentication is resolved.
-    //     Function and metric kept for re-enabling later.
-    // signalr_negotiate: { ... },
+    // 5. District boundaries — heavy GeoJSON read (correctness-checked).
+    district_boundaries: {
+        executor: 'constant-vus',
+        vus: 10,
+        duration: QUICK ? '90s' : '3m',
+        startTime: QUICK ? '15s' : '30s',
+        exec: 'districtBoundaries',
+    },
+
+    // 6. Telemetry batch — the real B2B ingest path (partner posts batches).
+    telemetry_batch: {
+        executor: 'constant-vus',
+        vus: QUICK ? 10 : 30,
+        duration: QUICK ? '90s' : '3m',
+        startTime: QUICK ? '15s' : '30s',
+        exec: 'telemetryBatch',
+    },
+
+    // 7. AI endpoints — LIGHT smoke only (calls Python/Groq, rate-limited). Never stress.
+    ai_smoke: {
+        executor: 'constant-vus',
+        vus: 5,
+        duration: QUICK ? '60s' : '2m',
+        startTime: QUICK ? '20s' : '40s',
+        exec: 'aiSmoke',
+    },
+
+    // 8. SignalR — negotiate handshake. Auth is bypassed in the Docker (load) env, so no
+    //    Clerk JWT is needed. Proves the hub is reachable + authorized under load.
+    signalr: {
+        executor: 'constant-arrival-rate',
+        rate: 10,
+        timeUnit: '1s',
+        duration: QUICK ? '90s' : '3m',
+        preAllocatedVUs: 20,
+        maxVUs: 40,
+        startTime: QUICK ? '15s' : '30s',
+        exec: 'signalrConnect',
+    },
 }
 
 
@@ -204,6 +240,30 @@ function pos() {
         lat: 33.5138 + (Math.random() - 0.5) * 0.1,
         lng: 36.2765 + (Math.random() - 0.5) * 0.1,
     }
+}
+
+// ── setup — fetch real district + delivery IDs once, share with all VUs ─────────
+
+export function setup() {
+    const data = { districtIds: [], deliveryIds: [] }
+
+    const dRes = http.get(`${BASE}/api/districts`)
+    if (dRes.status === 200) {
+        try {
+            const items = JSON.parse(dRes.body)
+            data.districtIds = (Array.isArray(items) ? items : items.items || [])
+                .map(d => d.id || d.districtId).filter(Boolean).slice(0, 20)
+        } catch { /* ignore */ }
+    }
+
+    const delRes = http.get(`${BASE}/api/deliveries?pageSize=20`)
+    if (delRes.status === 200) {
+        try {
+            data.deliveryIds = (JSON.parse(delRes.body).items || []).map(d => d.id).filter(Boolean)
+        } catch { /* ignore */ }
+    }
+
+    return data
 }
 
 // ── 1. Driver telemetry ───────────────────────────────────────────────────────
@@ -354,21 +414,89 @@ export function districtGroupCrud() {
     })
 }
 
-// ── 5. SignalR negotiate — DISABLED until Clerk JWT is resolved ────────────────
-// Re-enable by adding the scenario back to baseScenarios and removing the early return.
+// ── 5. District boundaries — heavy GeoJSON read, correctness-checked ───────────
 
-export function signalrNegotiate() {
-    if (true) { sleep(1); return }  // Disabled
+export function districtBoundaries() {
+    const res = http.get(`${BASE}/api/districts/boundaries`, { tags: { name: 'districts/boundaries' } })
+    readLatency.add(res.timings.duration)
+    mixReqs.analytics.add(1)
+
+    // Not just 2xx — the payload must actually contain district geometry.
+    const good = check(res, {
+        'boundaries 200': (r) => r.status === 200,
+        'boundaries has data': (r) => {
+            try {
+                const b = JSON.parse(r.body)
+                return (b.features?.length || b.items?.length || b.districts?.length || 0) > 0
+            } catch { return false }
+        },
+    })
+    errorRate.add(!good)
+    sleep(jitter(0.5))
+}
+
+// ── 6. Telemetry batch — real B2B ingest path; assert it persisted, not just 202 ─
+
+export function telemetryBatch() {
+    const events = []
+    for (let i = 0; i < 10; i++) {
+        const driverId = DRIVER_IDS.length > 0
+            ? DRIVER_IDS[(__VU + i) % DRIVER_IDS.length]
+            : `00000000-0000-0000-0000-${String(__VU).padStart(12, '0')}`
+        const { lat, lng } = pos()
+        events.push({ type: 'position', driverId, lat, lng })
+    }
 
     const res = http.post(
-        `${BASE}/dashboardHub/negotiate?negotiateVersion=1`, null,
-        {
-            headers: { Authorization: `Bearer ${JWT_TOKEN}` },
-            tags: { name: 'signalr/negotiate' },
+        `${BASE}/api/telemetry/batch`,
+        JSON.stringify({ events }),
+        { headers: JSON_HEADERS, tags: { name: 'telemetry/batch' } },
+    )
+    telLatency.add(res.timings.duration)
+    mixReqs.telemetry.add(events.length)
+
+    const good = check(res, {
+        'batch 202': (r) => r.status === 202,
+        'batch processed all': (r) => {
+            try { return JSON.parse(r.body).processed === events.length } catch { return false }
         },
+    })
+    errorRate.add(!good)
+    sleep(jitter(0.5))
+}
+
+// ── 7. AI smoke — LIGHT only. Verify the endpoints respond (incl. graceful degrade) ─
+//      Deliberately NOT added to errorRate: with Python absent these degrade by design.
+
+export function aiSmoke(data) {
+    const districtIds = (data && data.districtIds) || []
+    const deliveryIds = (data && data.deliveryIds) || []
+
+    if (districtIds.length > 0) {
+        const r1 = http.get(`${BASE}/api/ai/district-summary/${pick(districtIds)}`,
+            { tags: { name: 'ai/district-summary' } })
+        check(r1, { 'district-summary responded <500': (r) => r.status > 0 && r.status < 500 })
+    }
+
+    if (deliveryIds.length > 0) {
+        const r2 = http.get(`${BASE}/api/ai/delivery/${pick(deliveryIds)}/recommendation`,
+            { tags: { name: 'ai/recommendation' } })
+        check(r2, { 'recommendation responded <500': (r) => r.status > 0 && r.status < 500 })
+    }
+
+    sleep(jitter(2.0))  // light cadence — never hammer the AI path
+}
+
+// ── 8. SignalR — negotiate handshake (auth bypassed in Docker, no JWT) ─────────
+
+export function signalrConnect() {
+    const res = http.post(
+        `${BASE}/hubs/dashboard/negotiate?negotiateVersion=1`, null,
+        { tags: { name: 'signalr/negotiate' } },
     )
     hubLatency.add(res.timings.duration)
-    check(res, { 'negotiate 200': (r) => r.status === 200 })
+    const good = check(res, { 'negotiate 200': (r) => r.status === 200 })
+    errorRate.add(!good)
     sleep(0.1)
 }
 

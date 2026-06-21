@@ -76,7 +76,10 @@ public sealed class DistrictDataService : IDistrictDataService
                     Math.Sqrt(Math.Pow(p[0].GetDouble() - cLng, 2) + Math.Pow(p[1].GetDouble() - cLat, 2)));
                 var jitter = Math.Min(maxDist * 0.35, 0.018);
 
-                districts.Add(new DistrictInfo(id, nameAr, cLat, cLng, jitter));
+                // Keep the exterior ring ([lng, lat] pairs) so boundaries can be seeded.
+                var boundary = coords.Select(p => new[] { p[0].GetDouble(), p[1].GetDouble() }).ToList();
+
+                districts.Add(new DistrictInfo(id, nameAr, cLat, cLng, jitter, boundary));
             }
             catch (Exception ex)
             {
