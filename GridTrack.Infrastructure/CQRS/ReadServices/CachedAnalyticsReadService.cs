@@ -13,10 +13,13 @@ internal sealed class CachedAnalyticsReadService(
     AnalyticsReadService inner,
     ICacheService cache) : IAnalyticsReadService
 {
-    private static readonly TimeSpan LiveTtl       = TimeSpan.FromMinutes(5);
+    // Live (today-inclusive) data uses a short TTL so the dashboard stays near-current;
+    // safe to keep low because per-key single-flight collapses concurrent misses into one
+    // query (no stampede). Historical ranges are immutable, so they keep a long TTL.
+    private static readonly TimeSpan LiveTtl       = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan HistoricalTtl = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MapTtl        = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan UtilTtl       = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan MapTtl        = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan UtilTtl       = TimeSpan.FromSeconds(60);
 
     private static string Fmt(DateTime? dt) => dt?.ToString("yyyyMMdd") ?? "all";
 

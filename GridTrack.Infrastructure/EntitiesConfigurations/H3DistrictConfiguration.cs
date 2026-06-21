@@ -18,8 +18,10 @@ public sealed class H3DistrictConfiguration : IEntityTypeConfiguration<H3Distric
             .HasColumnType("geometry (point)")
             .IsRequired();
 
+        // Polygon, not a point — the original "geometry (point)" typmod rejected polygon
+        // inserts, which is why H3District was never seeded. Plain "geometry" accepts it.
         builder.Property(h => h.BoundaryPolygon)
-            .HasColumnType("geometry (point)")
+            .HasColumnType("geometry")
             .IsRequired();
 
         builder.Property(h => h.Resolution)

@@ -4,9 +4,11 @@ using GridTrack.Application.Dispatch;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.Drivers;
+using GridTrack.Domain.H3Districts;
 using GridTrack.Domain.ValueObjects;
 using GridTrack.Infrastructure.Data;
 using GridTrack.Infrastructure.DbContext;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 
@@ -94,6 +96,11 @@ public sealed class DataSeeder(
         }
 
         var now = DateTime.UtcNow;
+
+        // ── District boundaries (H3District) ──────────────────────────────
+        // Powers GET /api/districts/boundaries + the frontend district polygon layer.
+        // Idempotent: FORCE_RESEED does not clear this table, so we only seed when empty.
+        await SeedBoundariesAsync(allDistricts, ct);
 
         // ── Drivers ───────────────────────────────────────────────────────
         var today = now.Date;
@@ -288,6 +295,41 @@ public sealed class DataSeeder(
 
         await Task.WhenAll(tasks);
         return results;
+    }
+
+    // Builds H3District rows from the GeoJSON neighborhood polygons. Keyed by the district's
+    // osm_id (same id Drivers/Deliveries use as DistrictId), so the frontend can match polygons
+    // to live data. Skipped entirely if the table already has rows.
+    private async Task SeedBoundariesAsync(IReadOnlyList<DistrictInfo> districts, CancellationToken ct)
+    {
+        if (await db.Set<H3District>().AnyAsync(ct)) return;
+
+        var boundaries = new List<H3District>();
+        foreach (var d in districts)
+        {
+            if (d.Boundary is not { Count: >= 3 }) continue;
+
+            var shell = d.Boundary.Select(p => new Coordinate(p[0], p[1])).ToList();
+            if (!shell[0].Equals2D(shell[^1])) shell.Add(shell[0].Copy()); // a LinearRing must be closed
+            if (shell.Count < 4) continue;
+
+            var polygon = Geo.CreatePolygon(Geo.CreateLinearRing(shell.ToArray()));
+            var center  = Geo.CreatePoint(new Coordinate(d.CentroidLng, d.CentroidLat));
+
+            var result = H3District.Create(d.Id, center, polygon, resolution: 7);
+            if (result.IsFailure)
+            {
+                logger.LogWarning("Failed to create H3District {Id}: {Error}", d.Id, result.Error.Message);
+                continue;
+            }
+
+            result.Value.ClearDomainEvents();
+            boundaries.Add(result.Value);
+        }
+
+        db.Set<H3District>().AddRange(boundaries);
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Seeded {Count} district boundaries (H3District)", boundaries.Count);
     }
 
     private static Guid DeterministicGuid(string seed)
