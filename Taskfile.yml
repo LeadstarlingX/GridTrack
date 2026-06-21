@@ -105,7 +105,7 @@ tasks:
           --env THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} \
           --env TEST_MODE=${TEST_MODE:-latency} \
           --env DRIVER_IDS="$IDS" \
-          --env JWT_TOKEN="${K6_JWT_TOKEN}" \
+          --env JWT_TOKEN="${JWT_TOKEN}" \
           load-tests/gridtrack.js
 
   k6:

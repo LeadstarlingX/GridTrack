@@ -14,7 +14,7 @@ PATH_LABELS = {
     "gridtrack_delivery_write_latency": "Delivery lifecycle",
     "gridtrack_district_group_latency": "District-group CRUD",
     "gridtrack_signalr_neg_latency": "SignalR negotiate",
-    "http_req_duration": "**Overall HTTP**",
+    "http_req_duration": "Overall HTTP",
 }
 
 COMPARISON_METRICS = {
@@ -22,6 +22,13 @@ COMPARISON_METRICS = {
     "gridtrack_analytics_latency":      "Analytics reads",
     "gridtrack_delivery_write_latency": "Delivery writes",
     "gridtrack_district_group_latency": "District-group CRUD",
+}
+
+MIX_METRICS = {
+    "gridtrack_mix_telemetry_reqs": "Driver telemetry",
+    "gridtrack_mix_analytics_reqs": "Analytics reads",
+    "gridtrack_mix_delivery_reqs":  "Delivery lifecycle",
+    "gridtrack_mix_district_reqs":  "District-group CRUD",
 }
 
 
@@ -112,6 +119,18 @@ def _speedup(wb, direct):
     return "~same"
 
 
+def _test_duration_s(data):
+    """Extract test duration in seconds from k6 summary JSON."""
+    return (data.get("state", {}).get("testRunDurationMs", 0) or 0) / 1000.0
+
+
+def measured_mix(data, duration_s):
+    """Return {label: req/s} for each mix counter, or 0 if missing."""
+    if duration_s <= 0:
+        return {label: 0.0 for label in MIX_METRICS.values()}
+    return {label: (_get(data, m, "count") or 0) / duration_s for m, label in MIX_METRICS.items()}
+
+
 # ── stress (ceiling) test ───────────────────────────────────────────────────────
 
 def parse_stress_results(json_path):
@@ -138,30 +157,30 @@ def parse_stress_results(json_path):
     duration = duration_ms / 1000.0
     duration_str = f"{int(duration // 60)}m {int(duration % 60)}s" if duration >= 60 else f"{duration:.1f}s"
 
-    # Pass/fail comes straight from k6's own evaluation — no second hardcoded limits
-    # table to drift out of sync with gridtrack.js.
+    # Only error-rate thresholds affect pass/fail and appear in the compliance table.
+    # Latency thresholds exist in k6 as catastrophic-breakage ceilings but are NOT
+    # badged here — the raw latency numbers in the table above are the signal.
     threshold_status = []
     all_passed = True
-    for metric_name, label in PATH_LABELS.items():
-        m = metrics.get(metric_name)
-        if not m:
-            continue
-        for expr, ok, stat, limit in _threshold_results(m):
+    for metric_name, metric_obj in metrics.items():
+        for expr, ok, stat, limit in _threshold_results(metric_obj):
             if ok is None:
                 continue
+            if stat != "rate":
+                continue  # skip latency ceilings — informational only
             if not ok:
                 all_passed = False
+            label = PATH_LABELS.get(metric_name, metric_name)
             actual = _get(data, metric_name, stat) if stat else None
-            is_rate = stat == "rate"
-            disp_actual = actual * 100 if (is_rate and actual is not None) else actual
-            disp_limit = limit * 100 if (is_rate and limit is not None) else limit
-            unit = "%" if is_rate else ("ms" if stat and stat.startswith("p(") else "")
+            disp_actual = actual * 100 if (actual is not None) else actual
+            disp_limit = limit * 100 if (limit is not None) else limit
             threshold_status.append({
                 "metric": label, "stat": stat, "actual": disp_actual,
                 "limit": disp_limit, "passed": ok,
-                "symbol": "\u2713" if ok else "\u2717", "unit": unit,
+                "symbol": "\u2713" if ok else "\u2717", "unit": "%",
             })
 
+    # Latency table — numbers only, no pass/fail badges
     latency_rows = []
     for metric_name, label in PATH_LABELS.items():
         if metric_name not in metrics:
@@ -171,13 +190,8 @@ def parse_stress_results(json_path):
         p90 = _get(data, metric_name, "p(90)")
         p95 = _get(data, metric_name, "p(95)")
         max_val = _get(data, metric_name, "max")
-        p95_oks = [ok for expr, ok, stat, _ in _threshold_results(metrics.get(metric_name, {}))
-                   if stat == "p(95)" and ok is not None]
-        status_symbol = ""
-        if p95_oks:
-            status_symbol = " \u2713" if all(p95_oks) else " \u2717"
         latency_rows.append(
-            f"| {label}{status_symbol} | {_fmt_ms(avg)} | {_fmt_ms(med)} | {_fmt_ms(p90)} | {_fmt_ms(p95)} | {_fmt_ms(max_val)} |"
+            f"| {label} | {_fmt_ms(avg)} | {_fmt_ms(med)} | {_fmt_ms(p90)} | {_fmt_ms(p95)} | {_fmt_ms(max_val)} |"
         )
 
     checks_pass_str = f"{checks_pass_pct:.0f}%" if checks_pass_pct is not None else "N/A"
@@ -214,13 +228,16 @@ def generate_stress_section(results):
 
 *No results available yet. Run `task k6-stress` first.*
 """
-    badge = "**\u2713 ALL PASSED**" if results["all_passed"] else "**\u2717 SOME FAILED**"
+    badge = "**\u2713 PASSED**" if results["all_passed"] else "**\u2717 FAILED**"
     return f"""### Stress Test {badge}
 
-> Ceiling test — thresholds are informational regression markers (see Taskfile/gridtrack.js comments
-> for derivation), not a contractual SLA. The goal here is finding where the system actually breaks.
+> Latency numbers are informational — they reflect the 2-vCPU shared-runner environment and
+> should not be compared across different hardware. Only error rate is thresholded: a passing
+> test means the system handled the load without requests failing. Latency thresholds exist
+> inside k6 as catastrophic-breakage ceilings (e.g. accidental synchronous DB on the hot path)
+> but are not badged here — the numbers themselves are the signal.
 
-**Latest run — CI ceiling test:**
+**Latest run — CI stress test:**
 
 {results['summary_table']}
 
@@ -230,7 +247,7 @@ def generate_stress_section(results):
 |------|----:|-------:|----:|----:|----:|
 {results['latency_table']}
 
-**Threshold compliance:**
+**Error-rate compliance:**
 
 | Status | Metric | Actual | Threshold |
 |--------|--------|--------|-----------|
@@ -245,6 +262,11 @@ def parse_comparison(wb_path, direct_path):
     direct = _load(direct_path)
     if wb is None or direct is None:
         return None
+
+    wb_dur = _test_duration_s(wb)
+    dp_dur = _test_duration_s(direct)
+    wb_mix = measured_mix(wb, wb_dur)
+    dp_mix = measured_mix(direct, dp_dur)
 
     rows = []
     all_passed = True
@@ -273,8 +295,16 @@ def parse_comparison(wb_path, direct_path):
     if (wb_err is not None and wb_err >= 0.01) or (dp_err is not None and dp_err >= 0.01):
         all_passed = False
 
+    # Build measured mix rows
+    mix_rows = []
+    for label in MIX_METRICS.values():
+        wb_r = wb_mix.get(label, 0)
+        dp_r = dp_mix.get(label, 0)
+        mix_rows.append(f"| {label} | {wb_r:.1f}/s | {dp_r:.1f}/s |")
+
     return {
         "table": "\n".join(rows),
+        "mix_table": "\n".join(mix_rows),
         "wb_rps": wb_rps, "dp_rps": dp_rps,
         "wb_err": wb_err, "dp_err": dp_err,
         "all_passed": all_passed,
@@ -285,21 +315,17 @@ def generate_throughput_md(filepath):
     try:
         with open(filepath, 'r') as f:
             data = json.load(f)
-            
+
         m = data.get('metrics', {})
         vus_max = m.get('vus_max', {}).get('values', {}).get('max', '?')
         reqs = m.get('http_reqs', {}).get('values', {}).get('count', '?')
         rps = m.get('http_reqs', {}).get('values', {}).get('rate', 0)
         err_rate = m.get('http_req_failed', {}).get('values', {}).get('rate', 0)
-        
+
         # Throughput uses a different metric name
         tel_m = m.get('gridtrack_driver_tel_throughput_latency', {}).get('values', {})
-        
-        return f"""### Throughput Ceiling Test
 
-> Measures maximum sustained RPS before degradation. Uses a constant-arrival-rate executor (up to 3,000 target RPS) with no sleep, pushing the API to its absolute limit.
-
-### Throughput Ceiling Test
+        md = f"""### Throughput Ceiling Test
 
 > **What it does:** Aggressively ramps request rate until the system buckles — finds the absolute maximum RPS your API can handle before errors spike. This is NOT a performance benchmark, it's a capacity discovery test.
 >
@@ -322,12 +348,11 @@ def generate_throughput_md(filepath):
 
 | Avg | Median | p90 | p95 | Max |
 |----:|-------:|----:|----:|----:|
-| {tel_m.get('avg', 0):.1f} ms | {tel_m.get('med', 0):.1f} ms | {tel_m.get('p(90)', 0):.1f} ms | {tel_m.get('p(95)', 0):.1f} ms | {tel_m.get('max', 0) / 1000:.2f} s |
-<!-- K6_THROUGHPUT_END -->"""
+| {tel_m.get('avg', 0):.1f} ms | {tel_m.get('med', 0):.1f} ms | {tel_m.get('p(90)', 0):.1f} ms | {tel_m.get('p(95)', 0):.1f} ms | {tel_m.get('max', 0) / 1000:.2f} s |"""
         return md
     except Exception as e:
         print(f"Warning: Could not generate throughput md: {e}")
-        return "<!-- K6_THROUGHPUT_START -->\n<!-- K6_THROUGHPUT_END -->"
+        return None
 
 
 def generate_comparison_section(results):
@@ -357,6 +382,12 @@ def generate_comparison_section(results):
 |------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|
 {results['table']}
 
+**Measured traffic mix (req/s):**
+
+| Path | Write-behind | Direct-postgres |
+|------|-------------:|----------------:|
+{results['mix_table']}
+
 {rps_line}
 
 {err_line}
@@ -372,6 +403,8 @@ def update_readme(wb_file, direct_file, stress_file):
     comparison_results = parse_comparison(wb_file, direct_file)
     stress_results = parse_stress_results(stress_file)
     throughput_section = generate_throughput_md(DEFAULT_THROUGHPUT_FILE)
+    if throughput_section is None:
+        throughput_section = "*No results available yet. Run `task k6-throughput` first.*"
 
     print("Checking for k6 results files:")
     print(f"  - Comparison write-behind ({wb_file}): {'FOUND' if pathlib.Path(wb_file).exists() else 'NOT FOUND'}")
@@ -399,7 +432,7 @@ def update_readme(wb_file, direct_file, stress_file):
     | **Payload Endpoint** | `/api/telemetry/position` |
     | **Payload Size** | `52 bytes` |
     | **Payload Structure** | `{ "driverId": "uuid", "lat": float, "lng": float }` |"""
-    
+
     content = re.sub(
         rf"({re.escape(payload_start)}\n).*?({re.escape(payload_end)})",
         f"{payload_start}\n{payload_context}{payload_end}",
@@ -427,13 +460,13 @@ def update_readme(wb_file, direct_file, stress_file):
     if comparison_results:
         print(f"  Comparison: {'PASSED' if comparison_results['all_passed'] else 'SOME PATHS REGRESSED'}")
     if stress_results:
-        print(f"  Stress: {'PASSED' if stress_results['all_passed'] else 'SOME THRESHOLDS FAILED'}")
+        print(f"  Stress: {'PASSED' if stress_results['all_passed'] else 'FAILED'}")
         failed = [t for t in stress_results["threshold_status"] if not t["passed"]]
         for t in failed:
             actual_str = f"{t['actual']:.2f}" if t['actual'] is not None else "N/A"
             limit_str = f"{t['limit']:.2f}" if t['limit'] is not None else "N/A"
             print(f"    \u2717 {t['metric']} {t['stat']}: {actual_str}{t['unit']} (limit < {limit_str}{t['unit']})")
-                        
+
 
 if __name__ == "__main__":
     wb_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_COMPARISON_WB_FILE
