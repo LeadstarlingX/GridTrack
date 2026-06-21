@@ -408,7 +408,9 @@ def generate_comparison_chart(results):
         wb_val = _get(_load(DEFAULT_COMPARISON_WB_FILE), metric, "p(95)")
         dp_val = _get(_load(DEFAULT_COMPARISON_DIRECT_FILE), metric, "p(95)")
         if wb_val is not None and dp_val is not None:
-            labels.append(label.replace(" ", "<br/>")) # Mermaid needs <br/> for multi-line x-axis
+            # Short labels to fit xychart-beta x-axis (no <br/> support)
+            short = label.replace("Telemetry POST", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery writes", "Deliveries").replace("District-group CRUD", "Districts")
+            labels.append(short)
             wb_p95s.append(round(wb_val, 1))
             dp_p95s.append(round(dp_val, 1))
 
@@ -445,7 +447,8 @@ def generate_stress_chart(results):
         max_val = _get(data, metric, "max")
         
         if p50 is not None:
-            labels.append(label.replace(" ", "<br/>"))
+            short = label.replace("Driver telemetry", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery lifecycle", "Deliveries").replace("District-group CRUD", "Districts")
+            labels.append(short)
             p50s.append(round(p50, 1))
             p95s.append(round(p95, 1))
             maxs.append(round(max_val / 1000, 2) if max_val and max_val > 1000 else round(max_val, 1) if max_val else 0)
@@ -475,7 +478,8 @@ def generate_stress_mix_chart(results):
         if count:
             duration = _test_duration_s(data)
             rate = count / duration if duration > 0 else 0
-            labels.append(label.replace(" ", "<br/>"))
+            short = label.replace("Driver telemetry", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery lifecycle", "Deliveries").replace("District-group CRUD", "Districts")
+            labels.append(short)
             rates.append(round(rate, 1))
 
     if not labels: return ""
