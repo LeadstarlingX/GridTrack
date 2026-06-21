@@ -27,14 +27,23 @@ Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
 
 | Path | p50 WB | p50 Direct | p50 | p90 WB | p90 Direct | p90 | p95 WB | p95 Direct | p95 |
 |------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|
-| Telemetry POST ✓ | 31.2 ms | 244 ms | 7.8x faster | 210 ms | 10.02 s | 47.6x faster | 315 ms | 49.10 s | 155.8x faster |
-| Analytics reads ✓ | 21.8 ms | 12.6 ms | 1.7x slower | 139 ms | 746 ms | 5.4x faster | 227 ms | 4.93 s | 21.7x faster |
-| Delivery writes ✓ | 29.0 ms | 15.9 ms | 1.8x slower | 285 ms | 1.46 s | 5.1x faster | 532 ms | 7.23 s | 13.6x faster |
-| District-group CRUD ✓ | 31.3 ms | 181 ms | 5.8x faster | 189 ms | 5.18 s | 27.5x faster | 305 ms | 12.31 s | 40.4x faster |
+| Telemetry POST ✓ | 1.75 ms | 1.89 ms | 1.1x faster | 5.10 ms | 5.41 ms | 1.1x faster | 7.55 ms | 8.09 ms | 1.1x faster |
+| Analytics reads ✗ | 1.42 ms | 1.32 ms | 1.1x slower | 3.90 ms | 3.37 ms | 1.2x slower | 5.85 ms | 5.17 ms | 1.1x slower |
+| Delivery writes ✓ | 2.65 ms | 2.68 ms | ~same | 7.17 ms | 14.9 ms | 2.1x faster | 17.2 ms | 26.0 ms | 1.5x faster |
+| District-group CRUD ✗ | 2.02 ms | 1.88 ms | 1.1x slower | 5.49 ms | 5.41 ms | ~same | 8.71 ms | 8.30 ms | ~same |
 
-**Throughput:** write-behind 672.5 req/s vs direct-postgres 102.9 req/s
+**Measured traffic mix (req/s):**
 
-**Error rate:** write-behind 0.00% / direct-postgres 1.15%
+| Path | Write-behind | Direct-postgres |
+|------|-------------:|----------------:|
+| Driver telemetry | 241.3/s | 241.9/s |
+| Analytics reads | 573.3/s | 573.8/s |
+| Delivery lifecycle | 7.8/s | 7.8/s |
+| District-group CRUD | 8.6/s | 8.7/s |
+
+**Throughput:** write-behind 839.6 req/s vs direct-postgres 840.6 req/s
+
+**Error rate:** write-behind 1.01% / direct-postgres 1.01%
 <!-- K6_COMPARISON_END -->
 
 
@@ -51,10 +60,6 @@ Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
 <!-- K6_THROUGHPUT_START -->
 ### Throughput Ceiling Test
 
-> Measures maximum sustained RPS before degradation. Uses a constant-arrival-rate executor (up to 3,000 target RPS) with no sleep, pushing the API to its absolute limit.
-
-### Throughput Ceiling Test
-
 > **What it does:** Aggressively ramps request rate until the system buckles — finds the absolute maximum RPS your API can handle before errors spike. This is NOT a performance benchmark, it's a capacity discovery test.
 >
 > **Why we run it:** Know your breaking point before production does. If we can serve 3,000 RPS with <1% errors, we know our scaling limits and can set proper autoscaling thresholds.
@@ -67,62 +72,58 @@ Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
 
 | Result | Value |
 |--------|-------|
-| Peak RPS | **1020.7/s** |
-| Peak concurrent VUs | **1000** |
-| Total HTTP requests | **153,112** |
+| Peak RPS | **1308.8/s** |
+| Peak concurrent VUs | **127** |
+| Total HTTP requests | **196,317** |
 | Error rate | **0.00%** |
 
 **Telemetry Latency at Peak:**
 
 | Avg | Median | p90 | p95 | Max |
 |----:|-------:|----:|----:|----:|
-| 174.1 ms | 107.4 ms | 395.9 ms | 569.5 ms | 1.82 s |
-<!-- K6_THROUGHPUT_END --><!-- K6_THROUGHPUT_END -->
+| 2.9 ms | 1.6 ms | 5.9 ms | 9.4 ms | 0.10 s |<!-- K6_THROUGHPUT_END --><!-- K6_THROUGHPUT_END -->
 
 
 <!-- K6_STRESS_START -->
-### Stress Test **✗ SOME FAILED**
+### Stress Test **✓ PASSED**
 
-> Ceiling test — thresholds are informational regression markers (see Taskfile/gridtrack.js comments
-> for derivation), not a contractual SLA. The goal here is finding where the system actually breaks.
+> Latency numbers are informational — they reflect the 2-vCPU shared-runner environment and
+> should not be compared across different hardware. Only error rate is thresholded: a passing
+> test means the system handled the load without requests failing. Latency thresholds exist
+> inside k6 as catastrophic-breakage ceilings (e.g. accidental synchronous DB on the hot path)
+> but are not badged here — the numbers themselves are the signal.
 
-**Latest run — CI ceiling test:**
+**Latest run — CI stress test:**
 
 | Result | Value |
 |--------|-------|
 | Peak concurrent VUs | **795** |
 | Duration | **3m 31s** |
-| Total HTTP requests | **198,520** |
-| Request throughput | **937.8/s** |
-| Iterations | **87,502 (413.4/s)** |
-| Checks passed | **198,520 / 198,520 (100%)** |
-| Error rate | **0.00%** |
-| Data received | **3.4 MB/s** |
-| Data sent | **150.1 kB/s** |
+| Total HTTP requests | **355,484** |
+| Request throughput | **1680.3/s** |
+| Iterations | **112,634 (532.4/s)** |
+| Checks passed | **353,683 / 355,484 (99%)** |
+| Error rate | **0.51%** |
+| Data received | **7.4 MB/s** |
+| Data sent | **230.0 kB/s** |
 
 **Latency by path:**
 
 | Path | Avg | Median | p90 | p95 | Max |
 |------|----:|-------:|----:|----:|----:|
-| Driver telemetry ✗ | 214 ms | 148 ms | 501 ms | 651 ms | 1.53 s |
-| Analytics reads ✗ | 184 ms | 119 ms | 443 ms | 607 ms | 3.87 s |
-| Delivery lifecycle ✗ | 356 ms | 230 ms | 832 ms | 1.13 s | 4.62 s |
-| District-group CRUD ✗ | 314 ms | 234 ms | 669 ms | 861 ms | 1.77 s |
-| SignalR negotiate ✓ | 0 µs | 0 µs | 0 µs | 0 µs | 0 µs |
-| **Overall HTTP** ✓ | 198 ms | 130 ms | 476 ms | 640 ms | 4.62 s |
+| Driver telemetry | 11.6 ms | 4.51 ms | 24.0 ms | 41.2 ms | 637 ms |
+| Analytics reads | 9.60 ms | 3.93 ms | 20.7 ms | 34.1 ms | 632 ms |
+| Delivery lifecycle | 18.3 ms | 6.18 ms | 29.3 ms | 51.2 ms | 1.18 s |
+| District-group CRUD | 17.8 ms | 5.72 ms | 27.0 ms | 50.0 ms | 641 ms |
+| SignalR negotiate | 8.51 ms | 1.72 ms | 13.8 ms | 26.5 ms | 528 ms |
+| Overall HTTP | 10.2 ms | 4.08 ms | 21.5 ms | 35.7 ms | 1.18 s |
 
-**Threshold compliance:**
+**Error-rate compliance:**
 
 | Status | Metric | Actual | Threshold |
 |--------|--------|--------|-----------|
-| ✗ Driver telemetry p(95) | 651.02 ms | < 300.00 ms |
-| ✓ Driver telemetry p(99) | N/A ms | < 1000.00 ms |
-| ✗ Analytics reads p(95) | 607.32 ms | < 600.00 ms |
-| ✓ Analytics reads p(99) | N/A ms | < 2500.00 ms |
-| ✗ Delivery lifecycle p(95) | 1132.84 ms | < 700.00 ms |
-| ✗ District-group CRUD p(95) | 861.08 ms | < 450.00 ms |
-| ✓ SignalR negotiate p(95) | 0.00 ms | < 150.00 ms |
-| ✓ **Overall HTTP** p(95) | 639.50 ms | < 1500.00 ms |
+| ✓ gridtrack_error_rate rate | 0.00 % | < 1.00 % |
+| ✓ http_req_failed rate | 0.51 % | < 1.00 % |
 <!-- K6_STRESS_END -->
 
 
