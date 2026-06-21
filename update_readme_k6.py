@@ -374,9 +374,9 @@ def generate_comparison_section(results):
     return f"""### Comparison Test {badge}
 
 > ClickHouse + Postgres + write-behind buffer (`write-behind`) vs Postgres-only synchronous
-> writes (`direct-postgres`). \u2713/\u2717 marks whether write-behind matched or beat the direct-postgres
-> baseline at p95 \u2014 this is a relative check, not an absolute SLA (direct-postgres is meant
-> to be the slower arm).
+> writes (`direct-postgres`). Runs at high concurrency (≥600 driver VUs) to saturate the
+> synchronous Postgres path — at low load both are fast and the comparison is meaningless.
+> ✓/✗ marks whether write-behind matched or beat the direct-postgres baseline at p95.
 
 | Path | p50 WB | p50 Direct | p50 | p90 WB | p90 Direct | p90 | p95 WB | p95 Direct | p95 |
 |------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|

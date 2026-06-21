@@ -115,7 +115,9 @@ jobs:
         run: task k6-ci
         continue-on-error: true
         env:
-          STRESS_VUS: "450"
+          K6_COMPARE_VUS: "600"
+          K6_STRESS_VUS: "600"
+          K6_THROUGHPUT_MAX_VUS: "2000"
           JWT_TOKEN: ${{ secrets.K6_JWT_TOKEN }}
 
       - name: Publish k6 summary
