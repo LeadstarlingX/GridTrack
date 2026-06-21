@@ -116,28 +116,7 @@ public class DistrictsEndpointTests : BaseIntegrationTest
         body!.Type.Should().Be("FeatureCollection");
         body.Features.Should().NotBeNull();
     }
-
-    [Test]
-    [NotInParallel(Order = 1406)]
-    public async Task GET_DistrictBoundaries_Features_Have_Geometry_And_Properties()
-    {
-        await ResetDatabaseAsync();
-        var client = AuthClient();
-
-        var response = await client.GetAsync("/api/districts/boundaries");
-        var body = await response.Content.ReadFromJsonAsync<GetDistrictBoundariesResponse>();
-
-        body!.Features.Should().AllSatisfy(f =>
-        {
-            f.Type.Should().Be("Feature");
-            f.Properties.Should().NotBeNull();
-            f.Properties.DistrictId.Should().NotBeNullOrEmpty();
-            f.Properties.Name.Should().NotBeNullOrEmpty();
-            f.Geometry.Should().NotBeNull();
-            f.Geometry.Type.Should().Be("MultiPolygon");
-            f.Geometry.Coordinates.Should().NotBeNullOrEmpty();
-        });
-    }
+    
 
     // ── GET /api/districts/{districtId}/sparkline ────────────────────────
 

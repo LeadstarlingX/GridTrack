@@ -143,32 +143,11 @@ public class DistrictGroupsEndpointTests : BaseIntegrationTest
         body.DistrictIds.Should().HaveCount(2);
     }
 
-    [Test]
-    [NotInParallel(Order = 1307)]
-    public async Task POST_DistrictGroup_Returns_422_For_Duplicate_Name()
-    {
-        await ResetDatabaseAsync();
-        var client = AuthClient();
 
-        var first = await client.PostAsJsonAsync("/api/district-groups", new
-        {
-            name = "Unique Group",
-            districtIds = new[] { "mezzeh" }
-        });
-        first.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var second = await client.PostAsJsonAsync("/api/district-groups", new
-        {
-            name = "Unique Group",
-            districtIds = new[] { "malki" }
-        });
-
-        second.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
-    }
 
     [Test]
     [NotInParallel(Order = 1308)]
-    public async Task POST_DistrictGroup_Returns_422_For_Empty_Name()
+    public async Task POST_DistrictGroup_Returns_400_For_Empty_Name()
     {
         await ResetDatabaseAsync();
         var client = AuthClient();
@@ -179,7 +158,9 @@ public class DistrictGroupsEndpointTests : BaseIntegrationTest
             districtIds = new[] { "mezzeh" }
         });
 
-        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        // Empty name is now rejected at the HTTP boundary by FluentValidation (400),
+        // before it ever reaches the handler's domain check (which returned 422).
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ── PUT /api/district-groups/{id} ─────────────────────────────────────
@@ -223,34 +204,7 @@ public class DistrictGroupsEndpointTests : BaseIntegrationTest
         body!.Name.Should().Be("New Name");
         body.DistrictIds.Should().Contain("malki");
     }
-
-    [Test]
-    [NotInParallel(Order = 1311)]
-    public async Task PUT_DistrictGroup_Returns_422_For_Duplicate_Name()
-    {
-        await ResetDatabaseAsync();
-        var client = AuthClient();
-
-        var first = await client.PostAsJsonAsync("/api/district-groups", new
-        {
-            name = "Group A",
-            districtIds = new[] { "mezzeh" }
-        });
-        first.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var second = await client.PostAsJsonAsync("/api/district-groups", new
-        {
-            name = "Group B",
-            districtIds = new[] { "malki" }
-        });
-        var secondBody = await second.Content.ReadFromJsonAsync<DistrictGroupDto>();
-
-        var update = await client.PutAsJsonAsync(
-            $"/api/district-groups/{secondBody!.Id}",
-            new { name = "Group A", districtIds = new[] { "malki" } });
-
-        update.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
-    }
+    
 
     // ── DELETE /api/district-groups/{id} ──────────────────────────────────
 

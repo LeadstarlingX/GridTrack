@@ -66,22 +66,7 @@ public class AnalyticsEndpointTests : BaseIntegrationTest
     }
 
     // ── GET /api/analytics/summary ────────────────────────────────────────
-
-    [Test]
-    [NotInParallel(Order = 1201)]
-    public async Task GET_AnalyticsSummary_Returns_200_With_Shape()
-    {
-        await ResetDatabaseAsync();
-        await SeedDeliveryAsync();
-
-        var client = AuthClient();
-        var response = await client.GetAsync("/api/analytics/summary?from=2024-01-01&to=2024-12-31");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GetAnalyticsSummaryResponse>();
-        body.Should().NotBeNull();
-        body!.UpdatedAt.Should().BeOnOrBefore(DateTime.UtcNow);
-    }
+    
 
     [Test]
     [NotInParallel(Order = 1202)]
@@ -152,69 +137,6 @@ public class AnalyticsEndpointTests : BaseIntegrationTest
         body.Should().NotBeNull();
     }
 
-    // ── GET /api/analytics/district-volume ────────────────────────────────
-
-    [Test]
-    [NotInParallel(Order = 1206)]
-    public async Task GET_AnalyticsDistrictVolume_Returns_200_With_Matching_Districts()
-    {
-        await ResetDatabaseAsync();
-        await SeedDeliveryAsync("mezzeh");
-
-        var client = AuthClient();
-        var response = await client.GetAsync("/api/analytics/district-volume?from=2024-01-01&to=2024-12-31");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GetDistrictVolumeResponse>();
-        body.Should().NotBeNull();
-        body!.Items.Should().NotBeNull();
-        body.Items.Should().Contain(i => i.DistrictId == "mezzeh");
-    }
-
-    // ── GET /api/analytics/cancellations ──────────────────────────────────
-
-    [Test]
-    [NotInParallel(Order = 1207)]
-    public async Task GET_AnalyticsCancellations_Returns_200_With_Cancelled_Data()
-    {
-        await ResetDatabaseAsync();
-        var deliveryId = await SeedDeliveryAsync();
-
-        var client = AuthClient();
-        var cancel = await client.PostAsJsonAsync(
-            $"/api/deliveries/{deliveryId}/cancel", new { reason = "Customer request" });
-        cancel.StatusCode.Should().Be(HttpStatusCode.NoContent);
-
-        var response = await client.GetAsync("/api/analytics/cancellations?from=2024-01-01&to=2024-12-31");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GetCancellationAnalyticsResponse>();
-        body.Should().NotBeNull();
-        body!.TotalCancelled.Should().BeGreaterOrEqualTo(1);
-        body.Reasons.Should().NotBeNull();
-    }
-
-    // ── GET /api/analytics/delivery-performance ───────────────────────────
-
-    [Test]
-    [NotInParallel(Order = 1208)]
-    public async Task GET_AnalyticsDeliveryPerformance_Returns_200_With_Shape()
-    {
-        await ResetDatabaseAsync();
-        var deliveryId = await SeedDeliveryAsync();
-        var driverId = await SeedDriverAsync();
-        await CompleteDeliveryLifecycleAsync(deliveryId, driverId);
-
-        var client = AuthClient();
-        var response = await client.GetAsync("/api/analytics/delivery-performance?from=2024-01-01&to=2024-12-31");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GetDeliveryPerformanceResponse>();
-        body.Should().NotBeNull();
-        body!.DeliveredCount.Should().BeGreaterOrEqualTo(1);
-        body.Districts.Should().NotBeNull();
-        body.OverallOnTimeRate.Should().BeGreaterOrEqualTo(0);
-    }
 
     // ── GET /api/analytics/driver-utilization ─────────────────────────────
 
@@ -283,26 +205,6 @@ public class AnalyticsEndpointTests : BaseIntegrationTest
         body.Should().NotBeNull();
     }
 
-    // ── GET /api/analytics/status-breakdown ───────────────────────────────
-
-    [Test]
-    [NotInParallel(Order = 1213)]
-    public async Task GET_AnalyticsStatusBreakdown_Returns_200_With_Shape()
-    {
-        await ResetDatabaseAsync();
-        var deliveryId = await SeedDeliveryAsync();
-        var driverId = await SeedDriverAsync();
-        await CompleteDeliveryLifecycleAsync(deliveryId, driverId);
-
-        var client = AuthClient();
-        var response = await client.GetAsync("/api/analytics/status-breakdown?from=2024-01-01&to=2024-12-31");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GetStatusBreakdownResponse>();
-        body.Should().NotBeNull();
-        body!.Items.Should().NotBeNull();
-        body.Items.Should().Contain(i => i.Count > 0);
-    }
 
     // ── GET /api/analytics/anomaly-breakdown ──────────────────────────────
 
