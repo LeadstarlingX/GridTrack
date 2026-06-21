@@ -18,98 +18,28 @@ Redis Streams → SignalR live map, ClickHouse history, and a Python AI pipeline
 
 
 <!-- K6_COMPARISON_START -->
-### Comparison Test ✗ WRITE-BEHIND REGRESSED ON SOME PATHS
-
-> ClickHouse + Postgres + write-behind buffer (`write-behind`) vs Postgres-only synchronous
-> writes (`direct-postgres`). ✓/✗ marks whether write-behind matched or beat the direct-postgres
-> baseline at p95 — this is a relative check, not an absolute SLA (direct-postgres is meant
-> to be the slower arm).
-
-| Path | p50 WB | p50 Direct | p50 | p90 WB | p90 Direct | p90 | p95 WB | p95 Direct | p95 |
-|------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|
-| Telemetry POST ✗ | 6.53 ms | 5.04 ms | 1.3x slower | 93.1 ms | 76.6 ms | 1.2x slower | 230 ms | 130 ms | 1.8x slower |
-| Analytics reads ✗ | 4.22 ms | 3.13 ms | 1.4x slower | 56.7 ms | 38.9 ms | 1.5x slower | 101 ms | 69.1 ms | 1.5x slower |
-| Delivery writes ✗ | 6.45 ms | 5.52 ms | 1.2x slower | 102 ms | 94.8 ms | 1.1x slower | 319 ms | 204 ms | 1.6x slower |
-| District-group CRUD ✗ | 5.95 ms | 4.98 ms | 1.2x slower | 90.5 ms | 74.3 ms | 1.2x slower | 248 ms | 151 ms | 1.6x slower |
-
-**Throughput:** write-behind 605.5 req/s vs direct-postgres 635.7 req/s
-
-**Error rate:** write-behind 1.40% / direct-postgres 1.33%
 <!-- K6_COMPARISON_END -->
 
+<!-- K6_COMPARISON_CHART_START -->
+<!-- K6_COMPARISON_CHART_END -->
 
 <!-- K6_PAYLOAD_START -->
-### Test Context
-| Setting | Value |
-|---------|-------|
-| **Payload Endpoint** | `/api/telemetry/position` |
-| **Payload Size** | `52 bytes` |
-| **Payload Structure** | `{ "driverId": "uuid", "lat": float, "lng": float }` |
 <!-- K6_PAYLOAD_END -->
 
-
-
 <!-- K6_THROUGHPUT_START -->
-### Throughput Ceiling Test
-
-> Measures maximum sustained RPS before degradation. Uses a constant-arrival-rate executor (up to 3,000 target RPS) with no sleep, pushing the API to its absolute limit.
-
-**Latest run:**
-
-| Result | Value |
-|--------|-------|
-| Peak RPS | **1151.6/s** |
-| Peak concurrent VUs | **1,000** |
-| Total HTTP requests | **172,738** |
-| Error rate | **0.00%** |
-
-**Telemetry Latency at Peak:**
-
-| Avg | Median | p90 | p95 | Max |
-|----:|-------:|----:|----:|----:|
-| 111.0 ms | 53.5 ms | 291.0 ms | 394.0 ms | 1.13 s |
 <!-- K6_THROUGHPUT_END -->
 
-
 <!-- K6_STRESS_START -->
-### Stress Test **✓ ALL PASSED**
-
-> Ceiling test — thresholds are informational regression markers (see Taskfile/gridtrack.js comments
-> for derivation), not a contractual SLA. The goal here is finding where the system actually breaks.
-
-**Latest run — CI ceiling test:**
-
-| Result | Value |
-|--------|-------|
-| Peak concurrent VUs | **1,000** |
-| Duration | **2m 30s** |
-| Total HTTP requests | **172,738** |
-| Request throughput | **1151.6/s** |
-| Iterations | **172,738 (1151.6/s)** |
-| Checks passed | **172,738 / 172,738 (100%)** |
-| Error rate | **0.00%** |
-| Data received | **124.4 kB/s** |
-| Data sent | **311.9 kB/s** |
-
-**Latency by path:**
-
-| Path | Avg | Median | p90 | p95 | Max |
-|------|----:|-------:|----:|----:|----:|
-| **Overall HTTP** | 111 ms | 53.5 ms | 291 ms | 394 ms | 1.13 s |
-
-**Threshold compliance:**
-
-| Status | Metric | Actual | Threshold |
-|--------|--------|--------|-----------|
-| ✓ Overall HTTP p(95) | 394.00 ms | < 400.00 ms |
-| ✓ Driver telemetry p(95) | 512.00 ms | < 550.00 ms |
-| ✓ Analytics reads p(95) | 245.00 ms | < 300.00 ms |
-| ✓ Delivery lifecycle p(95) | 580.00 ms | < 600.00 ms |
-| ✓ District-group CRUD p(95) | 310.00 ms | < 350.00 ms |
-| ✓ SignalR negotiate p(95) | 120.00 ms | < 150.00 ms |
-| ✓ http_req_failed rate | 0.00% | < 1.00% |
 <!-- K6_STRESS_END -->
 
+<!-- K6_STRESS_CHART_START -->
+<!-- K6_STRESS_CHART_END -->
+
+<!-- K6_STRESS_MIX_CHART_START -->
+<!-- K6_STRESS_MIX_CHART_END -->
+
+<!-- K6_COMPARISON_RPS_CHART_START -->
+<!-- K6_COMPARISON_RPS_CHART_END -->
 
 ## Code Coverage
 
