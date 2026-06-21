@@ -12,4 +12,7 @@ public sealed record DistrictInfo(
     string NameAr,
     double CentroidLat,
     double CentroidLng,
-    double JitterRadius);
+    double JitterRadius,
+    // Exterior ring of the neighborhood polygon as [lng, lat] pairs (GeoJSON order).
+    // Used to seed H3District boundaries; null when geometry was unavailable.
+    IReadOnlyList<double[]>? Boundary = null);
