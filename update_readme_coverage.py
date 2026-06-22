@@ -13,6 +13,7 @@ TARGET = {
     "GridTrack.Domain":         "Domain",
     "GridTrack.Application":    "Application",
     "GridTrack.Infrastructure": "Infrastructure",
+    "GridTrack.Presentation":   "Presentation",  # HTTP surface, covered via the integration suite
 }
 
 def assembly_label(pkg_name):
@@ -49,7 +50,7 @@ if not rows:
 table = "| Layer | Line Coverage |\n|-------|---------------|\n" + "\n".join(rows)
 
 readme = pathlib.Path("README.md")
-content = readme.read_text()
+content = readme.read_text(encoding="utf-8")
 updated = re.sub(
     r"<!-- COVERAGE_START -->.*?<!-- COVERAGE_END -->",
     f"<!-- COVERAGE_START -->\n{table}\n<!-- COVERAGE_END -->",
@@ -57,5 +58,5 @@ updated = re.sub(
     flags=re.DOTALL,
 )
 
-readme.write_text(updated)
+readme.write_text(updated, encoding="utf-8")
 print("README.md updated")

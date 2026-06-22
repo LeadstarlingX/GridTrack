@@ -82,7 +82,6 @@ def _threshold_results(metric_obj):
 
 def _fmt_ms(v):
     if v is None: return "N/A"
-    if v >= 59000: return "≥60 s (k6 client timeout — true latency unmeasured)"
     if v >= 1000: return f"{v / 1000:.2f} s"
     if v >= 100:  return f"{v:.0f} ms"
     if v >= 10:   return f"{v:.1f} ms"
@@ -112,8 +111,6 @@ def _fmt_bytes_per_sec(v):
 def _speedup(wb, direct):
     if wb is None or direct is None or wb == 0:
             return "N/A"
-    if wb >= 59000 or direct >= 59000:
-        return "≥timeout (unmeasurable, not a real ratio)"
     ratio = direct / wb
     if ratio >= 1.05: return f"{ratio:.1f}x faster"
     if ratio <= 0.95: return f"{(1/ratio):.1f}x slower"
@@ -396,121 +393,19 @@ def generate_comparison_section(results):
 
 
 
-def generate_comparison_chart(results):
-    if results is None:
-        return ""
-    
-    # Extract p95 values in the exact order of COMPARISON_METRICS
-    wb_p95s = []
-    dp_p95s = []
-    labels = []
-    
-    for metric, label in COMPARISON_METRICS.items():
-        wb_val = _get(_load(DEFAULT_COMPARISON_WB_FILE), metric, "p(95)")
-        dp_val = _get(_load(DEFAULT_COMPARISON_DIRECT_FILE), metric, "p(95)")
-        if wb_val is not None and dp_val is not None:
-            # Short labels to fit xychart-beta x-axis (no <br/> support)
-            short = label.replace("Telemetry POST", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery writes", "Deliveries").replace("District-group CRUD", "Districts")
-            labels.append(short)
-            wb_p95s.append(round(wb_val, 1))
-            dp_p95s.append(round(dp_val, 1))
-
-    if not labels:
-        return ""
-
-    return f"""```mermaid
-xychart-beta
-    title "Comparison Test: p95 Latency (ms) — Lower is better"
-    x-axis {json.dumps(labels)}
-    line "Write-Behind" {wb_p95s}
-    line "Direct-Postgres" {dp_p95s}
-```"""
-
-def generate_stress_chart(results):
-    if results is None:
-        return ""
-    
-    # We only want the active paths (skip SignalR if it's 0)
-    active_paths = ["gridtrack_driver_tel_latency", "gridtrack_analytics_latency", 
-                    "gridtrack_delivery_write_latency", "gridtrack_district_group_latency"]
-    
-    p50s, p95s, maxs = [], [], []
-    labels = []
-    
-    for metric in active_paths:
-        label = PATH_LABELS.get(metric)
-        # We need the raw data again to get max, results dict doesn't store it cleanly
-        data = _load(DEFAULT_STRESS_FILE)
-        if not data: continue
-        
-        p50 = _get(data, metric, "med")
-        p95 = _get(data, metric, "p(95)")
-        max_val = _get(data, metric, "max")
-        
-        if p50 is not None:
-            short = label.replace("Driver telemetry", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery lifecycle", "Deliveries").replace("District-group CRUD", "Districts")
-            labels.append(short)
-            p50s.append(round(p50, 1))
-            p95s.append(round(p95, 1))
-            maxs.append(round(max_val / 1000, 2) if max_val and max_val > 1000 else round(max_val, 1) if max_val else 0)
-
-    if not labels:
-        return ""
-
-    return f"""```mermaid
-xychart-beta
-    title "Stress Test Latency Distribution (ms) — Lower is better"
-    x-axis {json.dumps(labels)}
-    line "Median (p50)" {p50s}
-    line "p95" {p95s}
-    line "Max" {maxs}
-```"""
-
-
-def generate_stress_mix_chart(results):
-    if results is None: return ""
-    data = _load(DEFAULT_STRESS_FILE)
-    if not data: return ""
-
-    labels = []
-    rates = []
-    for m, label in MIX_METRICS.items():
-        count = _get(data, m, "count")
-        if count:
-            duration = _test_duration_s(data)
-            rate = count / duration if duration > 0 else 0
-            short = label.replace("Driver telemetry", "Telemetry").replace("Analytics reads", "Analytics").replace("Delivery lifecycle", "Deliveries").replace("District-group CRUD", "Districts")
-            labels.append(short)
-            rates.append(round(rate, 1))
-
-    if not labels: return ""
-    
-    return f"""```mermaid
-xychart-beta
-    title "Stress Test: Measured Traffic Mix (req/s)"
-    x-axis {json.dumps(labels)}
-    bar "Requests/s" {rates}
-```"""
-
-def generate_comparison_rps_chart(results):
-    if results is None: return ""
-    if results.get("wb_rps") is None or results.get("dp_rps") is None: return ""
-
-    return f"""```mermaid
-xychart-beta
-    title "Comparison Test: Total Throughput (req/s) — Higher is better"
-    x-axis ["Total<br/>Requests/s"]
-    bar "Write-Behind" [{round(results["wb_rps"], 1)}]
-    bar "Direct-Postgres" [{round(results["dp_rps"], 1)}]
-```"""
-
+def runner_specs_block():
+    """Captured CI-runner specs (written by the 'Capture runner specs' CI step)."""
+    p = pathlib.Path("load-tests/results/runner-specs.md")
+    if not p.exists():
+        return "_Captured automatically from the runner during the CI k6 job — not yet available locally._"
+    return p.read_text(encoding="utf-8").strip()
 
 
 # ── README orchestration ─────────────────────────────────────────────────────
 
 def update_readme(wb_file, direct_file, stress_file):
     readme = pathlib.Path("README.md")
-    content = readme.read_text()
+    content = readme.read_text(encoding="utf-8")
 
     comparison_results = parse_comparison(wb_file, direct_file)
     stress_results = parse_stress_results(stress_file)
@@ -526,21 +421,18 @@ def update_readme(wb_file, direct_file, stress_file):
 
     comparison_section = generate_comparison_section(comparison_results)
     stress_section = generate_stress_section(stress_results)
-    
-    # Generate charts
-    comparison_chart = generate_comparison_chart(comparison_results)
-    stress_chart = generate_stress_chart(stress_results)
-    stress_mix_chart = generate_stress_mix_chart(stress_results)
-    comparison_rps_chart = generate_comparison_rps_chart(comparison_results)
 
+    specs_start, specs_end = "<!-- RUNNER_SPECS_START -->", "<!-- RUNNER_SPECS_END -->"
     payload_start, payload_end = "<!-- K6_PAYLOAD_START -->", "<!-- K6_PAYLOAD_END -->"
     comparison_start, comparison_end = "<!-- K6_COMPARISON_START -->", "<!-- K6_COMPARISON_END -->"
-    comparison_chart_start, comparison_chart_end = "<!-- K6_COMPARISON_CHART_START -->", "<!-- K6_COMPARISON_CHART_END -->"
     throughput_start, throughput_end = "<!-- K6_THROUGHPUT_START -->", "<!-- K6_THROUGHPUT_END -->"
     stress_start, stress_end = "<!-- K6_STRESS_START -->", "<!-- K6_STRESS_END -->"
-    stress_chart_start, stress_chart_end = "<!-- K6_STRESS_CHART_START -->", "<!-- K6_STRESS_CHART_END -->"
-    stress_mix_chart_start, stress_mix_chart_end = "<!-- K6_STRESS_MIX_CHART_START -->", "<!-- K6_STRESS_MIX_CHART_END -->"
-    comparison_rps_chart_start, comparison_rps_chart_end = "<!-- K6_COMPARISON_RPS_CHART_START -->", "<!-- K6_COMPARISON_RPS_CHART_END -->"
+
+    content = re.sub(
+        rf"({re.escape(specs_start)}\n).*?({re.escape(specs_end)})",
+        f"{specs_start}\n{runner_specs_block()}\n{specs_end}",
+        content, flags=re.DOTALL,
+    )
 
 
     payload_context = """### Test Context
@@ -561,11 +453,6 @@ def update_readme(wb_file, direct_file, stress_file):
         content, flags=re.DOTALL,
     )
     content = re.sub(
-        rf"({re.escape(comparison_chart_start)}\n).*?({re.escape(comparison_chart_end)})",
-        f"{comparison_chart_start}\n{comparison_chart}\n{comparison_chart_end}",
-        content, flags=re.DOTALL,
-    )
-    content = re.sub(
         rf"({re.escape(throughput_start)}\n).*?({re.escape(throughput_end)})",
         f"{throughput_start}\n{throughput_section}{throughput_end}",
         content, flags=re.DOTALL,
@@ -575,24 +462,8 @@ def update_readme(wb_file, direct_file, stress_file):
         f"{stress_start}\n{stress_section}{stress_end}",
         content, flags=re.DOTALL,
     )
-    content = re.sub(
-        rf"({re.escape(stress_chart_start)}\n).*?({re.escape(stress_chart_end)})",
-        f"{stress_chart_start}\n{stress_chart}\n{stress_chart_end}",
-        content, flags=re.DOTALL,
-    )
-    content = re.sub(
-        rf"({re.escape(stress_mix_chart_start)}\n).*?({re.escape(stress_mix_chart_end)})",
-        f"{stress_mix_chart_start}\n{stress_mix_chart}\n{stress_mix_chart_end}",
-        content, flags=re.DOTALL,
-    )
-    # Inject Comparison RPS Chart
-    content = re.sub(
-        rf"({re.escape(comparison_rps_chart_start)}\n).*?({re.escape(comparison_rps_chart_end)})",
-        f"{comparison_rps_chart_start}\n{comparison_rps_chart}\n{comparison_rps_chart_end}",
-        content, flags=re.DOTALL,
-    )
-    readme.write_text(content)
-    
+    readme.write_text(content, encoding="utf-8")
+
     print("\nREADME.md updated")
 
     if comparison_results:
