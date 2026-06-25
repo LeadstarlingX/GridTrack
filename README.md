@@ -121,23 +121,23 @@ The benchmark tables below are generated from real k6 runs in CI. We deliberatel
 
 | Path | p50 WB | p50 Direct | p50 | p90 WB | p90 Direct | p90 | p95 WB | p95 Direct | p95 |
 |------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|
-| Telemetry POST ✓ | 1.59 ms | 2.18 ms | 1.4x faster | 2.66 ms | 3.76 ms | 1.4x faster | 4.82 ms | 5.22 ms | 1.1x faster |
-| Analytics reads ✗ | 1.44 ms | 1.17 ms | 1.2x slower | 2.19 ms | 2.18 ms | ~same | 4.74 ms | 4.37 ms | 1.1x slower |
-| Delivery writes ✓ | 3.19 ms | 2.76 ms | 1.2x slower | 5.65 ms | 10.0 ms | 1.8x faster | 14.0 ms | 15.2 ms | 1.1x faster |
-| District-group CRUD ✗ | 2.71 ms | 2.33 ms | 1.2x slower | 5.56 ms | 3.75 ms | 1.5x slower | 13.9 ms | 6.53 ms | 2.1x slower |
+| Telemetry POST ✓ | 56.5 ms | 3.43 ms | 16.5x slower | 204 ms | 60.00 s | 294.3x faster | 271 ms | 60.00 s | 221.6x faster |
+| Analytics reads ✓ | 26.6 ms | 1.77 ms | 15.0x slower | 140 ms | 5.45 ms | 25.7x slower | 197 ms | 60.00 s | 304.2x faster |
+| Delivery writes ✓ | 23.5 ms | 60.00 s | 2550.6x faster | 173 ms | 60.00 s | 346.6x faster | 268 ms | 60.00 s | 224.3x faster |
+| District-group CRUD ✓ | 36.4 ms | 60.00 s | 1646.2x faster | 178 ms | 60.00 s | 336.3x faster | 272 ms | 60.00 s | 220.6x faster |
 
 **Measured traffic mix (req/s):**
 
 | Path | Write-behind | Direct-postgres |
 |------|-------------:|----------------:|
-| Driver telemetry | 525.8/s | 527.7/s |
-| Analytics reads | 592.1/s | 593.3/s |
-| Delivery lifecycle | 7.8/s | 7.8/s |
-| District-group CRUD | 8.6/s | 8.6/s |
+| Driver telemetry | 1001.8/s | 33.9/s |
+| Analytics reads | 411.4/s | 18.3/s |
+| Delivery lifecycle | 6.7/s | 0.0/s |
+| District-group CRUD | 6.9/s | 0.0/s |
 
-**Throughput:** write-behind 996.4 req/s vs direct-postgres 996.8 req/s
+**Throughput:** write-behind 1317.6 req/s vs direct-postgres 52.0 req/s
 
-**Error rate:** write-behind 0.79% / direct-postgres 1.66%
+**Error rate:** write-behind 0.10% / direct-postgres 24.19%
 <!-- K6_COMPARISON_END -->
 
 ### Throughput ceiling
@@ -156,16 +156,16 @@ The benchmark tables below are generated from real k6 runs in CI. We deliberatel
 
 | Result | Value |
 |--------|-------|
-| Peak RPS | **1309.9/s** |
-| Peak concurrent VUs | **100** |
-| Total HTTP requests | **196,501** |
-| Error rate | **2.00%** |
+| Peak RPS | **1308.0/s** |
+| Peak concurrent VUs | **144** |
+| Total HTTP requests | **196,208** |
+| Error rate | **0.00%** |
 
 **Telemetry Latency at Peak:**
 
 | Avg | Median | p90 | p95 | Max |
 |----:|-------:|----:|----:|----:|
-| 1.1 ms | 1.1 ms | 1.6 ms | 1.6 ms | 0.05 s |<!-- K6_THROUGHPUT_END -->
+| 3.7 ms | 1.9 ms | 8.3 ms | 13.6 ms | 0.09 s |<!-- K6_THROUGHPUT_END -->
 
 ### Stress test
 <!-- K6_STRESS_START -->
@@ -181,33 +181,33 @@ The benchmark tables below are generated from real k6 runs in CI. We deliberatel
 
 | Result | Value |
 |--------|-------|
-| Peak concurrent VUs | **990** |
+| Peak concurrent VUs | **1,590** |
 | Duration | **3m 32s** |
-| Total HTTP requests | **408,641** |
-| Request throughput | **1926.7/s** |
-| Iterations | **152,271 (718.0/s)** |
-| Checks passed | **419,104 / 422,687 (99%)** |
-| Error rate | **0.77%** |
-| Data received | **11.6 MB/s** |
-| Data sent | **336.1 kB/s** |
+| Total HTTP requests | **353,717** |
+| Request throughput | **1667.9/s** |
+| Iterations | **207,942 (980.5/s)** |
+| Checks passed | **362,939 / 362,939 (100%)** |
+| Error rate | **0.07%** |
+| Data received | **6.4 MB/s** |
+| Data sent | **353.1 kB/s** |
 
 **Latency by path:**
 
 | Path | Avg | Median | p90 | p95 | Max |
 |------|----:|-------:|----:|----:|----:|
-| Driver telemetry | 3.24 ms | 1.64 ms | 5.83 ms | 7.73 ms | 706 ms |
-| Analytics reads | 2.30 ms | 1.59 ms | 2.74 ms | 5.87 ms | 700 ms |
-| Delivery lifecycle | 9.63 ms | 3.20 ms | 10.8 ms | 22.7 ms | 673 ms |
-| District-group CRUD | 8.89 ms | 2.71 ms | 8.69 ms | 19.0 ms | 637 ms |
-| SignalR negotiate | 2.35 ms | 572 µs | 1.57 ms | 3.37 ms | 539 ms |
-| Overall HTTP | 2.69 ms | 1.60 ms | 3.86 ms | 6.87 ms | 706 ms |
+| Driver telemetry | 119 ms | 88.0 ms | 241 ms | 320 ms | 2.33 s |
+| Analytics reads | 89.0 ms | 61.9 ms | 198 ms | 261 ms | 1.88 s |
+| Delivery lifecycle | 120 ms | 77.8 ms | 244 ms | 334 ms | 2.57 s |
+| District-group CRUD | 132 ms | 90.0 ms | 264 ms | 377 ms | 1.90 s |
+| SignalR negotiate | 86.6 ms | 52.4 ms | 199 ms | 293 ms | 1.11 s |
+| Overall HTTP | 105 ms | 75.0 ms | 223 ms | 294 ms | 2.57 s |
 
 **Error-rate compliance:**
 
 | Status | Metric | Actual | Threshold |
 |--------|--------|--------|-----------|
-| ✓ http_req_failed rate | 0.77 % | < 1.00 % |
-| ✓ gridtrack_error_rate rate | 0.71 % | < 1.00 % |
+| ✓ gridtrack_error_rate rate | 0.00 % | < 1.00 % |
+| ✓ http_req_failed rate | 0.07 % | < 1.00 % |
 <!-- K6_STRESS_END -->
 
 ## Code coverage
@@ -218,10 +218,10 @@ High coverage on the layers that hold the business rules — and we measure the 
 <!-- COVERAGE_START -->
 | Layer | Line Coverage |
 |-------|---------------|
-| Domain | 97.1% |
-| Application | 87.6% |
-| Infrastructure | 75.7% |
-| Presentation | — |
+| Domain | 97.2% |
+| Application | 92.4% |
+| Infrastructure | 78.1% |
+| Presentation | 89.1% |
 <!-- COVERAGE_END -->
 
 ## License
