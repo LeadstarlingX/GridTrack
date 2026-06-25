@@ -153,10 +153,8 @@ public static class DependencyInjection
                 o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
                 o.KeepAliveInterval     = TimeSpan.FromSeconds(15);
             })
-            // Redis backplane: every API replica publishes/subscribes hub messages through Redis,
-            // so a broadcast on one node reaches clients connected to another node. Redis is a
-            // hard dependency (same instance as the cache + position stream) — there is no
-            // in-memory fallback. ChannelPrefix namespaces the backplane's pub/sub channels so
+            // Redis backplane: every API replica uses Redis, so a broadcast is passed to other nodes.
+            // ChannelPrefix namespaces the backplane's pub/sub channels so
             // other apps / future tenants sharing this Redis can't cross-talk.
             .AddStackExchangeRedis(redisConnectionString, options =>
             {
