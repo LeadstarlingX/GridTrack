@@ -5,6 +5,7 @@ backend POSTs driver GPS telemetry (B2B, server-to-server); GridTrack tracks del
 through their lifecycle, detects anomalies, forecasts district demand, and surfaces
 AI-assisted dispatch decisions — designed to stay correct and smooth at a target load of
 **10,000 concurrent drivers and 50 dashboard observers on a single host**.
+
 Current k6 tests results are limited by the GitHub CI runner,  not the system's real performance :(
 
 ## Related repositories

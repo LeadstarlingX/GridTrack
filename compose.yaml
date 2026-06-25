@@ -106,7 +106,7 @@ services:
       Python__BaseUrl: "http://gridtrack.python:8000"
       Osrm__BaseUrl: "http://gridtrack.osrm:5000"
       ConnectionStrings__ClickHouse: "Host=gridtrack.clickhouse;Port=8123;Database=gridtrack"
-      Simulation__Enabled: "false"
+      Simulation__Enabled: "true"
       Simulation__PositionUpdateIntervalMs: "1000"
       FORCE_RESEED: "${FORCE_RESEED:-false}"  # Override per-run: $env:FORCE_RESEED="true"; docker compose up -d gridtrack.api
     ports:

@@ -35,6 +35,8 @@ public sealed class GetDeliveryByIdHandler
             RoutePolyline: polyline,
             delivery.RouteDistanceMeters,
             delivery.RouteDurationSeconds,
-            delivery.RouteCost);
+            delivery.RouteCost,
+            CurrentLat: delivery.CurrentLocation?.Coordinate?.Y,
+            CurrentLng: delivery.CurrentLocation?.Coordinate?.X);
     }
 }

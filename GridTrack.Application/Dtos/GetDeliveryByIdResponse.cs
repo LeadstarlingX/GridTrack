@@ -12,4 +12,6 @@ public sealed record GetDeliveryByIdResponse(
     IReadOnlyList<CoordinateResponse> RoutePolyline,
     double? RouteDistanceMeters,
     double? RouteDurationSeconds,
-    decimal? RouteCost);
+    decimal? RouteCost,
+    double? CurrentLat,
+    double? CurrentLng);
