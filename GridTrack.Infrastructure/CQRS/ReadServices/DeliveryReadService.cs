@@ -136,8 +136,10 @@ public sealed class DeliveryReadService : IDeliveryReadService
         }
         if (to.HasValue)
         {
-            where.Add("""d."CreatedAt" <= @To""");
-            parameters.Add("To", to.Value);
+            // Treat the "to" bound as inclusive end-of-day: a date-only value arrives
+            // as midnight, so deliveries created later the same day must still match.
+            where.Add("""d."CreatedAt" < @To""");
+            parameters.Add("To", to.Value.Date.AddDays(1));
         }
         if (!string.IsNullOrWhiteSpace(districtId))
         {
