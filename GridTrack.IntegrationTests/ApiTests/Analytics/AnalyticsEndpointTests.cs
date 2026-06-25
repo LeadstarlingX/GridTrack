@@ -400,7 +400,7 @@ public class AnalyticsEndpointTests : BaseIntegrationTest
      
     [Test]
     [NotInParallel(Order = 1222)]
-    public async Task GET_AnalyticsStatusBreakdown_Reflects_Seeded_Pending_Delivery()
+    public async Task GET_AnalyticsStatusBreakdown_Reflects_Seeded_Created_Delivery()
     {
         await ResetDatabaseAsync();
         await SeedDeliveryAsync();
@@ -413,7 +413,7 @@ public class AnalyticsEndpointTests : BaseIntegrationTest
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<GetStatusBreakdownResponse>();
         // Status 0 = Pending — seeded delivery must appear
-        body!.Items.Should().Contain(i => i.Label == "Pending" && i.Count >= 1);
+        body!.Items.Should().Contain(i => i.Label == "Created" && i.Count >= 1);
     }
  
     

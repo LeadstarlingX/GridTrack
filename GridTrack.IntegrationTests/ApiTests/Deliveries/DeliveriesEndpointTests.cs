@@ -317,12 +317,12 @@ public class DeliveriesEndpointTests : BaseIntegrationTest
         await CreateDeliveryAsync(client, "mezzeh");
      
         // Status=Pending is the initial state after creation.
-        var response = await client.GetAsync("/api/deliveries?status=Pending&pageSize=10");
+        var response = await client.GetAsync("/api/deliveries?status=Created&pageSize=10");
      
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<GetDeliveriesResponse>();
         body!.Items.Should().NotBeEmpty();
-        body.Items.Should().AllSatisfy(i => i.Status.Should().Be("Pending"));
+        body.Items.Should().AllSatisfy(i => i.Status.Should().Be("Created"));
     }
      
     [Test]
