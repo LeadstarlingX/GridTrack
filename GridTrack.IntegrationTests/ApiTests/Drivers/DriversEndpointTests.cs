@@ -8,7 +8,7 @@ using GridTrack.IntegrationTests.Abstractions;
 using GridTrack.Presentation.Controllers.Drivers;
 using NetTopologySuite.Geometries;
 
-namespace GridTrack.IntegrationTests.ApiTests;
+namespace GridTrack.IntegrationTests.ApiTests.Drivers;
 
 public class DriversEndpointTests : BaseIntegrationTest
 {

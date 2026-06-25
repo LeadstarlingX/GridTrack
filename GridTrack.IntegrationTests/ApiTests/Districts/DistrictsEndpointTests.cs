@@ -7,7 +7,7 @@ using GridTrack.Domain.Abstractions;
 using GridTrack.IntegrationTests.Abstractions;
 using NetTopologySuite.Geometries;
 
-namespace GridTrack.IntegrationTests.ApiTests;
+namespace GridTrack.IntegrationTests.ApiTests.Districts;
 
 public class DistrictsEndpointTests : BaseIntegrationTest
 {

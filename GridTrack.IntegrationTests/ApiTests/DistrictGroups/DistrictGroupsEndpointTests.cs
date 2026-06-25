@@ -2,12 +2,10 @@
 using System.Net.Http.Json;
 using FluentAssertions;
 using GridTrack.Application.Dtos;
-using GridTrack.Application.UseCases.DistrictGroups;
-using GridTrack.Domain.Abstractions;
 using GridTrack.IntegrationTests.Abstractions;
 using NetTopologySuite.Geometries;
 
-namespace GridTrack.IntegrationTests.ApiTests;
+namespace GridTrack.IntegrationTests.ApiTests.DistrictGroups;
 
 public class DistrictGroupsEndpointTests : BaseIntegrationTest
 {
@@ -282,5 +280,119 @@ public class DistrictGroupsEndpointTests : BaseIntegrationTest
         // Verify deletion
         var getDeleted = await client.GetAsync($"/api/district-groups/{created.Id}");
         getDeleted.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+    
+    [Test]
+    [NotInParallel(Order = 1316)]
+    public async Task GET_DistrictGroup_By_Id_Returns_401_Without_Token()
+    {
+        var client = Factory.CreateClient();
+        var response = await client.GetAsync($"/api/district-groups/{Guid.NewGuid()}");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+     
+    [Test]
+    [NotInParallel(Order = 1317)]
+    public async Task PUT_DistrictGroup_Returns_401_Without_Token()
+    {
+        var client = Factory.CreateClient();
+        var response = await client.PutAsJsonAsync(
+            $"/api/district-groups/{Guid.NewGuid()}",
+            new { name = "X", districtIds = new[] { "mezzeh" } });
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+     
+    [Test]
+    [NotInParallel(Order = 1318)]
+    public async Task DELETE_DistrictGroup_Returns_401_Without_Token()
+    {
+        var client = Factory.CreateClient();
+        var response = await client.DeleteAsync($"/api/district-groups/{Guid.NewGuid()}");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+     
+    // ── POST validation (order 1307 gap) ─────────────────────────────────────
+     
+    [Test]
+    [NotInParallel(Order = 1307)]
+    public async Task POST_DistrictGroup_Returns_400_For_Empty_DistrictIds()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+     
+        // CreateDistrictGroupHttpRequestValidator: RuleFor(x => x.DistrictIds).NotEmpty()
+        var response = await client.PostAsJsonAsync("/api/district-groups", new
+        {
+            name        = "Valid Name",
+            districtIds = Array.Empty<string>()
+        });
+     
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+     
+    // ── PUT validation (order 1311 gap) ──────────────────────────────────────
+     
+    [Test]
+    [NotInParallel(Order = 1311)]
+    public async Task PUT_DistrictGroup_Returns_400_For_Empty_Name()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+     
+        var createResponse = await client.PostAsJsonAsync("/api/district-groups", new
+        {
+            name        = "Original",
+            districtIds = new[] { "mezzeh" }
+        });
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<DistrictGroupDto>();
+     
+        // UpdateDistrictGroupHttpRequestValidator: RuleFor(x => x.Name).NotEmpty()
+        var response = await client.PutAsJsonAsync(
+            $"/api/district-groups/{created!.Id}",
+            new { name = "", districtIds = new[] { "mezzeh" } });
+     
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+     
+    [Test]
+    [NotInParallel(Order = 1319)]
+    public async Task PUT_DistrictGroup_Returns_400_For_Empty_DistrictIds()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+     
+        var createResponse = await client.PostAsJsonAsync("/api/district-groups", new
+        {
+            name        = "Original",
+            districtIds = new[] { "mezzeh" }
+        });
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<DistrictGroupDto>();
+     
+        // UpdateDistrictGroupHttpRequestValidator: RuleFor(x => x.DistrictIds).NotEmpty()
+        var response = await client.PutAsJsonAsync(
+            $"/api/district-groups/{created!.Id}",
+            new { name = "Valid Name", districtIds = Array.Empty<string>() });
+     
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+     
+    // ── GET /api/district-groups (without date range, already seeded db) ─────
+    // Covers the path where district group list is non-empty after prior creates.
+     
+    [Test]
+    [NotInParallel(Order = 1320)]
+    public async Task GET_DistrictGroups_Returns_Empty_Array_After_Reset()
+    {
+        await ResetDatabaseAsync();
+        var client = AuthClient();
+     
+        var response = await client.GetAsync("/api/district-groups");
+     
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<List<DistrictGroupDto>>();
+        body.Should().NotBeNull();
+        body!.Should().BeEmpty();
     }
 }
