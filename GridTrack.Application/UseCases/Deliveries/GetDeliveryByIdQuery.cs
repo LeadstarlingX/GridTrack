@@ -23,13 +23,17 @@ public sealed class GetDeliveryByIdHandler
             .Select(w => new CoordinateResponse(w.Lat, w.Lng))
             .ToArray();
 
+        int? etaSeconds = delivery.ExpectedEta.HasValue
+            ? (int)Math.Max(0, (delivery.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds)
+            : null;
+
         return new GetDeliveryByIdResponse(
             delivery.DeliveryId,
             delivery.Status.ToString(),
             delivery.DistrictId,
             delivery.AssignedDriverId,
             AssignedDriverName: null,
-            EtaSeconds: null,
+            EtaSeconds: etaSeconds,
             delivery.CreatedAt,
             updatedAt,
             RoutePolyline: polyline,

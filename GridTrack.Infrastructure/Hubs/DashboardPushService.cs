@@ -36,7 +36,9 @@ internal sealed class DashboardPushService(
                 deliveryId       = payload.DeliveryId,
                 status           = payload.Status.ToString(),
                 assignedDriverId = payload.AssignedDriverId,
-                etaSeconds       = (int?)null,
+                etaSeconds       = payload.ExpectedEta.HasValue
+                    ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds)
+                    : (int?)null,
             }],
             ct);
 

@@ -4,6 +4,7 @@ using GridTrack.Application.Errors;
 using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Domain.Abstractions;
 using System.Linq;
+using GridTrack.Domain.Deliveries;
 
 namespace GridTrack.Application.UseCases.Deliveries;
 
@@ -13,7 +14,7 @@ public sealed record AssignDriverToDeliveryCommand(AssignDriverRequest Request);
 
 public sealed class AssignDriverToDeliveryHandler
 {
-    public async Task<(Result Result, IEnumerable<object> Events)> Handle(
+    public async Task<(Result Result, DeliveryCompletedDomainEvent[] Events)> Handle(
         AssignDriverToDeliveryCommand command,
         IDeliveryReadService readService,
         IDeliveryRepository repository,
@@ -25,21 +26,22 @@ public sealed class AssignDriverToDeliveryHandler
 
         if (delivery is null)
         {
-            return (Result.Failure(ApplicationErrors.DeliveryNotFound), Array.Empty<object>());
+            return (Result.Failure(ApplicationErrors.DeliveryNotFound), []);
         }
 
         var result = delivery.AssignDriver(request.DriverId);
         if (result.IsFailure)
         {
-            return (result, Array.Empty<object>());
+            return (result, []);
         }
 
         await repository.UpdateAsync(delivery, ct);
         await unitOfWork.SaveChangesAsync(ct);
 
-        var events = delivery.DomainEvents.Cast<object>().ToList();
+        var events = delivery.DomainEvents.OfType<DeliveryCompletedDomainEvent>().ToArray();
         delivery.ClearDomainEvents();
 
+        
         return (Result.Success(), events);
     }
 }
