@@ -275,15 +275,11 @@ public sealed class PositionSimulatorService(
                 continue;
             }
 
-            // ── Arrived at pickup → switch to dropoff ─────────────────────
+                        // ── Arrived at pickup → switch to dropoff ─────────────────────
             if (d.Phase == DeliveryPhase.MovingToPickup &&
                 IsAtEnd(d.WaypointIndex, d.Direction, d.Waypoints.Count))
             {
                 var (pickLat, pickLng) = d.Waypoints[^1];
-                await InvokeCommandAsync(new MarkDeliveryPickedUpCommand(new PickUpDeliveryRequest(
-                    d.ActiveDeliveryId!.Value,
-                    Geo.CreatePoint(new Coordinate(pickLng, pickLat)),
-                    now)), ct);
 
                 // Cross-district dropoff
                 var dropDistrict = districts.GetRandom(d.DistrictId);
@@ -306,7 +302,17 @@ public sealed class PositionSimulatorService(
                     stallAt = Math.Max(0, cancelTransitAt / 2);
 
                 var etaSecs = dropWaypoints.Count * opts.PositionUpdateIntervalMs / 1000.0 * opts.EtaBufferMultiplier;
-                await SetDeliveryEtaAsync(d.ActiveDeliveryId!.Value, now.AddSeconds(etaSecs), ct);
+                var etaTime = now.AddSeconds(etaSecs);
+
+                // FIX: Write ETA to DB BEFORE firing the status-change command.
+                await SetDeliveryEtaAsync(d.ActiveDeliveryId!.Value, etaTime, ct);
+                logger.LogInformation("[SIM] Wrote ETA {Secs}s for delivery {Id} BEFORE pickup command", etaSecs, d.ActiveDeliveryId);
+
+                await InvokeCommandAsync(new MarkDeliveryPickedUpCommand(new PickUpDeliveryRequest(
+                    d.ActiveDeliveryId!.Value,
+                    Geo.CreatePoint(new Coordinate(pickLng, pickLat)),
+                    now)), ct);
+                logger.LogInformation("[SIM] Pickup command fired for delivery {Id}", d.ActiveDeliveryId);
 
                 _drivers[i] = d with
                 {

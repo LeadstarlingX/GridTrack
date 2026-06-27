@@ -14,7 +14,7 @@ public sealed record AssignDriverToDeliveryCommand(AssignDriverRequest Request);
 
 public sealed class AssignDriverToDeliveryHandler
 {
-    public async Task<(Result Result, DeliveryCompletedDomainEvent[] Events)> Handle(
+    public async Task<(Result Result, DeliveryAssignedDomainEvent[] Events)> Handle(
         AssignDriverToDeliveryCommand command,
         IDeliveryReadService readService,
         IDeliveryRepository repository,
@@ -38,7 +38,7 @@ public sealed class AssignDriverToDeliveryHandler
         await repository.UpdateAsync(delivery, ct);
         await unitOfWork.SaveChangesAsync(ct);
 
-        var events = delivery.DomainEvents.OfType<DeliveryCompletedDomainEvent>().ToArray();
+        var events = delivery.DomainEvents.OfType<DeliveryAssignedDomainEvent>().ToArray();
         delivery.ClearDomainEvents();
 
         

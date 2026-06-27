@@ -48,35 +48,50 @@ public static class RouteCalculationHandler
             return;
         }
 
-        await conn.ExecuteAsync(
-            """DELETE FROM delivery_routes WHERE "DeliveryId" = @Id""",
-            new { Id = msg.DeliveryId });
+        try
+        {
+            await conn.ExecuteAsync(
+                """DELETE FROM delivery_routes WHERE "DeliveryId" = @Id""",
+                new { Id = msg.DeliveryId });
 
-        var waypoints = route.Waypoints
-            .Select((wp, i) => new { DeliveryId = msg.DeliveryId, Seq = i, wp.Lat, wp.Lng })
-            .ToList();
+            var waypoints = route.Waypoints
+                .Select((wp, i) => new { DeliveryId = msg.DeliveryId, Seq = i, wp.Lat, wp.Lng })
+                .ToList();
 
-        await conn.ExecuteAsync(
-            """
-            INSERT INTO delivery_routes ("DeliveryId", "Sequence", "Lat", "Lng")
-            VALUES (@DeliveryId, @Seq, @Lat, @Lng)
-            """,
-            waypoints);
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO delivery_routes ("DeliveryId", "Sequence", "Lat", "Lng")
+                VALUES (@DeliveryId, @Seq, @Lat, @Lng)
+                """,
+                waypoints);
 
-        // Persist route economics on the delivery so the dashboard can show cost.
-        var cost = costCalculator.Calculate(route.DistanceMeters, route.DurationSeconds);
-        await conn.ExecuteAsync(
-            """
-            UPDATE "Deliveries"
-            SET "RouteDistanceMeters" = @Distance,
-                "RouteDurationSeconds" = @Duration,
-                "RouteCost" = @Cost
-            WHERE "DeliveryId" = @Id
-            """,
-            new { Distance = route.DistanceMeters, Duration = route.DurationSeconds, Cost = cost, Id = msg.DeliveryId });
+            // Persist route economics on the delivery so the dashboard can show cost and ETA.
+            var cost = costCalculator.Calculate(route.DistanceMeters, route.DurationSeconds);
+            var expectedEta = DateTime.UtcNow.AddSeconds(route.DurationSeconds);
+            await conn.ExecuteAsync(
+                """
+                UPDATE "Deliveries"
+                SET "RouteDistanceMeters" = @Distance,
+                    "RouteDurationSeconds" = @Duration,
+                    "RouteCost" = @Cost,
+                    "ExpectedEta" = @ExpectedEta
+                WHERE "DeliveryId" = @Id
+                """,
+                new
+                {
+                    Distance = route.DistanceMeters, Duration = route.DurationSeconds, Cost = cost,
+                    ExpectedEta = expectedEta, Id = msg.DeliveryId
+                });
 
-        logger.LogInformation(
-            "Route calculated for delivery {DeliveryId}: {Count} waypoints, {Km:F1} km, {Cost} SYP",
-            msg.DeliveryId, waypoints.Count, route.DistanceMeters / 1000.0, cost);
+            logger.LogInformation(
+                "Route calculated for delivery {DeliveryId}: {Count} waypoints, {Km:F1} km, {Cost} SYP",
+                msg.DeliveryId, waypoints.Count, route.DistanceMeters / 1000.0, cost);
+        }
+
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ROUTE-ERROR] DeliveryId={msg.DeliveryId} Err={ex.Message}");
+            logger.LogError(ex, "Route calculation failed for delivery {DeliveryId}", msg.DeliveryId);
+        }
     }
 }

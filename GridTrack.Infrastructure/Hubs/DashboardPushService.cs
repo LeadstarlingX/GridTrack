@@ -28,19 +28,26 @@ internal sealed class DashboardPushService(
             await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("DriverPositionUpdated", [message], ct);
     }
 
-    public Task BroadcastDeliveryUpdateAsync(string districtId, DeliveryDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendCoreAsync(
+    public async Task BroadcastDeliveryUpdateAsync(string districtId, DeliveryDto payload, CancellationToken ct)
+    {
+        Console.WriteLine($"[PUSH] Broadcasting DeliveryUpdated id={payload.DeliveryId} etaSecs={(payload.ExpectedEta.HasValue
+            ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds) : -1)}");
+        await hub.Clients.All.SendCoreAsync(
             "DeliveryUpdated",
-            [new
-            {
-                deliveryId       = payload.DeliveryId,
-                status           = payload.Status.ToString(),
-                assignedDriverId = payload.AssignedDriverId,
-                etaSeconds       = payload.ExpectedEta.HasValue
-                    ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds)
-                    : (int?)null,
-            }],
+            [
+                new
+                {
+                    deliveryId = payload.DeliveryId,
+                    status = payload.Status.ToString(),
+                    assignedDriverId = payload.AssignedDriverId,
+                    etaSeconds = payload.ExpectedEta.HasValue
+                        ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds)
+                        : (int?)null,
+                }
+            ],
             ct);
+
+    }
 
     public Task BroadcastAnomalyAsync(string districtId, AnomalyAlertDto payload, CancellationToken ct)
         => hub.Clients.Group(districtId).SendCoreAsync(

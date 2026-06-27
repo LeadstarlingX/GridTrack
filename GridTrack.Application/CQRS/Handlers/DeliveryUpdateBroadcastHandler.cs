@@ -11,7 +11,10 @@ public static class DeliveryUpdateBroadcastHandler
         => BroadcastAsync(e.DeliveryId, r, p, ct);
 
     public static Task Handle(DeliveryPickedUpDomainEvent e, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
-        => BroadcastAsync(e.DeliveryId, r, p, ct);
+    {
+        Console.WriteLine($"[BROADCAST-HANDLER] DeliveryPickedUpDomainEvent received for {e.DeliveryId}");
+        return BroadcastAsync(e.DeliveryId, r, p, ct);
+    }
 
     public static Task Handle(DeliveryLocationUpdatedDomainEvent e, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
         => BroadcastAsync(e.DeliveryId, r, p, ct);
@@ -25,6 +28,7 @@ public static class DeliveryUpdateBroadcastHandler
     private static async Task BroadcastAsync(Guid deliveryId, IDeliveryReadService r, IDashboardPushService p, CancellationToken ct)
     {
         var delivery = await r.GetAggregateByIdAsync(deliveryId, ct);
+        Console.WriteLine($"[BROADCAST-HANDLER] Read delivery: {delivery is not null}, district: {delivery?.DistrictId}");
         if (delivery is null) return;
 
         await p.BroadcastDeliveryUpdateAsync(

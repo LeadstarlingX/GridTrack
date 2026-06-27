@@ -64,7 +64,7 @@ public class DashboardPushServiceTests
 
         await svc.BroadcastDeliveryUpdateAsync("kafrsousa", BuildDeliveryDto(), CancellationToken.None);
 
-        await Assert.That(hub.FakeClients.LastGroupName).IsEqualTo("kafrsousa");
+        await Assert.That(hub.FakeClients.AllProxy.Calls).Count().IsEqualTo(1);
     }
 
     [Test]
@@ -74,7 +74,7 @@ public class DashboardPushServiceTests
 
         await svc.BroadcastDeliveryUpdateAsync("kafrsousa", BuildDeliveryDto(), CancellationToken.None);
 
-        await Assert.That(hub.FakeClients.GroupProxy.Calls[0].Method).IsEqualTo("DeliveryUpdated");
+        await Assert.That(hub.FakeClients.AllProxy.Calls[0].Method).IsEqualTo("DeliveryUpdated");
     }
 
     [Test]
@@ -86,7 +86,7 @@ public class DashboardPushServiceTests
 
         await svc.BroadcastDeliveryUpdateAsync("malki", dto, CancellationToken.None);
 
-        var payload = hub.FakeClients.GroupProxy.Calls[0].Args[0]!;
+        var payload = hub.FakeClients.AllProxy.Calls[0].Args[0]!;
         await Assert.That(GetProperty<Guid>(payload, "deliveryId")).IsEqualTo(deliveryId);
     }
 
