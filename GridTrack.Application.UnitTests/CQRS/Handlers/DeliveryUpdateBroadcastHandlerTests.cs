@@ -49,6 +49,48 @@ public class DeliveryUpdateBroadcastHandlerTests
     }
 
     [Test]
+    public async Task Handle_Should_Map_Route_Fields_From_Aggregate_To_Dto()
+    {
+        var delivery = CreateDelivery(districtId: "mezzeh");
+        delivery.SetRoute(distanceMeters: 4200.5, durationSeconds: 780.0, cost: 12.50m);
+
+        var push = new FakeDashboardPushService();
+        var readService = new FakeDeliveryReadService(delivery);
+        var e = new DeliveryLocationUpdatedDomainEvent(
+            delivery.DeliveryId,
+            Factory.CreatePoint(new Coordinate(36.28, 33.52)),
+            DateTime.UtcNow);
+
+        await DeliveryUpdateBroadcastHandler.Handle(e, readService, push, CancellationToken.None);
+
+        var dto = push.DeliveryCalls[0].Dto;
+        await Assert.That(dto.RouteDistanceMeters).IsEqualTo(4200.5);
+        await Assert.That(dto.RouteDurationSeconds).IsEqualTo(780.0);
+        await Assert.That(dto.RouteCost).IsEqualTo(12.50m);
+    }
+
+    [Test]
+    public async Task Handle_Should_Map_Null_Route_Fields_When_Route_Not_Set()
+    {
+        var delivery = CreateDelivery(districtId: "mezzeh");
+        // No SetRoute call — route fields remain null on the aggregate.
+
+        var push = new FakeDashboardPushService();
+        var readService = new FakeDeliveryReadService(delivery);
+        var e = new DeliveryLocationUpdatedDomainEvent(
+            delivery.DeliveryId,
+            Factory.CreatePoint(new Coordinate(1, 1)),
+            DateTime.UtcNow);
+
+        await DeliveryUpdateBroadcastHandler.Handle(e, readService, push, CancellationToken.None);
+
+        var dto = push.DeliveryCalls[0].Dto;
+        await Assert.That(dto.RouteDistanceMeters).IsNull();
+        await Assert.That(dto.RouteDurationSeconds).IsNull();
+        await Assert.That(dto.RouteCost).IsNull();
+    }
+
+    [Test]
     public async Task Handle_Should_Not_Broadcast_When_Delivery_Not_Found()
     {
         var push = new FakeDashboardPushService();

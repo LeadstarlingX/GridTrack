@@ -37,12 +37,15 @@ internal sealed class DashboardPushService(
             [
                 new
                 {
-                    deliveryId = payload.DeliveryId,
-                    status = payload.Status.ToString(),
-                    assignedDriverId = payload.AssignedDriverId,
-                    etaSeconds = payload.ExpectedEta.HasValue
+                    deliveryId           = payload.DeliveryId,
+                    status               = payload.Status.ToString(),
+                    assignedDriverId     = payload.AssignedDriverId,
+                    etaSeconds           = payload.ExpectedEta.HasValue
                         ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds)
                         : (int?)null,
+                    routeDistanceMeters  = payload.RouteDistanceMeters,
+                    routeDurationSeconds = payload.RouteDurationSeconds,
+                    routeCost            = payload.RouteCost,
                 }
             ],
             ct);

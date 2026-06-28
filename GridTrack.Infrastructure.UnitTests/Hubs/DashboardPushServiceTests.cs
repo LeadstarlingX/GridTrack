@@ -90,6 +90,48 @@ public class DashboardPushServiceTests
         await Assert.That(GetProperty<Guid>(payload, "deliveryId")).IsEqualTo(deliveryId);
     }
 
+    [Test]
+    public async Task BroadcastDeliveryUpdate_Should_Include_Route_Economics_In_Payload()
+    {
+        var (svc, hub) = Build();
+        var dto = new DeliveryDto
+        {
+            DeliveryId           = Guid.NewGuid(),
+            Status               = DeliveryStatus.InTransit,
+            RouteDistanceMeters  = 3500.0,
+            RouteDurationSeconds = 600.0,
+            RouteCost            = 8.75m,
+        };
+
+        await svc.BroadcastDeliveryUpdateAsync("mezzeh", dto, CancellationToken.None);
+
+        var payload = hub.FakeClients.AllProxy.Calls[0].Args[0]!;
+        // Reflection boxes Nullable<T> values as T, so cast to non-nullable for non-null assertions.
+        await Assert.That(GetProperty<double>(payload, "routeDistanceMeters")).IsEqualTo(3500.0);
+        await Assert.That(GetProperty<double>(payload, "routeDurationSeconds")).IsEqualTo(600.0);
+        await Assert.That(GetProperty<decimal>(payload, "routeCost")).IsEqualTo(8.75m);
+    }
+
+    [Test]
+    public async Task BroadcastDeliveryUpdate_Should_Send_Null_Route_Fields_When_Not_Set()
+    {
+        var (svc, hub) = Build();
+        var dto = new DeliveryDto
+        {
+            DeliveryId = Guid.NewGuid(),
+            Status     = DeliveryStatus.Assigned,
+            // RouteDistanceMeters, RouteDurationSeconds, RouteCost all null
+        };
+
+        await svc.BroadcastDeliveryUpdateAsync("kafrsousa", dto, CancellationToken.None);
+
+        var payload = hub.FakeClients.AllProxy.Calls[0].Args[0]!;
+        // Boxing a null Nullable<T> returns null, so object is safe here.
+        await Assert.That(GetProperty<object>(payload, "routeDistanceMeters")).IsNull();
+        await Assert.That(GetProperty<object>(payload, "routeDurationSeconds")).IsNull();
+        await Assert.That(GetProperty<object>(payload, "routeCost")).IsNull();
+    }
+
     // ──────────────────────────────────────────────────────────────
     // BroadcastAnomalyAsync
     // ──────────────────────────────────────────────────────────────
