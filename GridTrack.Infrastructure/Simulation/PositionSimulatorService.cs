@@ -39,7 +39,8 @@ public sealed class PositionSimulatorService(
         DeliveryPhase Phase,
         int CancelAtWaypoint,
         int StallAtWaypoint,
-        DateTime? DwellUntil);
+        DateTime? DwellUntil,
+        DateTime LastEtaRefreshAt);
 
     private sealed record SimDelivery(Guid Id, double Lat, double Lng, string DistrictId);
 
@@ -110,7 +111,8 @@ public sealed class PositionSimulatorService(
                     LastBroadcastAt: DateTime.UtcNow,
                     PausedUntil: null, StallBroadcastSent: false,
                     ActiveDeliveryId: null, Phase: DeliveryPhase.Patrol,
-                    CancelAtWaypoint: -1, StallAtWaypoint: -1, DwellUntil: null));
+                    CancelAtWaypoint: -1, StallAtWaypoint: -1, DwellUntil: null,
+                    LastEtaRefreshAt: DateTime.MinValue));
             }
             _drivers = drivers;
         }
@@ -397,7 +399,41 @@ public sealed class PositionSimulatorService(
             // ── Advance position and broadcast ────────────────────────────
             var (lat, lng) = d.Waypoints[d.WaypointIndex];
             var (nextIdx, nextDir) = AdvanceIndex(d.WaypointIndex, d.Direction, d.Waypoints.Count);
-            _drivers[i] = d with { WaypointIndex = nextIdx, Direction = nextDir, LastBroadcastAt = now };
+
+            // ── ETA refresh every 30 s during active delivery transit ─────
+            var lastEtaRefresh = d.LastEtaRefreshAt;
+            if (d.Phase == DeliveryPhase.MovingToDropoff &&
+                d.ActiveDeliveryId.HasValue &&
+                (now - lastEtaRefresh).TotalSeconds >= 30)
+            {
+                var remaining    = Math.Max(0, d.Waypoints.Count - nextIdx);
+                var remainingSecs = remaining * opts.PositionUpdateIntervalMs / 1000.0 * opts.EtaBufferMultiplier;
+                await SetDeliveryEtaAsync(d.ActiveDeliveryId.Value, now.AddSeconds(remainingSecs), ct);
+
+                broadcastTasks.Add(hub.Clients.All.SendCoreAsync("DeliveryUpdated",
+                [
+                    new
+                    {
+                        deliveryId           = d.ActiveDeliveryId.Value,
+                        status               = "InTransit",
+                        assignedDriverId     = (Guid?)d.Id,
+                        etaSeconds           = remainingSecs > 0 ? (int?)((int)remainingSecs) : null,
+                        routeDistanceMeters  = (double?)null,
+                        routeDurationSeconds = (double?)null,
+                        routeCost            = (decimal?)null,
+                    }
+                ], ct));
+
+                lastEtaRefresh = now;
+            }
+
+            _drivers[i] = d with
+            {
+                WaypointIndex    = nextIdx,
+                Direction        = nextDir,
+                LastBroadcastAt  = now,
+                LastEtaRefreshAt = lastEtaRefresh,
+            };
 
             var routeAhead = d.Phase != DeliveryPhase.Patrol
                 ? d.Waypoints.Skip(d.WaypointIndex).Take(40)
