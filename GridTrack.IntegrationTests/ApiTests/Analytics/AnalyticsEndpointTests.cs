@@ -102,38 +102,38 @@ public class AnalyticsEndpointTests : BaseIntegrationTest
         body.UrgencyTrend.Should().NotBeNull();
     }
 
-    // ── GET /api/analytics/h3-density ─────────────────────────────────────
+    // ── GET /api/analytics/pickup-density ──────────────────────────────────
 
     [Test]
     [NotInParallel(Order = 1204)]
-    public async Task GET_AnalyticsH3Density_Returns_200_With_Shape()
+    public async Task GET_AnalyticsPickupDensity_Returns_200_With_Shape()
     {
         await ResetDatabaseAsync();
         await SeedDeliveryAsync();
 
         var client = AuthClient();
         var response = await client.GetAsync(
-            "/api/analytics/h3-density?from=2024-01-01&to=2024-12-31&resolution=9&fromHour=8&toHour=20");
+            "/api/analytics/pickup-density?from=2024-01-01&to=2024-12-31&fromHour=8&toHour=20");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GetH3DensityResponse>();
+        var body = await response.Content.ReadFromJsonAsync<GetPickupDensityResponse>();
         body.Should().NotBeNull();
-        body!.Cells.Should().NotBeNull();
+        body!.Points.Should().NotBeNull();
     }
 
     [Test]
     [NotInParallel(Order = 1205)]
-    public async Task GET_AnalyticsH3Density_Returns_200_Without_Optional_Hours()
+    public async Task GET_AnalyticsPickupDensity_Returns_200_Without_Optional_Hours()
     {
         await ResetDatabaseAsync();
         await SeedDeliveryAsync();
 
         var client = AuthClient();
         var response = await client.GetAsync(
-            "/api/analytics/h3-density?from=2024-01-01&to=2024-12-31&resolution=9");
+            "/api/analytics/pickup-density?from=2024-01-01&to=2024-12-31");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GetH3DensityResponse>();
+        var body = await response.Content.ReadFromJsonAsync<GetPickupDensityResponse>();
         body.Should().NotBeNull();
     }
 

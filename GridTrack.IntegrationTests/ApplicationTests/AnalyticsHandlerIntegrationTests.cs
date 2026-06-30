@@ -1,10 +1,12 @@
 using FluentAssertions;
 using GridTrack.Application.Dtos;
+using GridTrack.Application.Interfaces;
 using GridTrack.Application.UseCases.Analytics;
 using GridTrack.Domain.Deliveries;
 using GridTrack.Domain.Drivers;
 using GridTrack.Domain.ValueObjects;
 using GridTrack.IntegrationTests.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 
 namespace GridTrack.IntegrationTests.ApplicationTests;
@@ -170,29 +172,27 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         result.TotalDeliveriesToday.Should().Be(1);
     }
 
-    // ── GetH3DensityQuery ─────────────────────────────────────────────────
+    // ── GetPickupDensityQuery ────────────────────────────────────────────
 
     [Test]
     [NotInParallel(Order = 510)]
-    public async Task GetH3DensityQuery_Should_Return_Empty_When_No_Deliveries()
+    public async Task GetPickupDensityQuery_Should_Return_Empty_When_No_Deliveries()
     {
         await ResetDatabaseAsync();
 
-        var result = await InvokeAsync<GetH3DensityResponse>(
-            new GetH3DensityQuery(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1), 9, null, null));
+        var result = await InvokeAsync<GetPickupDensityResponse>(
+            new GetPickupDensityQuery(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1), null, null));
 
         result.Should().NotBeNull();
-        result.Cells.Should().BeEmpty();
+        result.Points.Should().BeEmpty();
     }
 
     [Test]
     [NotInParallel(Order = 511)]
-    public async Task GetH3DensityQuery_Should_Group_By_H3Cell_And_Count_Delivered_Pickups()
+    public async Task GetPickupDensityQuery_Should_Return_Raw_Pickup_Points_For_Delivered_Orders()
     {
         await ResetDatabaseAsync();
 
-        // ~8km apart — distinct H3 cells at resolution 9 (cell edge ≈ 174m), same district label
-        // doesn't matter anymore: grouping is by the real pickup-point H3 cell, not DistrictId.
         var zoneA = GeoFactory.CreatePoint(new Coordinate(36.2765, 33.5138));
         var zoneB = GeoFactory.CreatePoint(new Coordinate(36.3500, 33.5800));
         var deliveredAt = DateTime.UtcNow.AddMinutes(-30);
@@ -205,18 +205,19 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
             CreateDeliveredDeliveryAt(zoneB, "h3-zone-b", deliveredAt),
         ]);
 
-        var result = await InvokeAsync<GetH3DensityResponse>(
-            new GetH3DensityQuery(DateTime.UtcNow.AddHours(-1), DateTime.UtcNow.AddHours(1), 9, null, null));
+        var result = await InvokeAsync<GetPickupDensityResponse>(
+            new GetPickupDensityQuery(DateTime.UtcNow.AddHours(-1), DateTime.UtcNow.AddHours(1), null, null));
 
-        result.Cells.Should().HaveCount(2);
-        result.Cells.Sum(c => c.DeliveryCount).Should().Be(5);
-        result.Cells.Should().ContainSingle(c => c.DeliveryCount == 3);
-        result.Cells.Should().ContainSingle(c => c.DeliveryCount == 2);
+        result.Points.Should().HaveCount(5);
+        result.Points.Count(p => Math.Abs(p.Lat - zoneA.Y) < 0.0001 && Math.Abs(p.Lng - zoneA.X) < 0.0001)
+            .Should().Be(3);
+        result.Points.Count(p => Math.Abs(p.Lat - zoneB.Y) < 0.0001 && Math.Abs(p.Lng - zoneB.X) < 0.0001)
+            .Should().Be(2);
     }
 
     [Test]
     [NotInParallel(Order = 512)]
-    public async Task GetH3DensityQuery_Should_Filter_By_DeliveredAt_Time_Window()
+    public async Task GetPickupDensityQuery_Should_Filter_By_DeliveredAt_Time_Window()
     {
         await ResetDatabaseAsync();
 
@@ -225,11 +226,10 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         var recent = CreateDeliveredDeliveryAt(zone, "h3-zone-x", DateTime.UtcNow.AddHours(-1));
         await SeedDeliveriesAsync([past, recent]);
 
-        var result = await InvokeAsync<GetH3DensityResponse>(
-            new GetH3DensityQuery(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1), 9, null, null));
+        var result = await InvokeAsync<GetPickupDensityResponse>(
+            new GetPickupDensityQuery(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1), null, null));
 
-        result.Cells.Should().HaveCount(1);
-        result.Cells[0].DeliveryCount.Should().Be(1);
+        result.Points.Should().HaveCount(1);
     }
 
     // ── GetTrendsQuery ────────────────────────────────────────────────────
@@ -427,5 +427,52 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         result.ByType.First(t => t.AnomalyType == AnomalyType.RouteDeviation).Count.Should().Be(1);
         result.ByDistrict.First(d => d.DistrictId == "mezzeh").Count.Should().Be(2);
         result.ByDistrict.First(d => d.DistrictId == "kafrsousa").Count.Should().Be(1);
+    }
+
+    // ── GetDistrictDemandForecastQuery ──────────────────────────────────────
+
+    [Test]
+    [NotInParallel(Order = 580)]
+    public async Task GetDistrictDemandForecastQuery_Should_Include_Every_District_At_Zero_When_Empty()
+    {
+        await ResetDatabaseAsync();
+
+        var districtService = Factory.Services.GetRequiredService<IDistrictDataService>();
+        var realDistrictCount = districtService.GetAll().Count;
+
+        var result = await InvokeAsync<GetDistrictDemandForecastResponse>(
+            new GetDistrictDemandForecastQuery(1));
+
+        result.Items.Should().HaveCount(realDistrictCount);
+        result.Items.Should().OnlyContain(i => i.PredictedDeliveries == 0);
+    }
+
+    [Test]
+    [NotInParallel(Order = 581)]
+    public async Task GetDistrictDemandForecastQuery_Should_Predict_From_Historical_Same_Hour_Pattern()
+    {
+        await ResetDatabaseAsync();
+
+        var districtService = Factory.Services.GetRequiredService<IDistrictDataService>();
+        var districtId = districtService.GetAll().First().Id;
+
+        // Same day-of-week and hour-of-day as "1 hour from now", on 3 separate past weeks
+        // (all within the 28-day window) — average daily count should come out to (2+4+6)/3 = 4.
+        var target = DateTime.UtcNow.AddHours(1);
+        var deliveries = new List<Delivery>();
+        foreach (var (weeksAgo, count) in new[] { (1, 2), (2, 4), (3, 6) })
+        {
+            var day = target.AddDays(-7 * weeksAgo);
+            for (var i = 0; i < count; i++)
+                deliveries.Add(CreateDelivery(districtId, day));
+        }
+        await SeedDeliveriesAsync(deliveries);
+
+        var result = await InvokeAsync<GetDistrictDemandForecastResponse>(
+            new GetDistrictDemandForecastQuery(1));
+
+        var item = result.Items.First(i => i.DistrictId == districtId);
+        item.PredictedDeliveries.Should().BeApproximately(4.0, precision: 0.001);
+        result.Items.First().DistrictId.Should().Be(districtId); // ranked first — only district with activity
     }
 }

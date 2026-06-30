@@ -6,10 +6,9 @@ public interface IAnalyticsReadService
 {
     Task<GetAnalyticsSummaryResponse> GetSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct);
 
-    Task<GetH3DensityResponse> GetH3DensityAsync(
+    Task<GetPickupDensityResponse> GetPickupDensityAsync(
         DateTime from,
         DateTime to,
-        int resolution,
         int? fromHour,
         int? toHour,
         CancellationToken ct);
@@ -51,5 +50,14 @@ public interface IAnalyticsReadService
         string districtId,
         int    dayOfWeek,
         int    hour,
+        CancellationToken ct);
+
+    /// <summary>
+    /// Per-district predicted delivery volume over the next <paramref name="hoursAhead"/> hours,
+    /// ranked descending. A simple seasonal-naive forecast: sums the 28-day historical
+    /// hour-of-day/day-of-week average for each of the upcoming hours, per district.
+    /// </summary>
+    Task<GetDistrictDemandForecastResponse> GetDistrictDemandForecastAsync(
+        int hoursAhead,
         CancellationToken ct);
 }

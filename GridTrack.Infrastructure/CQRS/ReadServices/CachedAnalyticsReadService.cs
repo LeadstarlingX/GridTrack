@@ -20,6 +20,7 @@ internal sealed class CachedAnalyticsReadService(
     private static readonly TimeSpan HistoricalTtl = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan MapTtl        = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan UtilTtl       = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ForecastTtl   = TimeSpan.FromSeconds(60);
 
     private static string Fmt(DateTime? dt) => dt?.ToString("yyyyMMdd") ?? "all";
 
@@ -37,14 +38,14 @@ internal sealed class CachedAnalyticsReadService(
             RangeTtl(to),
             ct);
 
-    public Task<GetH3DensityResponse> GetH3DensityAsync(
-        DateTime from, DateTime to, int resolution, int? fromHour, int? toHour, CancellationToken ct)
+    public Task<GetPickupDensityResponse> GetPickupDensityAsync(
+        DateTime from, DateTime to, int? fromHour, int? toHour, CancellationToken ct)
         // Keyed to the minute, not the day: rolling lookback windows (e.g. "last 3h") share a
         // day-truncated key with every other window requested that day, which would otherwise
         // serve a stale/wrong slider position for up to MapTtl after the first request.
         => cache.GetOrSetAsync(
-            $"analytics:h3:{from:yyyyMMddHHmm}:{to:yyyyMMddHHmm}:{resolution}:{fromHour ?? -1}:{toHour ?? -1}",
-            innerCt => inner.GetH3DensityAsync(from, to, resolution, fromHour, toHour, innerCt),
+            $"analytics:pickup-density:{from:yyyyMMddHHmm}:{to:yyyyMMddHHmm}:{fromHour ?? -1}:{toHour ?? -1}",
+            innerCt => inner.GetPickupDensityAsync(from, to, fromHour, toHour, innerCt),
             MapTtl,
             ct);
 
@@ -103,5 +104,16 @@ internal sealed class CachedAnalyticsReadService(
             $"analytics:hourly-avg:{districtId}:{dayOfWeek}:{hour}",
             innerCt => inner.GetHistoricalHourlyDeliveryAvgAsync(districtId, dayOfWeek, hour, innerCt),
             HistoricalTtl,
+            ct);
+
+    public Task<GetDistrictDemandForecastResponse> GetDistrictDemandForecastAsync(
+        int hoursAhead, CancellationToken ct)
+        // Keyed to the hour, not just a TTL: the predicted window shifts every hour regardless
+        // of TTL, so a stale-but-not-yet-expired cache entry would otherwise serve last hour's
+        // window after the boundary passes.
+        => cache.GetOrSetAsync(
+            $"analytics:district-forecast:{hoursAhead}:{DateTime.UtcNow:yyyyMMddHH}",
+            innerCt => inner.GetDistrictDemandForecastAsync(hoursAhead, innerCt),
+            ForecastTtl,
             ct);
 }

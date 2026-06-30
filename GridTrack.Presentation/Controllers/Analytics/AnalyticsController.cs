@@ -33,18 +33,30 @@ public class AnalyticsController(IMessageBus bus) : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("h3-density")]
-    public async Task<IActionResult> GetH3Density(
-        [FromQuery] GetH3DensityRequest request,
+    [HttpGet("pickup-density")]
+    public async Task<IActionResult> GetPickupDensity(
+        [FromQuery] GetPickupDensityRequest request,
         CancellationToken ct)
     {
-        var result = await bus.InvokeAsync<GetH3DensityResponse>(
-            new GetH3DensityQuery(
+        var result = await bus.InvokeAsync<GetPickupDensityResponse>(
+            new GetPickupDensityQuery(
                 request.From,
                 request.To,
-                request.Resolution,
                 request.FromHour,
                 request.ToHour),
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpGet("district-demand-forecast")]
+    public async Task<IActionResult> GetDistrictDemandForecast(
+        [FromQuery] int hoursAhead,
+        CancellationToken ct)
+    {
+        var clamped = hoursAhead is > 0 and <= 12 ? hoursAhead : 1;
+        var result = await bus.InvokeAsync<GetDistrictDemandForecastResponse>(
+            new GetDistrictDemandForecastQuery(clamped),
             ct);
 
         return Ok(result);

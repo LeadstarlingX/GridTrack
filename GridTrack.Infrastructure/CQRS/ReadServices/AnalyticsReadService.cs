@@ -3,19 +3,18 @@ using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
-using NetTopologySuite.Geometries;
 
 namespace GridTrack.Infrastructure.CQRS.ReadServices;
 
 public sealed class AnalyticsReadService : IAnalyticsReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
-    private readonly IH3GridService _h3GridService;
+    private readonly IDistrictDataService _districtDataService;
 
-    public AnalyticsReadService(ISqlConnectionFactory sqlConnectionFactory, IH3GridService h3GridService)
+    public AnalyticsReadService(ISqlConnectionFactory sqlConnectionFactory, IDistrictDataService districtDataService)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
-        _h3GridService = h3GridService;
+        _districtDataService = districtDataService;
     }
 
     public async Task<GetAnalyticsSummaryResponse> GetSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct)
@@ -76,12 +75,12 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         return row;
     }
 
-    private sealed record PickupPointRow(double Lat, double Lng);
-
-    public async Task<GetH3DensityResponse> GetH3DensityAsync(
+    // Raw pickup points, not pre-aggregated into H3 cells — the frontend renders this with
+    // MapLibre's native `heatmap` layer (GPU-side kernel density), so server-side binning to a
+    // hex grid would be wasted computation that the client doesn't use.
+    public async Task<GetPickupDensityResponse> GetPickupDensityAsync(
         DateTime from,
         DateTime to,
-        int resolution,
         int? fromHour,
         int? toHour,
         CancellationToken ct)
@@ -100,7 +99,7 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
                              AND (@ToHour   IS NULL OR EXTRACT(HOUR FROM "DeliveredAt" AT TIME ZONE 'UTC') <= @ToHour)
                            """;
 
-        var points = await connection.QueryAsync<PickupPointRow>(sql, new
+        var points = await connection.QueryAsync<PickupPointResponse>(sql, new
         {
             From = from,
             To = to,
@@ -108,32 +107,7 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
             ToHour = toHour,
         });
 
-        var cells = new Dictionary<string, (double SumLat, double SumLng, int Count)>();
-        foreach (var point in points)
-        {
-            var cellResult = await _h3GridService.GetCellAsync(new Point(point.Lng, point.Lat), resolution);
-            if (cellResult.IsFailure)
-            {
-                continue;
-            }
-
-            var existing = cells.TryGetValue(cellResult.Value, out var agg)
-                ? agg
-                : (SumLat: 0.0, SumLng: 0.0, Count: 0);
-
-            cells[cellResult.Value] = (existing.SumLat + point.Lat, existing.SumLng + point.Lng, existing.Count + 1);
-        }
-
-        var result = cells
-            .Select(kv => new H3DensityCellResponse(
-                kv.Key,
-                kv.Value.SumLat / kv.Value.Count,
-                kv.Value.SumLng / kv.Value.Count,
-                kv.Value.Count))
-            .OrderByDescending(c => c.DeliveryCount)
-            .ToList();
-
-        return new GetH3DensityResponse(result);
+        return new GetPickupDensityResponse(points.ToList());
     }
 
     public async Task<GetTrendsResponse> GetTrendsAsync(
@@ -559,5 +533,62 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         var result = await connection.ExecuteScalarAsync<double>(sql,
             new { DistrictId = districtId, DayOfWeek = dayOfWeek, Hour = hour });
         return result;
+    }
+
+    private sealed record DemandForecastRow(string DistrictId, double PredictedDeliveries);
+
+    public async Task<GetDistrictDemandForecastResponse> GetDistrictDemandForecastAsync(
+        int hoursAhead, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var dows = new int[hoursAhead];
+        var hours = new int[hoursAhead];
+        for (var i = 0; i < hoursAhead; i++)
+        {
+            var target = now.AddHours(i + 1);
+            dows[i] = (int)target.DayOfWeek;
+            hours[i] = target.Hour;
+        }
+
+        using var connection = _sqlConnectionFactory.CreateConnection();
+
+        // Same per-(district,dow,hour) averaging semantics as GetHistoricalHourlyDeliveryAvgAsync
+        // (average of per-day counts, over the last 28 days, only counting days that had at least
+        // one delivery in that exact slot) — just computed for every district and every hour in
+        // the target window in a single query instead of looping per-district per-hour.
+        const string sql = """
+                           WITH targets AS (
+                               SELECT unnest(@Dows) AS dow, unnest(@Hours) AS hour
+                           ),
+                           daily AS (
+                               SELECT "DistrictId", DATE("CreatedAt") AS day,
+                                      EXTRACT(DOW FROM "CreatedAt")::int AS dow,
+                                      EXTRACT(HOUR FROM "CreatedAt")::int AS hour,
+                                      COUNT(*)::int AS cnt
+                               FROM public."Deliveries"
+                               WHERE "CreatedAt" >= NOW() - INTERVAL '28 days'
+                               GROUP BY "DistrictId", DATE("CreatedAt"), EXTRACT(DOW FROM "CreatedAt"), EXTRACT(HOUR FROM "CreatedAt")
+                           ),
+                           cell_avgs AS (
+                               SELECT "DistrictId", dow, hour, AVG(cnt)::float AS avg_cnt
+                               FROM daily
+                               GROUP BY "DistrictId", dow, hour
+                           )
+                           SELECT ca."DistrictId" AS "DistrictId", SUM(ca.avg_cnt) AS "PredictedDeliveries"
+                           FROM cell_avgs ca
+                           JOIN targets t ON t.dow = ca.dow AND t.hour = ca.hour
+                           GROUP BY ca."DistrictId"
+                           """;
+
+        var rows = await connection.QueryAsync<DemandForecastRow>(sql, new { Dows = dows, Hours = hours });
+        var byDistrict = rows.ToDictionary(r => r.DistrictId, r => r.PredictedDeliveries);
+
+        var items = _districtDataService.GetAll()
+            .Select(d => new DistrictDemandForecastItemResponse(
+                d.Id, d.NameAr, byDistrict.GetValueOrDefault(d.Id, 0)))
+            .OrderByDescending(i => i.PredictedDeliveries)
+            .ToList();
+
+        return new GetDistrictDemandForecastResponse(items, hoursAhead, now);
     }
 }
