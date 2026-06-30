@@ -6,6 +6,7 @@ using GridTrack.Application.Interfaces;
 using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Infrastructure.Hubs;
+using GridTrack.Infrastructure.Seeding;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,6 +24,7 @@ public sealed class PositionSimulatorService(
     IServiceScopeFactory scopeFactory,
     IDistrictDataService districts,
     IOptions<SimulatorOptions> options,
+    SeedCompletionSignal seedSignal,
     ILogger<PositionSimulatorService> logger) : BackgroundService
 {
     private enum DeliveryPhase { Patrol, MovingToPickup, MovingToDropoff }
@@ -62,7 +64,20 @@ public sealed class PositionSimulatorService(
         var opts = options.Value;
         if (!opts.Enabled) { logger.LogInformation("PositionSimulator disabled"); return; }
 
-        await Task.Delay(TimeSpan.FromSeconds(20), ct);
+        // Wait for seeding to actually finish — every startup now does a full reseed (~20s with
+        // OSRM calls), and loading drivers before it settles reads an empty or half-written
+        // table. Capped so a hung/failed seed can't block the simulator forever.
+        try
+        {
+            using var seedWaitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            seedWaitCts.CancelAfter(TimeSpan.FromSeconds(60));
+            await seedSignal.Completed.WaitAsync(seedWaitCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("PositionSimulator: seed did not complete within 60s, starting anyway");
+        }
+
         await LoadDriversAsync(ct);
         await LoadPendingDeliveriesAsync(ct);
 

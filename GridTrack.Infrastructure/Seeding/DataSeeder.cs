@@ -99,7 +99,7 @@ public sealed class DataSeeder(
 
         // ── District boundaries (H3District) ──────────────────────────────
         // Powers GET /api/districts/boundaries + the frontend district polygon layer.
-        // Idempotent: FORCE_RESEED does not clear this table, so we only seed when empty.
+        // Idempotent: SeedService doesn't clear this table on reseed, so we only seed when empty.
         await SeedBoundariesAsync(allDistricts, ct);
 
         // ── Drivers ───────────────────────────────────────────────────────
@@ -143,15 +143,20 @@ public sealed class DataSeeder(
 
         // ── Build delivery specs (no network yet) ─────────────────────────
         // ~40 are in-progress *right now*, each on a distinct driver, so the dashboard
-        // shows many drivers with active orders. The rest are historical (last 7 days).
+        // shows many drivers with active orders. ~60 land in the last ~11h specifically —
+        // a dense band so the pickup-density heatmap (1-12h lookback slider) always has
+        // something to show, regardless of where the slider sits. The rest are spread across
+        // the full 7 days for weekly trend views.
         var activeDrivers = drivers.Where(d => d.IsActive).ToList();
         const int activeCount = 40;
+        const int recentCount = 60;
         const int historicalCount = 110;
 
-        var specs = new List<DeliverySpec>(activeCount + historicalCount);
-        for (var i = 0; i < activeCount + historicalCount; i++)
+        var specs = new List<DeliverySpec>(activeCount + recentCount + historicalCount);
+        for (var i = 0; i < activeCount + recentCount + historicalCount; i++)
         {
             var isActive = i < activeCount;
+            var isRecent = !isActive && i < activeCount + recentCount;
             var driver = activeDrivers[i % activeDrivers.Count];
 
             var originDistrict = districtService.GetById(driver.DistrictId);
@@ -163,7 +168,9 @@ public sealed class DataSeeder(
 
             var createdAt = isActive
                 ? now.AddMinutes(-Rng.Next(15, 90))  // recent → still on the road
-                : now.AddDays(-7).AddSeconds(Rng.Next(0, (int)TimeSpan.FromDays(7).TotalSeconds));
+                : isRecent
+                    ? now.AddMinutes(-Rng.Next(60, 11 * 60))  // last ~11h, leaves room to complete within 12h
+                    : now.AddDays(-7).AddSeconds(Rng.Next(0, (int)TimeSpan.FromDays(7).TotalSeconds));
 
             specs.Add(new DeliverySpec(driver, origin, destination, createdAt, isActive));
         }

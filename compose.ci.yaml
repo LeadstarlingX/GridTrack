@@ -75,7 +75,6 @@ services:
       ASPNETCORE_ENVIRONMENT: Docker
       ConnectionStrings__ClickHouse: "Host=gridtrack.clickhouse;Port=8123;Database=gridtrack"
       Simulation__Enabled: "false"        # k6 is the only load source
-      FORCE_RESEED: "true"                # fresh seeded drivers each run
       Osrm__BaseUrl: "http://gridtrack.osrm:5000"
     ports:
       - "5098:8080"

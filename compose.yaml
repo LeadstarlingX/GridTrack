@@ -108,7 +108,6 @@ services:
       ConnectionStrings__ClickHouse: "Host=gridtrack.clickhouse;Port=8123;Database=gridtrack"
       Simulation__Enabled: "true"
       Simulation__PositionUpdateIntervalMs: "1000"
-      FORCE_RESEED: "${FORCE_RESEED:-false}"  # Override per-run: $env:FORCE_RESEED="true"; docker compose up -d gridtrack.api
     ports:
       - "5098:8080"   # same port as local dev — frontend .env.local needs no change
     depends_on:

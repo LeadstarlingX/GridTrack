@@ -47,7 +47,7 @@ docker compose up -d            # db, redis, rabbitmq, clickhouse, osrm, seq, ap
 # then, in GridTrack.Web:
 npm run dev                     # dashboard on :5173
 ```
-API on `:5098`, Python on `:8000`, Seq on `:8080`. Secrets (incl. `GROQ_API_KEY`) come from `.env` at the repo root. `FORCE_RESEED=true` clears and re-seeds the DB on startup.
+API on `:5098`, Python on `:8000`, Seq on `:8080`. Secrets (incl. `GROQ_API_KEY`) come from `.env` at the repo root. The DB is cleared and re-seeded with fresh data on every API startup.
 
 **Infra-only + local services (faster inner loop):**
 ```bash

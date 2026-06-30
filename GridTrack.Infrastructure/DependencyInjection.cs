@@ -211,6 +211,7 @@ public static class DependencyInjection
 
     private static IServiceCollection AddSeeding(this IServiceCollection services)
     {
+        services.AddSingleton<SeedCompletionSignal>();
         services.AddScoped<DataSeeder>();
         services.AddHostedService<SeedService>();
         return services;
