@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - ./.containers/database:/var/lib/postgresql
+      - gridtrack_db_data:/var/lib/postgresql
     ports:
       - "5433:5432"
     healthcheck:
@@ -145,3 +145,6 @@ services:
       retries: 5
       start_period: 15s
     restart: unless-stopped
+
+volumes:
+  gridtrack_db_data:

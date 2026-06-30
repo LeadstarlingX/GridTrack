@@ -19,6 +19,7 @@ public sealed class Delivery : BaseEntity
 	{
 		DeliveryId = deliveryId;
 		CurrentLocation = currentLocation;
+		PickupLocation = currentLocation;
 		DistrictId = districtId;
 		CreatedAt = createdAt;
 		ExpectedEta = expectedEta;
@@ -27,6 +28,12 @@ public sealed class Delivery : BaseEntity
 
 	public Guid DeliveryId { get; private set; }
 	public Point CurrentLocation { get; private set; } = null!;
+
+	// The order's pickup point, fixed at creation. Unlike CurrentLocation, this is never
+	// overwritten by MarkPickedUp/UpdateLocation as the driver moves — analytics that need
+	// "where did this order get picked up" (e.g. pickup-density heatmap) must read this,
+	// not CurrentLocation, once a delivery has progressed past Created.
+	public Point PickupLocation { get; private set; } = null!;
 	public DeliveryStatus Status { get; private set; }
 	public Guid? AssignedDriverId { get; private set; }
 	public DateTime? ExpectedEta { get; private set; }

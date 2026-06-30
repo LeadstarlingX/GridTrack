@@ -39,8 +39,11 @@ internal sealed class CachedAnalyticsReadService(
 
     public Task<GetH3DensityResponse> GetH3DensityAsync(
         DateTime from, DateTime to, int resolution, int? fromHour, int? toHour, CancellationToken ct)
+        // Keyed to the minute, not the day: rolling lookback windows (e.g. "last 3h") share a
+        // day-truncated key with every other window requested that day, which would otherwise
+        // serve a stale/wrong slider position for up to MapTtl after the first request.
         => cache.GetOrSetAsync(
-            $"analytics:h3:{from:yyyyMMdd}:{to:yyyyMMdd}:{resolution}:{fromHour ?? -1}:{toHour ?? -1}",
+            $"analytics:h3:{from:yyyyMMddHHmm}:{to:yyyyMMddHHmm}:{resolution}:{fromHour ?? -1}:{toHour ?? -1}",
             innerCt => inner.GetH3DensityAsync(from, to, resolution, fromHour, toHour, innerCt),
             MapTtl,
             ct);

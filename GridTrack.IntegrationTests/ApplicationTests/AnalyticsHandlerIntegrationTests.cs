@@ -51,6 +51,17 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
         return d;
     }
 
+    private static Delivery CreateDeliveredDeliveryAt(Point pickupLocation, string districtId, DateTime deliveredAt)
+    {
+        var createdAt = deliveredAt.AddMinutes(-30);
+        var d = Delivery.Create(Guid.NewGuid(), pickupLocation, districtId, createdAt, null).Value;
+        d.AssignDriver(Guid.NewGuid());
+        d.MarkPickedUp(pickupLocation, deliveredAt.AddMinutes(-10));
+        d.MarkDelivered(deliveredAt);
+        d.ClearDomainEvents();
+        return d;
+    }
+
     private static Delivery CreateInTransitDelivery(string districtId, Guid driverId)
     {
         var d = Delivery.Create(Guid.NewGuid(), Damascus, districtId, DateTime.UtcNow.AddMinutes(-30), null).Value;
@@ -176,43 +187,48 @@ public class AnalyticsHandlerIntegrationTests : BaseIntegrationTest
 
     [Test]
     [NotInParallel(Order = 511)]
-    public async Task GetH3DensityQuery_Should_Group_By_District_And_Count()
+    public async Task GetH3DensityQuery_Should_Group_By_H3Cell_And_Count_Delivered_Pickups()
     {
         await ResetDatabaseAsync();
 
+        // ~8km apart — distinct H3 cells at resolution 9 (cell edge ≈ 174m), same district label
+        // doesn't matter anymore: grouping is by the real pickup-point H3 cell, not DistrictId.
+        var zoneA = GeoFactory.CreatePoint(new Coordinate(36.2765, 33.5138));
+        var zoneB = GeoFactory.CreatePoint(new Coordinate(36.3500, 33.5800));
+        var deliveredAt = DateTime.UtcNow.AddMinutes(-30);
+
         await SeedDeliveriesAsync([
-            CreateDelivery("h3-zone-a"),
-            CreateDelivery("h3-zone-a"),
-            CreateDelivery("h3-zone-a"),
-            CreateDelivery("h3-zone-b"),
-            CreateDelivery("h3-zone-b"),
+            CreateDeliveredDeliveryAt(zoneA, "h3-zone-a", deliveredAt),
+            CreateDeliveredDeliveryAt(zoneA, "h3-zone-a", deliveredAt),
+            CreateDeliveredDeliveryAt(zoneA, "h3-zone-a", deliveredAt),
+            CreateDeliveredDeliveryAt(zoneB, "h3-zone-b", deliveredAt),
+            CreateDeliveredDeliveryAt(zoneB, "h3-zone-b", deliveredAt),
         ]);
 
         var result = await InvokeAsync<GetH3DensityResponse>(
             new GetH3DensityQuery(DateTime.UtcNow.AddHours(-1), DateTime.UtcNow.AddHours(1), 9, null, null));
 
         result.Cells.Should().HaveCount(2);
-        var zoneA = result.Cells.First(c => c.H3Index == "h3-zone-a");
-        var zoneB = result.Cells.First(c => c.H3Index == "h3-zone-b");
-        zoneA.DeliveryCount.Should().Be(3);
-        zoneB.DeliveryCount.Should().Be(2);
+        result.Cells.Sum(c => c.DeliveryCount).Should().Be(5);
+        result.Cells.Should().ContainSingle(c => c.DeliveryCount == 3);
+        result.Cells.Should().ContainSingle(c => c.DeliveryCount == 2);
     }
 
     [Test]
     [NotInParallel(Order = 512)]
-    public async Task GetH3DensityQuery_Should_Filter_By_Time_Window()
+    public async Task GetH3DensityQuery_Should_Filter_By_DeliveredAt_Time_Window()
     {
         await ResetDatabaseAsync();
 
-        var past = CreateDelivery("h3-zone-x", DateTime.UtcNow.AddDays(-5));
-        var recent = CreateDelivery("h3-zone-x", DateTime.UtcNow.AddHours(-1));
+        var zone = GeoFactory.CreatePoint(new Coordinate(36.2765, 33.5138));
+        var past = CreateDeliveredDeliveryAt(zone, "h3-zone-x", DateTime.UtcNow.AddDays(-5));
+        var recent = CreateDeliveredDeliveryAt(zone, "h3-zone-x", DateTime.UtcNow.AddHours(-1));
         await SeedDeliveriesAsync([past, recent]);
 
         var result = await InvokeAsync<GetH3DensityResponse>(
             new GetH3DensityQuery(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1), 9, null, null));
 
         result.Cells.Should().HaveCount(1);
-        result.Cells[0].H3Index.Should().Be("h3-zone-x");
         result.Cells[0].DeliveryCount.Should().Be(1);
     }
 

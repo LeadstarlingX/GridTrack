@@ -2,16 +2,20 @@ using Dapper;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
+using GridTrack.Application.Interfaces;
+using NetTopologySuite.Geometries;
 
 namespace GridTrack.Infrastructure.CQRS.ReadServices;
 
 public sealed class AnalyticsReadService : IAnalyticsReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
+    private readonly IH3GridService _h3GridService;
 
-    public AnalyticsReadService(ISqlConnectionFactory sqlConnectionFactory)
+    public AnalyticsReadService(ISqlConnectionFactory sqlConnectionFactory, IH3GridService h3GridService)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
+        _h3GridService = h3GridService;
     }
 
     public async Task<GetAnalyticsSummaryResponse> GetSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct)
@@ -72,6 +76,8 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
         return row;
     }
 
+    private sealed record PickupPointRow(double Lat, double Lng);
+
     public async Task<GetH3DensityResponse> GetH3DensityAsync(
         DateTime from,
         DateTime to,
@@ -84,20 +90,17 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
 
         const string sql = """
                            SELECT
-                               "DistrictId"                                    AS "H3Index",
-                               AVG(ST_Y("CurrentLocation"::geometry))::float   AS "Lat",
-                               AVG(ST_X("CurrentLocation"::geometry))::float   AS "Lng",
-                               COUNT(*)::int                                    AS "DeliveryCount"
+                               ST_Y("PickupLocation"::geometry)::float AS "Lat",
+                               ST_X("PickupLocation"::geometry)::float AS "Lng"
                            FROM public."Deliveries"
-                           WHERE "CreatedAt" >= @From
-                             AND "CreatedAt" <= @To
-                             AND (@FromHour IS NULL OR EXTRACT(HOUR FROM "CreatedAt" AT TIME ZONE 'UTC') >= @FromHour)
-                             AND (@ToHour   IS NULL OR EXTRACT(HOUR FROM "CreatedAt" AT TIME ZONE 'UTC') <= @ToHour)
-                           GROUP BY "DistrictId"
-                           ORDER BY "DeliveryCount" DESC
+                           WHERE "Status" = 4
+                             AND "DeliveredAt" >= @From
+                             AND "DeliveredAt" <= @To
+                             AND (@FromHour IS NULL OR EXTRACT(HOUR FROM "DeliveredAt" AT TIME ZONE 'UTC') >= @FromHour)
+                             AND (@ToHour   IS NULL OR EXTRACT(HOUR FROM "DeliveredAt" AT TIME ZONE 'UTC') <= @ToHour)
                            """;
 
-        var cells = await connection.QueryAsync<H3DensityCellResponse>(sql, new
+        var points = await connection.QueryAsync<PickupPointRow>(sql, new
         {
             From = from,
             To = to,
@@ -105,7 +108,32 @@ public sealed class AnalyticsReadService : IAnalyticsReadService
             ToHour = toHour,
         });
 
-        return new GetH3DensityResponse(cells.ToList());
+        var cells = new Dictionary<string, (double SumLat, double SumLng, int Count)>();
+        foreach (var point in points)
+        {
+            var cellResult = await _h3GridService.GetCellAsync(new Point(point.Lng, point.Lat), resolution);
+            if (cellResult.IsFailure)
+            {
+                continue;
+            }
+
+            var existing = cells.TryGetValue(cellResult.Value, out var agg)
+                ? agg
+                : (SumLat: 0.0, SumLng: 0.0, Count: 0);
+
+            cells[cellResult.Value] = (existing.SumLat + point.Lat, existing.SumLng + point.Lng, existing.Count + 1);
+        }
+
+        var result = cells
+            .Select(kv => new H3DensityCellResponse(
+                kv.Key,
+                kv.Value.SumLat / kv.Value.Count,
+                kv.Value.SumLng / kv.Value.Count,
+                kv.Value.Count))
+            .OrderByDescending(c => c.DeliveryCount)
+            .ToList();
+
+        return new GetH3DensityResponse(result);
     }
 
     public async Task<GetTrendsResponse> GetTrendsAsync(

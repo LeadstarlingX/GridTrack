@@ -18,6 +18,10 @@ public sealed class DeliveryConfiguration : IEntityTypeConfiguration<Delivery>
             .HasColumnType("geometry (point)")
             .IsRequired();
 
+        builder.Property(d => d.PickupLocation)
+            .HasColumnType("geometry (point)")
+            .IsRequired();
+
         builder.Property(d => d.Status)
             .HasConversion<int>()
             .IsRequired();
