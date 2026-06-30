@@ -14,7 +14,7 @@ public sealed record AssignDriverToDeliveryCommand(AssignDriverRequest Request);
 
 public sealed class AssignDriverToDeliveryHandler
 {
-    public async Task<(Result Result, DeliveryAssignedDomainEvent[] Events)> Handle(
+    public async Task<(Result Result, DeliveryAssignedDomainEvent[] Events, RouteCalculationMessage? RouteCalculation)> Handle(
         AssignDriverToDeliveryCommand command,
         IDeliveryReadService readService,
         IDeliveryRepository repository,
@@ -26,13 +26,13 @@ public sealed class AssignDriverToDeliveryHandler
 
         if (delivery is null)
         {
-            return (Result.Failure(ApplicationErrors.DeliveryNotFound), []);
+            return (Result.Failure(ApplicationErrors.DeliveryNotFound), [], null);
         }
 
         var result = delivery.AssignDriver(request.DriverId);
         if (result.IsFailure)
         {
-            return (result, []);
+            return (result, [], null);
         }
 
         await repository.UpdateAsync(delivery, ct);
@@ -41,7 +41,13 @@ public sealed class AssignDriverToDeliveryHandler
         var events = delivery.DomainEvents.OfType<DeliveryAssignedDomainEvent>().ToArray();
         delivery.ClearDomainEvents();
 
-        
-        return (Result.Success(), events);
+        // Manual assignment bypasses the dispatch strategy entirely, so unlike auto-assign
+        // nothing else triggers route geometry/cost calculation. Cascade it as a third tuple
+        // value — Wolverine treats each tuple item independently (equivalent to
+        // bus.PublishAsync, routed through the same route-calculation local queue configured
+        // in Program.cs) — so manually assigned deliveries get RouteCost/RoutePolyline too.
+        var routeCalculation = new RouteCalculationMessage(request.DeliveryId, request.DriverId);
+
+        return (Result.Success(), events, routeCalculation);
     }
 }

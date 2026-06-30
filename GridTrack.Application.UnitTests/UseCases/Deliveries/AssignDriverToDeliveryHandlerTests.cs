@@ -17,13 +17,14 @@ public class AssignDriverToDeliveryHandlerTests
     public async Task Handle_Should_Return_Event_And_Clear_DomainEvents()
     {
         var delivery = CreateDelivery();
+        var driverId = Guid.NewGuid();
         var readService = new FakeDeliveryReadService(delivery);
         var repository = new FakeDeliveryRepository();
         var unitOfWork = new CreateDeliveryHandlerTests.FakeUnitOfWork();
         var handler = new AssignDriverToDeliveryHandler();
 
-        var (result, events) = await handler.Handle(
-            new AssignDriverToDeliveryCommand(new AssignDriverRequest(delivery.DeliveryId, Guid.NewGuid())),
+        var (result, events, routeCalculation) = await handler.Handle(
+            new AssignDriverToDeliveryCommand(new AssignDriverRequest(delivery.DeliveryId, driverId)),
             readService,
             repository,
             unitOfWork,
@@ -33,6 +34,9 @@ public class AssignDriverToDeliveryHandlerTests
         await Assert.That(events.OfType<DeliveryAssignedDomainEvent>().Count()).IsEqualTo(1);
         await Assert.That(delivery.DomainEvents.Count).IsEqualTo(0);
         await Assert.That(unitOfWork.SavedCount).IsEqualTo(1);
+        await Assert.That(routeCalculation).IsNotNull();
+        await Assert.That(routeCalculation!.DeliveryId).IsEqualTo(delivery.DeliveryId);
+        await Assert.That(routeCalculation.DriverId).IsEqualTo(driverId);
     }
 
     [Test]
@@ -43,7 +47,7 @@ public class AssignDriverToDeliveryHandlerTests
         var unitOfWork = new CreateDeliveryHandlerTests.FakeUnitOfWork();
         var handler = new AssignDriverToDeliveryHandler();
 
-        var (result, events) = await handler.Handle(
+        var (result, events, routeCalculation) = await handler.Handle(
             new AssignDriverToDeliveryCommand(new AssignDriverRequest(Guid.NewGuid(), Guid.NewGuid())),
             readService,
             repository,
@@ -54,6 +58,7 @@ public class AssignDriverToDeliveryHandlerTests
         await Assert.That(result.Error).IsEqualTo(ApplicationErrors.DeliveryNotFound);
         await Assert.That(events.Count()).IsEqualTo(0);
         await Assert.That(unitOfWork.SavedCount).IsEqualTo(0);
+        await Assert.That(routeCalculation).IsNull();
     }
 
     private static Delivery CreateDelivery()
