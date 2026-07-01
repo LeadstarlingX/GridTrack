@@ -19,6 +19,10 @@ public sealed class SimulatorOptions
     // Post-delivery rest before next assignment
     public int DwellMinSeconds { get; set; } = 20;
     public int DwellMaxSeconds { get; set; } = 60;
+    // Route deviation — driver briefly leaves optimal path during transit
+    public int RouteDeviationProbabilityPct { get; set; } = 12;
+    public int RouteDeviationDurationTicks { get; set; } = 8;
+    public double RouteDeviationRadiusDeg { get; set; } = 0.003; // ~300 m
     // Anomaly / surge / incident simulation
     public int AnomalyIntervalMs { get; set; } = 15_000;
     public int SurgeIntervalMs { get; set; } = 30_000;

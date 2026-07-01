@@ -41,6 +41,11 @@ public sealed class PositionSimulatorService(
         DeliveryPhase Phase,
         int CancelAtWaypoint,
         int StallAtWaypoint,
+        // Route deviation: driver broadcasts an offset position for DeviationTicksLeft ticks
+        int RouteDeviationWaypoint,
+        int DeviationTicksLeft,
+        double DeviationLatOffset,
+        double DeviationLngOffset,
         DateTime? DwellUntil,
         DateTime LastEtaRefreshAt);
 
@@ -126,8 +131,10 @@ public sealed class PositionSimulatorService(
                     LastBroadcastAt: DateTime.UtcNow,
                     PausedUntil: null, StallBroadcastSent: false,
                     ActiveDeliveryId: null, Phase: DeliveryPhase.Patrol,
-                    CancelAtWaypoint: -1, StallAtWaypoint: -1, DwellUntil: null,
-                    LastEtaRefreshAt: DateTime.MinValue));
+                    CancelAtWaypoint: -1, StallAtWaypoint: -1,
+                    RouteDeviationWaypoint: -1, DeviationTicksLeft: 0,
+                    DeviationLatOffset: 0, DeviationLngOffset: 0,
+                    DwellUntil: null, LastEtaRefreshAt: DateTime.MinValue));
             }
             _drivers = drivers;
         }
@@ -176,12 +183,16 @@ public sealed class PositionSimulatorService(
                 var lng = d.CentroidLng + (Random.Shared.NextDouble() * 2 - 1) * d.JitterRadius;
                 var createdAt = now.AddSeconds(-Random.Shared.Next(30, 180));
                 var eta = createdAt.AddMinutes(20 + Random.Shared.Next(40));
+                // PickupLocation = CurrentLocation for pending deliveries (pickup hasn't happened yet;
+                // the domain's MarkPickedUp command will carry the real position through EF)
                 await conn.ExecuteAsync(
                     """
                     INSERT INTO public."Deliveries"
-                        ("DeliveryId", "CurrentLocation", "Status", "DistrictId", "CreatedAt", "ExpectedEta", "AnomalyFlag")
+                        ("DeliveryId", "CurrentLocation", "PickupLocation", "Status", "DistrictId", "CreatedAt", "ExpectedEta", "AnomalyFlag")
                     VALUES
-                        (@Id, ST_SetSRID(ST_MakePoint(@Lng, @Lat), 4326), 0, @DistrictId, @CreatedAt, @ExpectedEta, false)
+                        (@Id, ST_SetSRID(ST_MakePoint(@Lng, @Lat), 4326),
+                             ST_SetSRID(ST_MakePoint(@Lng, @Lat), 4326),
+                         0, @DistrictId, @CreatedAt, @ExpectedEta, false)
                     """,
                     new { Id = Guid.NewGuid(), Lng = lng, Lat = lat, DistrictId = d.Id, CreatedAt = createdAt, ExpectedEta = eta });
             }
@@ -286,6 +297,8 @@ public sealed class PositionSimulatorService(
                     Direction = 1,
                     CancelAtWaypoint = -1,
                     StallAtWaypoint = -1,
+                    RouteDeviationWaypoint = -1,
+                    DeviationTicksLeft = 0,
                     LastBroadcastAt = now,
                 };
                 logger.LogDebug("Driver {Name} cancelled before pickup", d.Name);
@@ -304,7 +317,7 @@ public sealed class PositionSimulatorService(
                 var dropLng = dropDistrict.CentroidLng + (Random.Shared.NextDouble() * 2 - 1) * dropDistrict.JitterRadius;
                 var dropWaypoints = await FetchRouteWaypointsAsync(pickLat, pickLng, dropLat, dropLng, ct);
 
-                // Roll once: will this transit have a stall and/or a cancellation?
+                // Roll once: stall, cancellation, and route deviation for this transit leg
                 var willStall = Random.Shared.Next(100) < opts.StallPauseProbabilityPct;
                 var willCancelTransit = Random.Shared.Next(100) < opts.CancellationProbabilityPct;
                 var stallAt = willStall
@@ -317,6 +330,13 @@ public sealed class PositionSimulatorService(
                 // Ensure stall fires before cancellation when both are set
                 if (stallAt >= 0 && cancelTransitAt >= 0 && stallAt >= cancelTransitAt)
                     stallAt = Math.Max(0, cancelTransitAt / 2);
+                // Route deviation: driver leaves optimal path for DeviationDurationTicks ticks
+                var willDeviate = Random.Shared.Next(100) < opts.RouteDeviationProbabilityPct;
+                var deviateAt = willDeviate
+                    ? Random.Shared.Next(15, Math.Max(16, dropWaypoints.Count * 2 / 3))
+                    : -1;
+                var devLatOff = willDeviate ? (Random.Shared.NextDouble() * 2 - 1) * opts.RouteDeviationRadiusDeg : 0;
+                var devLngOff = willDeviate ? (Random.Shared.NextDouble() * 2 - 1) * opts.RouteDeviationRadiusDeg : 0;
 
                 var etaSecs = dropWaypoints.Count * opts.PositionUpdateIntervalMs / 1000.0 * opts.EtaBufferMultiplier;
                 var etaTime = now.AddSeconds(etaSecs);
@@ -339,6 +359,10 @@ public sealed class PositionSimulatorService(
                     Direction = 1,
                     CancelAtWaypoint = cancelTransitAt,
                     StallAtWaypoint = stallAt,
+                    RouteDeviationWaypoint = deviateAt,
+                    DeviationTicksLeft = 0,
+                    DeviationLatOffset = devLatOff,
+                    DeviationLngOffset = devLngOff,
                     LastBroadcastAt = now,
                 };
                 logger.LogDebug("Driver {Name} picked up, heading to {District}", d.Name, dropDistrict.Id);
@@ -377,6 +401,8 @@ public sealed class PositionSimulatorService(
                     Direction = 1,
                     CancelAtWaypoint = -1,
                     StallAtWaypoint = -1,
+                    RouteDeviationWaypoint = -1,
+                    DeviationTicksLeft = 0,
                     DwellUntil = now.AddSeconds(dwellSecs),
                     LastBroadcastAt = now,
                 };
@@ -404,6 +430,8 @@ public sealed class PositionSimulatorService(
                     Direction = 1,
                     CancelAtWaypoint = -1,
                     StallAtWaypoint = -1,
+                    RouteDeviationWaypoint = -1,
+                    DeviationTicksLeft = 0,
                     DwellUntil = now.AddSeconds(dwellSecs),
                     LastBroadcastAt = now,
                 };
@@ -411,8 +439,37 @@ public sealed class PositionSimulatorService(
                 continue;
             }
 
+            // ── Route deviation onset ─────────────────────────────────────
+            if (d.Phase == DeliveryPhase.MovingToDropoff &&
+                d.RouteDeviationWaypoint >= 0 && d.WaypointIndex >= d.RouteDeviationWaypoint)
+            {
+                d = d with { RouteDeviationWaypoint = -1, DeviationTicksLeft = opts.RouteDeviationDurationTicks };
+                var wp = d.Waypoints[d.WaypointIndex];
+                broadcastTasks.Add(hub.Clients.All.SendCoreAsync("AnomalyBroadcast",
+                [new
+                {
+                    id          = $"sim-dev-{Guid.NewGuid():N}",
+                    deliveryId  = d.ActiveDeliveryId?.ToString() ?? Guid.NewGuid().ToString(),
+                    driverId    = d.Id.ToString(),
+                    driverName  = d.Name,
+                    anomalyType = "RouteDeviation",
+                    reason      = "Driver deviated from assigned route",
+                    districtId  = d.DistrictId,
+                    lat         = wp.Lat + d.DeviationLatOffset,
+                    lng         = wp.Lng + d.DeviationLngOffset,
+                    timestamp   = now,
+                }], ct));
+            }
+
             // ── Advance position and broadcast ────────────────────────────
             var (lat, lng) = d.Waypoints[d.WaypointIndex];
+            // Apply offset while deviation is active; driver appears off the optimal route
+            if (d.DeviationTicksLeft > 0)
+            {
+                lat += d.DeviationLatOffset;
+                lng += d.DeviationLngOffset;
+                d = d with { DeviationTicksLeft = d.DeviationTicksLeft - 1 };
+            }
             var (nextIdx, nextDir) = AdvanceIndex(d.WaypointIndex, d.Direction, d.Waypoints.Count);
 
             // ── ETA refresh every 30 s during active delivery transit ─────
@@ -498,12 +555,10 @@ public sealed class PositionSimulatorService(
             var route = await osrm.GetRouteAsync(fromLat, fromLng, toLat, toLng, cts.Token);
             if (route?.Waypoints is { Count: > 1 } pts)
             {
-                var fwd = pts.ToList();
-                var rev = fwd.AsEnumerable().Reverse().Skip(1).ToList();
-                var combined = new List<(double, double)>(fwd.Count + rev.Count);
-                combined.AddRange(fwd);
-                combined.AddRange(rev);
-                return combined;
+                // Return forward path only. Patrol bouncing (A→B→A) is handled by AdvanceIndex
+                // reversing direction at boundaries — no need to embed the reverse in waypoints.
+                // Delivery routes must end at B (destination), not wrap back to A.
+                return pts.ToList();
             }
         }
         catch (Exception ex)
