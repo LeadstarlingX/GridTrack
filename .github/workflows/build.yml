@@ -94,9 +94,14 @@ jobs:
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     env:
-      K6_COMPARE_VUS: "1500"
+      K6_COMPARE_VUS: "1600"
       K6_STRESS_VUS: "1200"
-      K6_THROUGHPUT_MAX_VUS: "2000"
+      K6_THROUGHPUT_MAX_VUS: "3000"
+      K6_RAMP_DUR: "30s"
+      K6_HOLD_DUR: "2m"
+      K6_DOWN_DUR: "20s"
+      K6_CONST_DUR: "3m"
+      K6_START_DUR: "30s"
 
     steps:
       - name: Check out .NET repo
@@ -128,6 +133,7 @@ jobs:
             echo "| Docker | $(docker --version | cut -d, -f1) |"
             echo "| Per-container limits | none — every service **and** k6 share the runner (\`compose.ci.yaml\`) |"
             echo "| k6 VUs | compare ${K6_COMPARE_VUS} · stress ${K6_STRESS_VUS} · throughput ≤${K6_THROUGHPUT_MAX_VUS} |"
+            echo "| k6 Timing | ramp ${K6_RAMP_DUR} · hold ${K6_HOLD_DUR} · down ${K6_DOWN_DUR} · const ${K6_CONST_DUR} |"
             echo "| Captured (UTC) | $(date -u '+%Y-%m-%d %H:%M') |"
           } > load-tests/results/runner-specs.md
           cat load-tests/results/runner-specs.md >> "$GITHUB_STEP_SUMMARY"
