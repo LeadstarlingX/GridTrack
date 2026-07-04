@@ -7,7 +7,7 @@ container right to their doorstep.
 
 # GridTrack
 
-Real-time fleet tracking & dispatch for a Damascus delivery fleet. A partner company's
+AI Agent-integrable real-time fleet tracking & dispatch for a Damascus delivery fleet. A partner company's
 backend POSTs driver GPS telemetry (B2B, server-to-server); GridTrack tracks deliveries
 through their lifecycle, detects anomalies, forecasts district demand, and surfaces
 AI-assisted dispatch decisions — designed to stay correct and smooth at a target load of
