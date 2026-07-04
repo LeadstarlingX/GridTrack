@@ -130,6 +130,9 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
 
         public Task<string?> TranscribeAsync(Stream audio, string fileName, string contentType, CancellationToken ct)
             => Task.FromResult<string?>(null);
+
+        public Task<byte[]?> GenerateReportAsync(IEnumerable<ChatMessageDto> messages, string csvContext, CancellationToken ct)
+            => Task.FromResult<byte[]?>(null);
     }
 
     private sealed class UnavailableRecommendationService : IAiRecommendationService

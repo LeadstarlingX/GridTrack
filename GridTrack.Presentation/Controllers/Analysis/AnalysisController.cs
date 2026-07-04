@@ -37,9 +37,12 @@ public class AnalysisController(IMessageBus bus, IAnalysisChatService chatServic
         Response.Headers["Cache-Control"]     = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
 
-        await foreach (var token in chatService.StreamAsync(request.Question, request.CsvData, ct))
+        await foreach (var item in chatService.StreamAsync(request.Question, request.CsvData, ct))
         {
-            var data  = JsonSerializer.Serialize(new { token });
+            // \x01 prefix means it's a tool-call event, not a token
+            var data = item.Length > 0 && item[0] == '\x01'
+                ? JsonSerializer.Serialize(new { tool = item[1..] })
+                : JsonSerializer.Serialize(new { token = item });
             var bytes = Encoding.UTF8.GetBytes($"data: {data}\n\n");
             await Response.Body.WriteAsync(bytes, ct);
             await Response.Body.FlushAsync(ct);
@@ -48,6 +51,18 @@ public class AnalysisController(IMessageBus bus, IAnalysisChatService chatServic
         var done = Encoding.UTF8.GetBytes("data: [DONE]\n\n");
         await Response.Body.WriteAsync(done, ct);
         await Response.Body.FlushAsync(ct);
+    }
+
+    /// <summary>POST /api/analysis/chat/report — generates a 1-page PDF operations report.</summary>
+    [HttpPost("chat/report")]
+    public async Task<IActionResult> GenerateReport(
+        [FromBody] ChatRequest request,
+        CancellationToken ct)
+    {
+        var pdf = await chatService.GenerateReportAsync(request.Messages, request.CsvData, ct);
+        return pdf is null
+            ? StatusCode(503, new { code = "REPORT_FAILED", message = "Report generation failed." })
+            : File(pdf, "application/pdf", "gridtrack-report.pdf");
     }
 
     /// <summary>POST /api/analysis/transcribe — transcribes audio via Groq Whisper.</summary>

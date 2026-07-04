@@ -114,5 +114,8 @@ public class AnalysisChatHandlerTests
 
         public Task<string?> TranscribeAsync(Stream audio, string fileName, string contentType, CancellationToken ct)
             => Task.FromResult<string?>(null);
+
+        public Task<byte[]?> GenerateReportAsync(IEnumerable<ChatMessageDto> messages, string csvContext, CancellationToken ct)
+            => Task.FromResult<byte[]?>(null);
     }
 }

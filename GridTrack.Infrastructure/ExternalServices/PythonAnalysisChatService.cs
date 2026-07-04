@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using GridTrack.Application.Dtos;
 using GridTrack.Application.Interfaces;
 
 namespace GridTrack.Infrastructure.ExternalServices;
@@ -55,16 +56,30 @@ internal sealed class PythonAnalysisChatService(HttpClient http) : IAnalysisChat
                 var data = line["data: ".Length..];
                 if (data == "[DONE]") yield break;
 
-                string token;
+                // C# disallows yield inside try/catch — parse first, yield after
+                string? yieldItem = null;
                 try
                 {
                     using var doc = JsonDocument.Parse(data);
-                    token = doc.RootElement.GetProperty("token").GetString() ?? "";
+                    var root = doc.RootElement;
+
+                    if (root.TryGetProperty("tool", out var toolProp))
+                    {
+                        var toolName = toolProp.GetString() ?? "";
+                        if (!string.IsNullOrEmpty(toolName))
+                            yieldItem = "\x01" + toolName;
+                    }
+                    else if (root.TryGetProperty("token", out var tokProp))
+                    {
+                        var tok = tokProp.GetString() ?? "";
+                        if (!string.IsNullOrEmpty(tok))
+                            yieldItem = tok;
+                    }
                 }
                 catch { continue; }
 
-                if (!string.IsNullOrEmpty(token))
-                    yield return token;
+                if (yieldItem is not null)
+                    yield return yieldItem;
             }
         }
     }
@@ -117,6 +132,26 @@ internal sealed class PythonAnalysisChatService(HttpClient http) : IAnalysisChat
         {
             return null;
         }
+    }
+
+    public async Task<byte[]?> GenerateReportAsync(
+        IEnumerable<ChatMessageDto> messages,
+        string csvContext,
+        CancellationToken ct)
+    {
+        try
+        {
+            var response = await http.PostAsJsonAsync("/chat/report", new
+            {
+                messages = messages.Select(m => new { role = m.Role.ToLowerInvariant(), content = m.Content }),
+                context  = new { csv = csvContext },
+            }, ct);
+
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadAsByteArrayAsync(ct)
+                : null;
+        }
+        catch { return null; }
     }
 
     private sealed record PythonChatResponse(string Answer);
