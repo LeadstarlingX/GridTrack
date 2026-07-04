@@ -24,22 +24,27 @@ def assembly_label(pkg_name):
             return label
     return None
 
-totals = {label: [0, 0] for label in TARGET.values()}  # [covered_lines, total_lines]
+# Use line-rate from each package element (the value ReportGenerator computes and
+# displays in the HTML report's Percentage column) weighted by line count so that
+# assemblies split across multiple namespace-packages are aggregated correctly.
+totals = {label: [0.0, 0] for label in TARGET.values()}  # [covered_weighted, total_lines]
 
 for pkg in root.iter("package"):
     label = assembly_label(pkg.get("name", ""))
     if label is None:
         continue
-    for line_elem in pkg.iter("line"):
-        totals[label][1] += 1
-        if int(line_elem.get("hits", 0)) > 0:
-            totals[label][0] += 1
+    rate  = float(pkg.get("line-rate", 0))
+    lines = sum(1 for _ in pkg.iter("line"))
+    if lines == 0:
+        continue
+    totals[label][0] += rate * lines
+    totals[label][1] += lines
 
 rows = []
 for prefix, label in TARGET.items():
-    covered, total = totals[label]
+    covered_weighted, total = totals[label]
     if total > 0:
-        pct = covered / total * 100
+        pct = covered_weighted / total * 100
         rows.append(f"| {label} | {pct:.1f}% |")
 
 if not rows:

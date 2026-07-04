@@ -1,3 +1,10 @@
+In response to trends in the gaming industry, as of 1st of September 2026, GridTrack will cease 
+production of the CD pipeline into docker containers and shift to production of floppy disks.
+
+Developers can still order a pigeon carrier to receive the latest updates within a stainless-steel
+container right to their doorstep.
+
+
 # GridTrack
 
 Real-time fleet tracking & dispatch for a Damascus delivery fleet. A partner company's
@@ -218,10 +225,10 @@ High coverage on the layers that hold the business rules — and we measure the 
 <!-- COVERAGE_START -->
 | Layer | Line Coverage |
 |-------|---------------|
-| Domain | 97.1% |
-| Application | 87.6% |
-| Infrastructure | 75.7% |
-| Presentation | — |
+| Domain | 94.3% |
+| Application | 85.2% |
+| Infrastructure | 76.7% |
+| Presentation | 87.1% |
 <!-- COVERAGE_END -->
 
 ## License
