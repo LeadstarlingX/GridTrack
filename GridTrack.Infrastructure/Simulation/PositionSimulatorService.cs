@@ -546,7 +546,7 @@ public sealed class PositionSimulatorService(
             };
 
             var routeAhead = d.Phase != DeliveryPhase.Patrol
-                ? d.Waypoints.Skip(d.WaypointIndex).Take(40)
+                ? d.Waypoints.Skip(d.WaypointIndex)
                     .Select(static w => new[] { w.Lat, w.Lng })
                     .ToArray()
                 : null;
