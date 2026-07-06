@@ -10,4 +10,6 @@ public interface IForecastService
         double historicalAvgDeliveries,
         bool recentSurgeDetected,
         CancellationToken ct);
+
+    Task<IReadOnlyList<TrendPointResponse>?> GetDeliveryTrendForecastAsync(int days, CancellationToken ct);
 }

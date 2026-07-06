@@ -47,8 +47,28 @@ internal sealed class PythonForecastService(HttpClient http) : IForecastService
         }
     }
 
+    public async Task<IReadOnlyList<TrendPointResponse>?> GetDeliveryTrendForecastAsync(int days, CancellationToken ct)
+    {
+        try
+        {
+            var response = await http.GetAsync($"/forecast/delivery-trend?days={days}", ct);
+            if (!response.IsSuccessStatusCode) return null;
+            var result = await response.Content.ReadFromJsonAsync<PythonTrendForecastResponse>(
+                cancellationToken: ct);
+            return result?.Forecast.Select(p => new TrendPointResponse(p.Bucket, p.Value)).ToList();
+        }
+        catch { return null; }
+    }
+
     private sealed record PythonStaffingResponse(
         [property: JsonPropertyName("recommended_drivers")] int    RecommendedDrivers,
         [property: JsonPropertyName("confidence")]          string Confidence,
         [property: JsonPropertyName("reasoning")]           string Reasoning);
+
+    private sealed record PythonTrendPoint(
+        [property: JsonPropertyName("bucket")] string Bucket,
+        [property: JsonPropertyName("value")]  double Value);
+
+    private sealed record PythonTrendForecastResponse(
+        [property: JsonPropertyName("forecast")] IReadOnlyList<PythonTrendPoint> Forecast);
 }

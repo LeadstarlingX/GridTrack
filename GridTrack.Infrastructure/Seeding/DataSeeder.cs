@@ -84,6 +84,16 @@ public sealed class DataSeeder(
         ("عدنان جوهر",    "عدنان",    CarType.Truck,      "10010048", "+963955100048", 5000m,  "evening"),
         ("مصطفى حلبي",    "مصطفى",    CarType.Sedan,      "10010049", "+963944100049", 200m,   "morning"),
         ("تامر ناصيف",    "تامر",     CarType.Motorcycle, "10010050", "+963911100050", 30m,    "evening"),
+        ("مروان فرج",     "مروان",    CarType.Sedan,      "10010051", "+963955100051", 200m,   "morning"),
+        ("حيدر عمر",      "حيدر",     CarType.Van,        "10010052", "+963944100052", 1000m,  "evening"),
+        ("سيف الدين",     "سيف",      CarType.Motorcycle, "10010053", "+963911100053", 30m,    "morning"),
+        ("كمال درويش",    "كمال",     CarType.Sedan,      "10010054", "+963955100054", 200m,   "evening"),
+        ("نبيل زريق",     "نبيل",     CarType.Truck,      "10010055", "+963944100055", 5000m,  "morning"),
+        ("وسيم منصور",    "وسيم",     CarType.Sedan,      "10010056", "+963911100056", 200m,   "evening"),
+        ("أديب حمدان",    "أديب",     CarType.Van,        "10010057", "+963955100057", 1000m,  "morning"),
+        ("شادي خليل",     "شادي",     CarType.Motorcycle, "10010058", "+963944100058", 30m,    "evening"),
+        ("علاء الدين",    "علاء",     CarType.Sedan,      "10010059", "+963911100059", 200m,   "morning"),
+        ("زكريا حداد",    "زكريا",    CarType.Sedan,      "10010060", "+963955100060", 200m,   "evening"),
     ];
 
     public async Task SeedAsync(CancellationToken ct)
@@ -205,7 +215,7 @@ public sealed class DataSeeder(
             delivery.MarkPickedUp(spec.Origin, pickedUpAt);
             delivery.UpdateLocation(spec.Origin, pickedUpAt); // → InTransit
             delivery.SetRoute(distanceMeters, durationSeconds,
-                costCalculator.Calculate(distanceMeters, durationSeconds));
+                costCalculator.Calculate(distanceMeters, DateTime.UtcNow));
             delivery.ClearDomainEvents();
 
             if (!spec.IsActive)

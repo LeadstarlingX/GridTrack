@@ -5,6 +5,7 @@ using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.Interfaces;
 using GridTrack.Application.UseCases.Deliveries;
 using GridTrack.Domain.Abstractions;
+using GridTrack.Domain.ValueObjects;
 using GridTrack.Infrastructure.Hubs;
 using GridTrack.Infrastructure.Seeding;
 using Microsoft.AspNetCore.SignalR;
@@ -47,7 +48,8 @@ public sealed class PositionSimulatorService(
         double DeviationLatOffset,
         double DeviationLngOffset,
         DateTime? DwellUntil,
-        DateTime LastEtaRefreshAt);
+        DateTime LastEtaRefreshAt,
+        bool IsAggressiveStaller);
 
     private sealed record SimDelivery(Guid Id, double Lat, double Lng, string DistrictId);
 
@@ -134,9 +136,27 @@ public sealed class PositionSimulatorService(
                     CancelAtWaypoint: -1, StallAtWaypoint: -1,
                     RouteDeviationWaypoint: -1, DeviationTicksLeft: 0,
                     DeviationLatOffset: 0, DeviationLngOffset: 0,
-                    DwellUntil: null, LastEtaRefreshAt: DateTime.MinValue));
+                    DwellUntil: null, LastEtaRefreshAt: DateTime.MinValue,
+                    IsAggressiveStaller: i < 3));
             }
             _drivers = drivers;
+
+            // Cancel all stale non-terminal deliveries left over from previous simulator runs.
+            // Without this, old assigned/in-transit deliveries pollute the driver status query.
+            if (drivers.Count > 0)
+            {
+                var ids = drivers.Select(d => d.Id).ToArray();
+                var cancelled = await conn.ExecuteAsync(
+                    """
+                    UPDATE public."Deliveries"
+                    SET "Status" = 5, "CancelledAt" = @Now
+                    WHERE "AssignedDriverId" = ANY(@Ids)
+                      AND "Status" NOT IN (4, 5)
+                    """,
+                    new { Now = DateTime.UtcNow, Ids = ids });
+                if (cancelled > 0)
+                    logger.LogInformation("PositionSimulator: cancelled {Count} stale deliveries on startup", cancelled);
+            }
         }
         catch (Exception ex) { logger.LogError(ex, "PositionSimulator: failed to load drivers"); }
     }
@@ -250,6 +270,13 @@ public sealed class PositionSimulatorService(
                 Random.Shared.Next(100) < opts.DeliveryAssignProbabilityPct &&
                 _pendingDeliveries.Count > 0)
             {
+                // Keep at least 2 drivers freely patrolling for demo visibility
+                var freePatrolCount = _drivers.Count(x =>
+                    x.Phase == DeliveryPhase.Patrol &&
+                    !x.PausedUntil.HasValue &&
+                    (!x.DwellUntil.HasValue || x.DwellUntil.Value <= now));
+                if (freePatrolCount <= 2) goto advancePosition;
+
                 var delivery = _pendingDeliveries.Dequeue();
                 _activeDeliveryIds.Add(delivery.Id);
                 var (curLat, curLng) = d.Waypoints[d.WaypointIndex];
@@ -318,10 +345,14 @@ public sealed class PositionSimulatorService(
                 var dropWaypoints = await FetchRouteWaypointsAsync(pickLat, pickLng, dropLat, dropLng, ct);
 
                 // Roll once: stall, cancellation, and route deviation for this transit leg
-                var willStall = Random.Shared.Next(100) < opts.StallPauseProbabilityPct;
+                // Aggressive stallers (first 3 drivers) stall almost always and very early
+                var stallProb = d.IsAggressiveStaller ? 90 : opts.StallPauseProbabilityPct;
+                var willStall = Random.Shared.Next(100) < stallProb;
                 var willCancelTransit = Random.Shared.Next(100) < opts.CancellationProbabilityPct;
                 var stallAt = willStall
-                    ? Random.Shared.Next(10, Math.Max(11, dropWaypoints.Count / 2))
+                    ? (d.IsAggressiveStaller
+                        ? Random.Shared.Next(2, Math.Max(3, dropWaypoints.Count / 4))
+                        : Random.Shared.Next(10, Math.Max(11, dropWaypoints.Count / 2)))
                     : -1;
                 var cancelTransitAt = willCancelTransit
                     ? Random.Shared.Next(dropWaypoints.Count / 3,
@@ -346,6 +377,11 @@ public sealed class PositionSimulatorService(
                 logger.LogInformation("[SIM] Wrote ETA {Secs}s for delivery {Id} BEFORE pickup command", etaSecs, d.ActiveDeliveryId);
 
                 await InvokeCommandAsync(new MarkDeliveryPickedUpCommand(new PickUpDeliveryRequest(
+                    d.ActiveDeliveryId!.Value,
+                    Geo.CreatePoint(new Coordinate(pickLng, pickLat)),
+                    now)), ct);
+                // Advance delivery from PickedUp → InTransit so driver shows as "in-transit" in the API
+                await InvokeCommandAsync(new UpdateDeliveryLocationCommand(new UpdateLocationRequest(
                     d.ActiveDeliveryId!.Value,
                     Geo.CreatePoint(new Coordinate(pickLng, pickLat)),
                     now)), ct);
@@ -378,6 +414,9 @@ public sealed class PositionSimulatorService(
                     PausedUntil = now.AddSeconds(opts.StallPauseDurationSeconds),
                     StallAtWaypoint = -1,
                 };
+                if (d.ActiveDeliveryId.HasValue)
+                    await InvokeCommandAsync(new FlagDeliveryAnomalyCommand(new FlagAnomalyRequest(
+                        d.ActiveDeliveryId.Value, AnomalyType.UnexpectedStop, "Driver stalled during transit")), ct);
                 continue;
             }
 
@@ -435,15 +474,17 @@ public sealed class PositionSimulatorService(
                     DwellUntil = now.AddSeconds(dwellSecs),
                     LastBroadcastAt = now,
                 };
+                // Broadcast immediately as available so the frontend doesn't show in-transit during dwell
+                positionBatch.Add(new { driverId = d.Id, lat = dropLat2, lng = dropLng2, districtId = d.DistrictId, deliveryId = (string?)null, routeAhead = (object?)null });
                 logger.LogDebug("Driver {Name} completed delivery", d.Name);
                 continue;
             }
 
-            // ── Route deviation onset ─────────────────────────────────────
+            // ── Route deviation onset — anomaly event only, dot stays on route ──
             if (d.Phase == DeliveryPhase.MovingToDropoff &&
                 d.RouteDeviationWaypoint >= 0 && d.WaypointIndex >= d.RouteDeviationWaypoint)
             {
-                d = d with { RouteDeviationWaypoint = -1, DeviationTicksLeft = opts.RouteDeviationDurationTicks };
+                d = d with { RouteDeviationWaypoint = -1, DeviationTicksLeft = 0 };
                 var wp = d.Waypoints[d.WaypointIndex];
                 broadcastTasks.Add(hub.Clients.All.SendCoreAsync("AnomalyBroadcast",
                 [new
@@ -455,21 +496,18 @@ public sealed class PositionSimulatorService(
                     anomalyType = "RouteDeviation",
                     reason      = "Driver deviated from assigned route",
                     districtId  = d.DistrictId,
-                    lat         = wp.Lat + d.DeviationLatOffset,
-                    lng         = wp.Lng + d.DeviationLngOffset,
+                    lat         = wp.Lat,
+                    lng         = wp.Lng,
                     timestamp   = now,
                 }], ct));
+                if (d.ActiveDeliveryId.HasValue)
+                    await InvokeCommandAsync(new FlagDeliveryAnomalyCommand(new FlagAnomalyRequest(
+                        d.ActiveDeliveryId.Value, AnomalyType.RouteDeviation, "Driver deviated from assigned route")), ct);
             }
 
             // ── Advance position and broadcast ────────────────────────────
+            advancePosition:
             var (lat, lng) = d.Waypoints[d.WaypointIndex];
-            // Apply offset while deviation is active; driver appears off the optimal route
-            if (d.DeviationTicksLeft > 0)
-            {
-                lat += d.DeviationLatOffset;
-                lng += d.DeviationLngOffset;
-                d = d with { DeviationTicksLeft = d.DeviationTicksLeft - 1 };
-            }
             var (nextIdx, nextDir) = AdvanceIndex(d.WaypointIndex, d.Direction, d.Waypoints.Count);
 
             // ── ETA refresh every 30 s during active delivery transit ─────

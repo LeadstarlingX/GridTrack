@@ -98,7 +98,7 @@ internal sealed class StreamPositionConsumer(
         var name       = Field(entry, "name");
         var shortName  = Field(entry, "shortName");
         var isActive   = Field(entry, "isActive") == "1";
-        var ts         = DateTime.Parse(Field(entry, "ts"), null, DateTimeStyles.RoundtripKind);
+        var ts         = DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(Field(entry, "ts"), CultureInfo.InvariantCulture)).UtcDateTime;
 
         await BroadcastAsync(driverId, lat, lng, districtId, name, shortName, isActive, ts, push, ct);
     }

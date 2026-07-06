@@ -66,7 +66,7 @@ public static class RouteCalculationHandler
                 waypoints);
 
             // Persist route economics on the delivery so the dashboard can show cost and ETA.
-            var cost = costCalculator.Calculate(route.DistanceMeters, route.DurationSeconds);
+            var cost = costCalculator.Calculate(route.DistanceMeters, DateTime.UtcNow);
             var expectedEta = DateTime.UtcNow.AddSeconds(route.DurationSeconds);
             await conn.ExecuteAsync(
                 """

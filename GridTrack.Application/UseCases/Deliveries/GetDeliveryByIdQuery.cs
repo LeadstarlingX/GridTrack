@@ -32,7 +32,7 @@ public sealed class GetDeliveryByIdHandler
             delivery.Status.ToString(),
             delivery.DistrictId,
             delivery.AssignedDriverId,
-            AssignedDriverName: null,
+            AssignedDriverName: delivery.AssignedDriverName,
             EtaSeconds: etaSeconds,
             delivery.CreatedAt,
             updatedAt,

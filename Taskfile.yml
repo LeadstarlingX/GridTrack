@@ -105,6 +105,17 @@ tasks:
           --env QUICK=${QUICK:-true} \
           --env THRESHOLD_PROFILE=${THRESHOLD_PROFILE:-stress} \
           --env TEST_MODE=${TEST_MODE:-latency} \
+          --env K6_RAMP_DUR="${K6_RAMP_DUR:-}" \
+          --env K6_HOLD_DUR="${K6_HOLD_DUR:-}" \
+          --env K6_DOWN_DUR="${K6_DOWN_DUR:-}" \
+          --env K6_CONST_DUR="${K6_CONST_DUR:-}" \
+          --env K6_START_DUR="${K6_START_DUR:-}" \
+          --env K6_ANALYTICS_VUS="${K6_ANALYTICS_VUS:-}" \
+          --env K6_DELIVERY_VUS="${K6_DELIVERY_VUS:-}" \
+          --env K6_DG_VUS="${K6_DG_VUS:-}" \
+          --env K6_BOUNDS_VUS="${K6_BOUNDS_VUS:-}" \
+          --env K6_BATCH_VUS="${K6_BATCH_VUS:-}" \
+          --env K6_BASE_VUS="${K6_BASE_VUS:-}" \
           --env DRIVER_IDS="$IDS" \
           --env JWT_TOKEN="${JWT_TOKEN}" \
           load-tests/gridtrack.js
@@ -117,12 +128,12 @@ tasks:
   k6-compare:
     desc: "Write-behind vs direct-postgres comparison (QUICK), FULL reset between arms."
     cmds:
-      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${K6_COMPARE_VUS:-600} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=true THRESHOLD_PROFILE=compare K6_BASE_VUS=${K6_BASE_VUS:-600} task k6-run
         ignore_error: true
       # FULL tear-down between arms to guarantee clean state
       - docker compose -f compose.ci.yaml down -v
       - docker compose -f compose.ci.yaml up -d --build --wait
-      - cmd: TEST_MODE=latency WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare DRIVER_VUS=${K6_COMPARE_VUS:-600} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=false QUICK=true THRESHOLD_PROFILE=compare K6_BASE_VUS=${K6_BASE_VUS:-600} task k6-run
         ignore_error: true
   
   reset-between-arms:
@@ -148,7 +159,7 @@ tasks:
   k6-stress:
     desc: "High-VU stress test (write-behind only)."
     cmds:
-      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress DRIVER_VUS=${K6_STRESS_VUS:-600} task k6-run
+      - cmd: TEST_MODE=latency WRITE_BEHIND=true QUICK=false THRESHOLD_PROFILE=stress K6_BASE_VUS=${K6_BASE_VUS:-600} task k6-run
         ignore_error: true
 
   k6-ci:

@@ -1,5 +1,6 @@
 using GridTrack.Application.IntegrationEvents;
 using GridTrack.Application.UseCases.Deliveries;
+using GridTrack.Domain.Drivers;
 using Serilog;
 using Wolverine;
 using Wolverine.RabbitMQ;
@@ -36,6 +37,14 @@ public class Program
                     .MaximumParallelMessages(5);
                 opts.PublishMessage<RouteCalculationMessage>()
                     .ToLocalQueue("route-calculation");
+
+                // Position domain events are relayed to RabbitMQ via a background queue so the
+                // HTTP thread is never blocked on AMQP. At 1600 req/s this cuts p95 tail latency
+                // by eliminating 1-10ms AMQP round-trips from the telemetry hot path.
+                opts.LocalQueue("position-relay")
+                    .MaximumParallelMessages(16);
+                opts.PublishMessage<DriverPositionUpdatedDomainEvent>()
+                    .ToLocalQueue("position-relay");
 
                 if (!string.IsNullOrWhiteSpace(rabbit))
                 {

@@ -9,6 +9,7 @@ public sealed class DeliveryDto
     public Geometry CurrentLocation { get; init; } = null!;
     public DeliveryStatus Status { get; init; }
     public Guid? AssignedDriverId { get; init; }
+    public string? AssignedDriverName { get; init; }
     public DateTime? ExpectedEta { get; init; }
     public DateTime? ActualEta { get; init; }
     public string DistrictId { get; init; } = string.Empty;

@@ -229,11 +229,11 @@ def generate_stress_section(results):
     badge = "**\u2713 PASSED**" if results["all_passed"] else "**\u2717 FAILED**"
     return f"""### Stress Test {badge}
 
-> Latency numbers are informational — they reflect the 2-vCPU shared-runner environment and
-> should not be compared across different hardware. Only error rate is thresholded: a passing
-> test means the system handled the load without requests failing. Latency thresholds exist
-> inside k6 as catastrophic-breakage ceilings (e.g. accidental synchronous DB on the hot path)
-> but are not badged here — the numbers themselves are the signal.
+> **What it does:** High-concurrency soak across all 6 scenarios simultaneously (driver telemetry, analytics reads, delivery lifecycle, district-group CRUD, SignalR, batch ingest) — realistic mixed-workload at production-scale VU counts.
+>
+> **Why we run it:** Catch regressions that only appear under combined load: connection-pool exhaustion, Redis saturation, slow queries that serialize under concurrency, memory leaks invisible in single-scenario runs.
+>
+> **How it works:** Ramp 0 → peak VUs over 30 s, hold for 2 min, ramp down. Only error rate is thresholded (< 1%). Latency numbers are hardware-relative (2-vCPU CI runner) — compare the trend across runs, not the absolute values.
 
 **Latest run — CI stress test:**
 
@@ -323,13 +323,14 @@ def generate_throughput_md(filepath):
         # Throughput uses a different metric name
         tel_m = m.get('gridtrack_driver_tel_throughput_latency', {}).get('values', {})
 
+        vus_max_display = m.get('vus_max', {}).get('values', {}).get('max', '?')
         md = f"""### Throughput Ceiling Test
 
-> **What it does:** Aggressively ramps request rate until the system buckles — finds the absolute maximum RPS your API can handle before errors spike. This is NOT a performance benchmark, it's a capacity discovery test.
+> **What it does:** Finds the absolute maximum RPS the telemetry pipeline can sustain before error rate spikes — a capacity-discovery test, not a benchmark.
 >
-> **Why we run it:** Know your breaking point before production does. If we can serve 3,000 RPS with <1% errors, we know our scaling limits and can set proper autoscaling thresholds.
+> **Why we run it:** Know the breaking point before production does. Sets the upper bound for autoscaling thresholds and reveals whether the write-behind buffer degrades gracefully or hard-fails under extreme load.
 >
-> **How it works:** Constant arrival rate executor pushes 100 → 500 → 1,000 → 2,000 → 3,000 requests/second with **no sleep between iterations**. No latency thresholds — only error rate <5% matters here.
+> **How it works:** `ramping-arrival-rate` executor escalates 100 → 500 → 1,500 → 3,000 → 5,000 → 8,000 → 12,000 req/s over ~6 min with no sleep. Up to 15,000 VUs pre-allocated. No latency thresholds — only error rate < 5% matters here.
 
 
 
@@ -338,7 +339,7 @@ def generate_throughput_md(filepath):
 | Result | Value |
 |--------|-------|
 | Peak RPS | **{rps:.1f}/s** |
-| Peak concurrent VUs | **{vus_max}** |
+| Peak concurrent VUs | **{vus_max_display}** |
 | Total HTTP requests | **{reqs:,}** |
 | Error rate | **{err_rate * 100:.2f}%** |
 
@@ -371,10 +372,11 @@ def generate_comparison_section(results):
 
     return f"""### Comparison Test {badge}
 
-> ClickHouse + Postgres + write-behind buffer (`write-behind`) vs Postgres-only synchronous
-> writes (`direct-postgres`). Runs at high concurrency (≥600 driver VUs) to saturate the
-> synchronous Postgres path — at low load both are fast and the comparison is meaningless.
-> ✓/✗ marks whether write-behind matched or beat the direct-postgres baseline at p95.
+> **What it does:** Benchmarks write-behind buffering (Redis queue → ClickHouse + Postgres async) against direct synchronous Postgres writes — the core architectural trade-off in GridTrack's telemetry pipeline.
+>
+> **Why we run it:** Validates that the write-behind buffer is actually faster, not just complexity. If write-behind regresses at p95, the optimization is wrong or broken.
+>
+> **How it works:** Two full runs at ≥600 driver VUs across 6 parallel scenarios, with a full stack teardown between arms. ✓/✗ marks whether write-behind matched or beat direct-postgres at p95. Error rate < 1% is also required — faster but lossy doesn't count.
 
 | Path | p50 WB | p50 Direct | p50 | p90 WB | p90 Direct | p90 | p95 WB | p95 Direct | p95 |
 |------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|

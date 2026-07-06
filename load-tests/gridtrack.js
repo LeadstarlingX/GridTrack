@@ -6,8 +6,9 @@ import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js'
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 const BASE         = __ENV.BASE          || 'http://localhost:5098'
-const DRIVER_VUS   = parseInt(__ENV.DRIVER_VUS || '600')
-const THROUGHPUT_MAX_VUS = parseInt(__ENV.THROUGHPUT_MAX_VUS || '2000')
+// K6_BASE_VUS is the single knob in build.yml; DRIVER_VUS kept for Taskfile compatibility.
+const DRIVER_VUS   = parseInt(__ENV.K6_BASE_VUS || __ENV.DRIVER_VUS || '600')
+const THROUGHPUT_MAX_VUS = parseInt(__ENV.THROUGHPUT_MAX_VUS || '10000')
 const DRIVER_IDS   = (__ENV.DRIVER_IDS   || '').split(',').filter(Boolean)
 const JWT_TOKEN    = __ENV.JWT_TOKEN     || ''
 // WRITE_BEHIND=true  → /api/telemetry/position  (buffered, default)
@@ -24,6 +25,14 @@ const HOLD_DUR   = __ENV.K6_HOLD_DUR   || (QUICK ? '45s' : '2m')
 const DOWN_DUR   = __ENV.K6_DOWN_DUR   || (QUICK ? '15s' : '20s')
 const CONST_DUR  = __ENV.K6_CONST_DUR  || (QUICK ? '90s' : '3m')
 const START_DUR  = __ENV.K6_START_DUR  || (QUICK ? '15s' : '30s')
+
+// Secondary VUs — default to percentages of DRIVER_VUS; override with K6_* env vars
+const pct = (p, min) => Math.max(min, Math.round(DRIVER_VUS * p))
+const ANALYTICS_VUS      = parseInt(__ENV.K6_ANALYTICS_VUS || '') || pct(0.25, 10)
+const DELIVERY_VUS       = parseInt(__ENV.K6_DELIVERY_VUS  || '') || pct(0.03,  3)
+const DISTRICT_GROUP_VUS = parseInt(__ENV.K6_DG_VUS        || '') || pct(0.01,  3)
+const DISTRICT_BOUND_VUS = parseInt(__ENV.K6_BOUNDS_VUS    || '') || pct(0.02,  5)
+const BATCH_VUS          = parseInt(__ENV.K6_BATCH_VUS     || '') || pct(0.05,  5)
 
 
 const TEL_URL = WRITE_BEHIND
@@ -81,9 +90,7 @@ const CEILING_THRESHOLDS = {
 
 const baseScenarios = {
 
-    // 1. Driver GPS telemetry — the write-behind hot path (or direct-postgres baseline).
-    //    Each VU = one driver posting 1 position/s.
-    //    Ramps up to DRIVER_VUS, holds to measure sustained throughput, then cools down.
+    // 1. Driver telemetry — write-behind hot path or direct-postgres baseline. 1 VU = 1 driver @ 1 req/s.
     driver_telemetry: {
         executor: 'ramping-vus',
         startVUs: 0,
@@ -97,59 +104,57 @@ const baseScenarios = {
         exec: 'driverTelemetry',
     },
 
-    // 2. Concurrent dashboard observers hitting all analytics endpoints.
+    // 2. Analytics reads — concurrent dashboard observers (25% of DRIVER_VUS by default).
     analytics_read: {
         executor: 'ramping-vus',
         startVUs: 0,
         stages: [
-            { duration: RAMP_DUR, target: QUICK ? 50  : 100 },
-            { duration: RAMP_DUR, target: QUICK ? 150 : 300 },
-            { duration: HOLD_DUR, target: QUICK ? 150 : 300 },
+            { duration: RAMP_DUR, target: Math.round(ANALYTICS_VUS * 0.33) },
+            { duration: RAMP_DUR, target: ANALYTICS_VUS },
+            { duration: HOLD_DUR, target: ANALYTICS_VUS },
             { duration: DOWN_DUR, target: 0 },
         ],
         gracefulRampDown: '10s',
         exec: 'analyticsRead',
     },
 
-    // 3. Delivery lifecycle: create → auto-assign → cancel.
-    //    Reduced to 5 VUs in QUICK mode — OSRM route calc is the bottleneck here,
-    //    not the write-behind architecture. Full stress uses 20.
+    // 3. Delivery lifecycle — create → auto-assign → cancel (OSRM-bound, kept low).
     delivery_lifecycle: {
         executor: 'constant-vus',
-        vus: QUICK ? 5 : 20,
+        vus: DELIVERY_VUS,
         duration: CONST_DUR,
         startTime: START_DUR,
         exec: 'deliveryLifecycle',
     },
 
-    // 4. District group CRUD — exercises the new endpoints end-to-end.
+    // 4. District group CRUD — create/read/update/delete end-to-end.
     district_group_crud: {
         executor: 'constant-vus',
-        vus: 5,
+        vus: DISTRICT_GROUP_VUS,
         duration: CONST_DUR,
         startTime: START_DUR,
         exec: 'districtGroupCrud',
     },
 
-    // 5. District boundaries — heavy GeoJSON read (correctness-checked).
+    // 5. District boundaries — GeoJSON read, correctness-checked.
     district_boundaries: {
         executor: 'constant-vus',
-        vus: 10,
+        vus: DISTRICT_BOUND_VUS,
         duration: CONST_DUR,
         startTime: START_DUR,
         exec: 'districtBoundaries',
     },
 
-    // 6. Telemetry batch — the real B2B ingest path (partner posts batches).
+    // 6. Telemetry batch — B2B ingest path (10-event batches).
     telemetry_batch: {
         executor: 'constant-vus',
-        vus: QUICK ? 10 : 30,
+        vus: BATCH_VUS,
         duration: CONST_DUR,
         startTime: START_DUR,
         exec: 'telemetryBatch',
     },
 
-    // 7. AI endpoints — LIGHT smoke only (calls Python/Groq, rate-limited). Never stress.
+    // 7. AI smoke — light only; Python/Groq are rate-limited. Never stress.
     ai_smoke: {
         executor: 'constant-vus',
         vus: 5,
@@ -158,8 +163,7 @@ const baseScenarios = {
         exec: 'aiSmoke',
     },
 
-    // 8. SignalR — negotiate handshake. Auth is bypassed in the Docker (load) env, so no
-    //    Clerk JWT is needed. Proves the hub is reachable + authorized under load.
+    // 8. SignalR — negotiate handshake under load; auth bypassed in Docker env.
     signalr: {
         executor: 'constant-arrival-rate',
         rate: 10,
@@ -173,23 +177,26 @@ const baseScenarios = {
 }
 
 
+// Stage targets as fractions of THROUGHPUT_MAX_VUS — change K6_THROUGHPUT_MAX_VUS in build.yml
+// to scale the entire ramp proportionally. Fractions: 0.04 → 0.13 → 0.25 → 0.42 → 0.67 → 1.0.
+const tv = (f) => Math.round(THROUGHPUT_MAX_VUS * f)
+
 const throughputScenario = {
-    // 6. Measures maximum requests per second before errors or degradation.
-    //    Uses constant arrival rate with no sleep.
-    //    maxVUs controlled by THROUGHPUT_MAX_VUS env var to give k6 enough 
-    //    goroutines to reach the 3000 RPS target stages.
+    // Arrival-rate ceiling — escalates RPS until the system breaks; ~6 min run.
     driver_telemetry_throughput: {
         executor: 'ramping-arrival-rate',
         startRate: 100,
         timeUnit: '1s',
-        preAllocatedVUs: 100,
+        preAllocatedVUs: 500,
         maxVUs: THROUGHPUT_MAX_VUS,
         stages: [
-            { duration: '30s', target: 500 },
-            { duration: '60s', target: 1000 },
-            { duration: '60s', target: 2000 },
-            { duration: '60s', target: 3000 },
-            { duration: '30s', target: 0 },
+            { duration: '30s',  target: tv(0.04) },
+            { duration: '60s',  target: tv(0.13) },
+            { duration: '60s',  target: tv(0.25) },
+            { duration: '60s',  target: tv(0.42) },
+            { duration: '60s',  target: tv(0.67) },
+            { duration: '60s',  target: tv(1.00) },
+            { duration: '30s',  target: 0 },
         ],
         exec: 'driverTelemetryNoSleep',
     },

@@ -1,4 +1,5 @@
 using GridTrack.Application.Dtos;
+using GridTrack.Application.Interfaces;
 using GridTrack.Application.UseCases.Forecast;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;
@@ -7,7 +8,7 @@ namespace GridTrack.Presentation.Controllers.Forcast;
 
 [ApiController]
 [Route("/api/forecast")]
-public class ForecastController(IMessageBus bus) : ControllerBase
+public class ForecastController(IMessageBus bus, IForecastService forecastService) : ControllerBase
 {
     [HttpGet("{districtId}")]
     public async Task<IActionResult> GetForecast(string districtId, CancellationToken ct)
@@ -17,6 +18,14 @@ public class ForecastController(IMessageBus bus) : ControllerBase
             ct);
 
         return result is null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>GET /api/forecast/delivery-trend?days=3 — SARIMA-based daily delivery count forecast.</summary>
+    [HttpGet("delivery-trend")]
+    public async Task<IActionResult> GetDeliveryTrendForecast([FromQuery] int days = 3, CancellationToken ct = default)
+    {
+        var result = await forecastService.GetDeliveryTrendForecastAsync(days, ct);
+        return result is null ? StatusCode(503, new { code = "SARIMA_UNAVAILABLE" }) : Ok(result);
     }
 
     /// <summary>GET /api/forecast/staffing?districtId=mezzeh&amp;targetAt=2026-06-15T09:00:00Z</summary>

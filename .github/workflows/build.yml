@@ -94,14 +94,20 @@ jobs:
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     env:
-      K6_COMPARE_VUS: "1600"
-      K6_STRESS_VUS: "1200"
-      K6_THROUGHPUT_MAX_VUS: "3000"
+      K6_BASE_VUS: "1600"          # driver telemetry VUs; secondary VUs auto-computed in gridtrack.js
+      K6_THROUGHPUT_MAX_VUS: "15000"
       K6_RAMP_DUR: "30s"
       K6_HOLD_DUR: "2m"
       K6_DOWN_DUR: "20s"
       K6_CONST_DUR: "3m"
       K6_START_DUR: "30s"
+      # Secondary VUs — auto-computed as % of the relevant DRIVER_VUS if left empty.
+      # Set explicitly here to override (e.g. K6_ANALYTICS_VUS: "200").
+      K6_ANALYTICS_VUS: ""
+      K6_DELIVERY_VUS: ""
+      K6_DG_VUS: ""
+      K6_BOUNDS_VUS: ""
+      K6_BATCH_VUS: ""
 
     steps:
       - name: Check out .NET repo
@@ -132,7 +138,7 @@ jobs:
             echo "| Kernel | $(uname -sr) |"
             echo "| Docker | $(docker --version | cut -d, -f1) |"
             echo "| Per-container limits | none — every service **and** k6 share the runner (\`compose.ci.yaml\`) |"
-            echo "| k6 VUs | compare ${K6_COMPARE_VUS} · stress ${K6_STRESS_VUS} · throughput ≤${K6_THROUGHPUT_MAX_VUS} |"
+            echo "| k6 VUs | base ${K6_BASE_VUS} · throughput ≤${K6_THROUGHPUT_MAX_VUS} |"
             echo "| k6 Timing | ramp ${K6_RAMP_DUR} · hold ${K6_HOLD_DUR} · down ${K6_DOWN_DUR} · const ${K6_CONST_DUR} |"
             echo "| Captured (UTC) | $(date -u '+%Y-%m-%d %H:%M') |"
           } > load-tests/results/runner-specs.md

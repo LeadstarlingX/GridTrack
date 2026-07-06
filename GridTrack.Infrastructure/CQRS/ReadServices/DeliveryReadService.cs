@@ -26,25 +26,27 @@ public sealed class DeliveryReadService : IDeliveryReadService
 
         const string sql = """
                            SELECT
-                               "DeliveryId",
-                               "CurrentLocation",
-                               "Status",
-                               "AssignedDriverId",
-                               "ExpectedEta",
-                               "ActualEta",
-                               "DistrictId",
-                               "AnomalyFlag",
-                               "AnomalyTypeValue",
-                               "CreatedAt",
-                               "PickedUpAt",
-                               "DeliveredAt",
-                               "CancelledAt",
-                               "AnomalyReason",
-                               "RouteDistanceMeters",
-                               "RouteDurationSeconds",
-                               "RouteCost"
-                           FROM public."Deliveries"
-                           WHERE "DeliveryId" = @Id
+                               d."DeliveryId",
+                               d."CurrentLocation",
+                               d."Status",
+                               d."AssignedDriverId",
+                               dr."Name" AS "AssignedDriverName",
+                               d."ExpectedEta",
+                               d."ActualEta",
+                               d."DistrictId",
+                               d."AnomalyFlag",
+                               d."AnomalyTypeValue",
+                               d."CreatedAt",
+                               d."PickedUpAt",
+                               d."DeliveredAt",
+                               d."CancelledAt",
+                               d."AnomalyReason",
+                               d."RouteDistanceMeters",
+                               d."RouteDurationSeconds",
+                               d."RouteCost"
+                           FROM public."Deliveries" d
+                           LEFT JOIN public."Drivers" dr ON dr."DriverId" = d."AssignedDriverId"
+                           WHERE d."DeliveryId" = @Id
                            """;
 
         return await connection.QueryFirstOrDefaultAsync<DeliveryDto>(sql, new { Id = id });

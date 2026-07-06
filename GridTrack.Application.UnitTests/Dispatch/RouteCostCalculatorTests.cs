@@ -5,64 +5,94 @@ namespace GridTrack.Application.UnitTests.Dispatch;
 
 public class RouteCostCalculatorTests
 {
-    private static RouteCostCalculator Create(decimal baseFare, decimal perKm, decimal perMinute)
+    // Fixed UTC hours that fall within day (10:00) and night (23:00) windows
+    private static readonly DateTime Day   = new(2025, 6, 1, 10, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime Night = new(2025, 6, 1, 23, 0, 0, DateTimeKind.Utc);
+
+    private static RouteCostCalculator Create(
+        decimal baseFare      = 2000m,
+        decimal perMeter      = 0.5m,
+        decimal dayFactor     = 1.0m,
+        decimal nightFactor   = 1.3m,
+        int     dayStartHour  = 6,
+        int     nightStartHour = 22)
         => new(Options.Create(new RouteCostOptions
         {
-            BaseFare  = baseFare,
-            PerKm     = perKm,
-            PerMinute = perMinute,
+            BaseFare       = baseFare,
+            PerMeter       = perMeter,
+            DayFactor      = dayFactor,
+            NightFactor    = nightFactor,
+            DayStartHour   = dayStartHour,
+            NightStartHour = nightStartHour,
         }));
 
     [Test]
-    public async Task Calculate_Returns_BaseFare_For_Zero_Distance_And_Duration()
+    public async Task Calculate_Returns_BaseFare_For_Zero_Distance_During_Day()
     {
-        var calc = Create(baseFare: 2000m, perKm: 500m, perMinute: 50m);
+        var cost = Create().Calculate(distanceMeters: 0, at: Day);
 
-        var cost = calc.Calculate(distanceMeters: 0, durationSeconds: 0);
-
-        await Assert.That(cost).IsEqualTo(2000m);
+        await Assert.That(cost).IsEqualTo(2000m); // 2000 × 1.0
     }
 
     [Test]
-    public async Task Calculate_Adds_PerKm_Component()
+    public async Task Calculate_Adds_PerMeter_Component()
     {
-        var calc = Create(baseFare: 0m, perKm: 500m, perMinute: 0m);
+        var calc = Create(baseFare: 0m, perMeter: 0.5m, dayFactor: 1.0m);
 
-        // 5 000 m = 5 km → 5 × 500 = 2 500
-        var cost = calc.Calculate(distanceMeters: 5_000, durationSeconds: 0);
+        // 1 000 m × 0.5 = 500
+        var cost = calc.Calculate(distanceMeters: 1_000, at: Day);
+
+        await Assert.That(cost).IsEqualTo(500m);
+    }
+
+    [Test]
+    public async Task Calculate_Applies_DayFactor()
+    {
+        var calc = Create(baseFare: 1000m, perMeter: 0m, dayFactor: 1.0m);
+
+        var cost = calc.Calculate(distanceMeters: 0, at: Day);
+
+        await Assert.That(cost).IsEqualTo(1000m);
+    }
+
+    [Test]
+    public async Task Calculate_Applies_NightFactor()
+    {
+        var calc = Create(baseFare: 1000m, perMeter: 0m, nightFactor: 1.3m);
+
+        var cost = calc.Calculate(distanceMeters: 0, at: Night);
+
+        await Assert.That(cost).IsEqualTo(1300m);
+    }
+
+    [Test]
+    public async Task Calculate_Combines_BaseFare_PerMeter_And_DayFactor()
+    {
+        var calc = Create(baseFare: 2000m, perMeter: 0.5m, dayFactor: 1.0m);
+
+        // (2000 + 0.5 × 1000) × 1.0 = 2500
+        var cost = calc.Calculate(distanceMeters: 1_000, at: Day);
 
         await Assert.That(cost).IsEqualTo(2500m);
     }
 
     [Test]
-    public async Task Calculate_Adds_PerMinute_Component()
+    public async Task Calculate_Applies_NightSurcharge()
     {
-        var calc = Create(baseFare: 0m, perKm: 0m, perMinute: 50m);
+        var calc = Create(baseFare: 2000m, perMeter: 0.5m, nightFactor: 1.3m);
 
-        // 120 s = 2 min → 2 × 50 = 100
-        var cost = calc.Calculate(distanceMeters: 0, durationSeconds: 120);
+        // (2000 + 0.5 × 1000) × 1.3 = 3250
+        var cost = calc.Calculate(distanceMeters: 1_000, at: Night);
 
-        await Assert.That(cost).IsEqualTo(100m);
-    }
-
-    [Test]
-    public async Task Calculate_Combines_All_Components()
-    {
-        var calc = Create(baseFare: 2000m, perKm: 500m, perMinute: 50m);
-
-        // 3 km, 10 min → 2000 + 1500 + 500 = 4000
-        var cost = calc.Calculate(distanceMeters: 3_000, durationSeconds: 600);
-
-        await Assert.That(cost).IsEqualTo(4000m);
+        await Assert.That(cost).IsEqualTo(3250m);
     }
 
     [Test]
     public async Task Calculate_Clamps_To_Zero_When_Result_Is_Negative()
     {
-        // Negative base fare, no distance/time → would be negative without clamping
-        var calc = Create(baseFare: -5000m, perKm: 0m, perMinute: 0m);
+        var calc = Create(baseFare: -5000m, perMeter: 0m);
 
-        var cost = calc.Calculate(distanceMeters: 0, durationSeconds: 0);
+        var cost = calc.Calculate(distanceMeters: 0, at: Day);
 
         await Assert.That(cost).IsEqualTo(0m);
     }
@@ -70,12 +100,12 @@ public class RouteCostCalculatorTests
     [Test]
     public async Task Calculate_Rounds_To_Two_Decimal_Places()
     {
-        var calc = Create(baseFare: 0m, perKm: 1m, perMinute: 0m);
+        // 1 m × (1/3) ≈ 0.3333... → rounds to 0.33
+        var calc = Create(baseFare: 0m, perMeter: 1m / 3m, dayFactor: 1.0m);
 
-        // 1 m = 0.001 km → raw cost = 0.001 → Math.Round(..., 2) = 0.00
-        var cost = calc.Calculate(distanceMeters: 1, durationSeconds: 0);
+        var cost = calc.Calculate(distanceMeters: 1, at: Day);
 
-        await Assert.That(cost).IsEqualTo(0.00m);
+        await Assert.That(cost).IsEqualTo(0.33m);
     }
 
     [Test]
@@ -83,20 +113,20 @@ public class RouteCostCalculatorTests
     {
         var calc = new RouteCostCalculator(Options.Create(new RouteCostOptions()));
 
-        // defaults: BaseFare=2000, PerKm=500, PerMinute=50; 0 km, 0 min → 2000
-        var cost = calc.Calculate(distanceMeters: 0, durationSeconds: 0);
+        // defaults: BaseFare=2000, PerMeter=0.5, DayFactor=1.0; 0 m at daytime → 2000
+        var cost = calc.Calculate(distanceMeters: 0, at: Day);
 
         await Assert.That(cost).IsEqualTo(2000m);
     }
 
     [Test]
-    public async Task Calculate_Handles_Long_Route()
+    public async Task Calculate_Handles_Long_Route_During_Day()
     {
-        var calc = Create(baseFare: 2000m, perKm: 500m, perMinute: 50m);
+        var calc = Create(baseFare: 2000m, perMeter: 0.5m, dayFactor: 1.0m);
 
-        // 50 km, 60 min → 2000 + 25000 + 3000 = 30000
-        var cost = calc.Calculate(distanceMeters: 50_000, durationSeconds: 3_600);
+        // (2000 + 0.5 × 50000) × 1.0 = 27000
+        var cost = calc.Calculate(distanceMeters: 50_000, at: Day);
 
-        await Assert.That(cost).IsEqualTo(30000m);
+        await Assert.That(cost).IsEqualTo(27000m);
     }
 }
