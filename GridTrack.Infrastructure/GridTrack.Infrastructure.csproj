@@ -19,6 +19,7 @@
         <PackageReference Include="pocketken.H3" />
         <PackageReference Include="WolverineFx.RabbitMQ" />
         <PackageReference Include="ClickHouse.Client" />
+        <PackageReference Include="BCrypt.Net-Next" />
 
     </ItemGroup>
 

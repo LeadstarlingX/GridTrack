@@ -1,4 +1,5 @@
 using Dapper;
+using GridTrack.Application.Abstractions.Authentication;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
@@ -11,26 +12,32 @@ namespace GridTrack.Infrastructure.CQRS.ReadServices;
 
 public sealed class DriverReadService : IDriverReadService
 {
+    
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
-    private readonly AppDbContext _context;
+    private readonly AppDbContext          _context;
+    private readonly ICurrentUser          _currentUser;
 
-    public DriverReadService(ISqlConnectionFactory sqlConnectionFactory, AppDbContext context)
+    public DriverReadService(
+        ISqlConnectionFactory sqlConnectionFactory,
+        AppDbContext context,
+        ICurrentUser currentUser)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
-        _context = context;
+        _context              = context;
+        _currentUser          = currentUser;
     }
+
+    private string[]? AllowedDistricts => _currentUser.AllowedDistrictIds?.ToArray();
 
     public async Task<IEnumerable<DriverDto>> GetByDistrictAsync(string districtId, CancellationToken ct)
     {
-        using var connection = _sqlConnectionFactory.CreateConnection();
+        var allowed = AllowedDistricts;
+        if (allowed is not null && !allowed.Contains(districtId))
+            return [];
 
+        using var connection = _sqlConnectionFactory.CreateConnection();
         const string sql = """
-                           SELECT
-                               "DriverId",
-                               "Location",
-                               "IsActive",
-                               "LastSeen",
-                               "DistrictId"
+                           SELECT "DriverId", "Location", "IsActive", "LastSeen", "DistrictId"
                            FROM public."Drivers"
                            WHERE "DistrictId" = @DistrictId
                            ORDER BY "LastSeen" DESC
@@ -43,21 +50,28 @@ public sealed class DriverReadService : IDriverReadService
     {
         using var connection = _sqlConnectionFactory.CreateConnection();
 
-        const string sql = """
-                           SELECT
-                               "DriverId",
-                               "Location",
-                               "IsActive",
-                               "LastSeen",
-                               "DistrictId"
-                           FROM public."Drivers"
-                           WHERE "IsActive" = true
-                           ORDER BY "Location" <-> ST_GeogFromText(@LocationWkt)
-                           LIMIT @Count
-                           """;
+        var allowed        = AllowedDistricts;
+        var districtFilter = allowed is null
+            ? string.Empty
+            : """AND "DistrictId" = ANY(@AllowedDistricts::text[])""";
+
+        var sql = $"""
+                   SELECT
+                       "DriverId",
+                       "Location",
+                       "IsActive",
+                       "LastSeen",
+                       "DistrictId"
+                   FROM public."Drivers"
+                   WHERE "IsActive" = true
+                   {districtFilter}
+                   ORDER BY "Location" <-> ST_GeogFromText(@LocationWkt)
+                   LIMIT @Count
+                   """;
 
         var locationWkt = $"POINT({location.X} {location.Y})";
-        return await connection.QueryAsync<DriverDto>(sql, new { LocationWkt = locationWkt, Count = count });
+        return await connection.QueryAsync<DriverDto>(sql,
+            new { LocationWkt = locationWkt, Count = count, AllowedDistricts = allowed });
     }
 
     public async Task<Driver?> GetAggregateByIdAsync(Guid id, CancellationToken ct)
@@ -69,14 +83,18 @@ public sealed class DriverReadService : IDriverReadService
         using var connection = _sqlConnectionFactory.CreateConnection();
 
         // Free-text search across name, phone number, and license plate.
-        var searchPattern = string.IsNullOrWhiteSpace(search) ? null : $"%{search.Trim()}%";
+        var searchPattern   = string.IsNullOrWhiteSpace(search) ? null : $"%{search.Trim()}%";
+        var allowed         = AllowedDistricts;                                             
+        var rbacFilter      = allowed is null                                               
+            ? string.Empty                                                                  
+            : """AND d."DistrictId" = ANY(@AllowedDistricts::text[])""";                   
 
         // Derive status from deliveries:
         //   IsActive = false              → "offline"
         //   has anomalous delivery        → "stalled"
         //   has in-transit delivery       → "in-transit"
         //   otherwise                     → "available"
-        const string sql = """
+        string sql = $"""
             SELECT
                 d."DriverId"                                       AS "Id",
                 d."Name",
@@ -112,6 +130,7 @@ public sealed class DriverReadService : IDriverReadService
                    OR d."Name" ILIKE @Search
                    OR d."PhoneNumber" ILIKE @Search
                    OR d."LicensePlate" ILIKE @Search)
+            {rbacFilter} 
             GROUP BY d."DriverId", d."Name", d."ShortName", d."Location", d."DistrictId", d."IsActive", d."CarType", d."LicensePlate", d."PhoneNumber"
             HAVING (@Status IS NULL
                 OR (
@@ -134,7 +153,9 @@ public sealed class DriverReadService : IDriverReadService
 
         var rows = (await connection.QueryAsync<DriverListItemResponse>(
             sql,
-            new { Cursor = cursor, DistrictId = districtId, Status = status, Search = searchPattern, PageSize = pageSize + 1 }))
+            new { Cursor = cursor, DistrictId = districtId,
+                Status = status, Search = searchPattern,
+                PageSize = pageSize + 1, AllowedDistricts = allowed, }))
             .ToList();
 
         string? nextCursor = null;

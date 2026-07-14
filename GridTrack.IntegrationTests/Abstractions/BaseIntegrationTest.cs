@@ -44,7 +44,7 @@ public abstract class BaseIntegrationTest
         using var connection = connectionFactory.CreateConnection();
 
         const string sql = """
-                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District", delivery_routes, district_groups
+                           TRUNCATE TABLE "Deliveries", "Drivers", "H3District", delivery_routes, district_groups, app_users
                            RESTART IDENTITY CASCADE;
                            """;
 

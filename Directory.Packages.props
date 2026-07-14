@@ -37,6 +37,7 @@
     <!-- Utility & Patterns -->
     <PackageVersion Include="WolverineFx" Version="5.39.0" />
     <PackageVersion Include="WolverineFx.RabbitMQ" Version="5.39.0" />
+    <PackageVersion Include="BCrypt.Net-Next" Version="4.0.3" />
     <!--    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.0.0" />-->
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
     <PackageVersion Include="Dapper" Version="2.1.35" />

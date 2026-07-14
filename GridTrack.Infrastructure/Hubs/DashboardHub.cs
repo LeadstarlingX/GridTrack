@@ -1,4 +1,5 @@
 using System.Diagnostics.Metrics;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -6,11 +7,13 @@ namespace GridTrack.Infrastructure.Hubs;
 
 
 [Authorize]
-public sealed class DashboardHub : Hub
+public sealed class DashboardHub(IDistrictGroupCache groupCache) : Hub
 {
     private static readonly Meter HubMeter = new("gridtrack.hub", "1.0");
     private static readonly UpDownCounter<int> ConnectedClients =
-        HubMeter.CreateUpDownCounter<int>("hub.connections.active", description: "Number of active SignalR connections");
+        HubMeter.CreateUpDownCounter<int>(
+            "hub.connections.active",
+            description: "Number of active SignalR connections");
 
     public async Task JoinDistrict(string districtId)
         => await Groups.AddToGroupAsync(Context.ConnectionId, districtId);
@@ -18,20 +21,43 @@ public sealed class DashboardHub : Hub
     public async Task LeaveDistrict(string districtId)
         => await Groups.RemoveFromGroupAsync(Context.ConnectionId, districtId);
 
-    // Subscribe to all drivers whose district belongs to the named district group.
-    // The server broadcasts to the "dg:{groupId}" SignalR group on every position tick.
     public async Task JoinDistrictGroup(string districtGroupId)
         => await Groups.AddToGroupAsync(Context.ConnectionId, $"dg:{districtGroupId}");
 
     public async Task LeaveDistrictGroup(string districtGroupId)
         => await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"dg:{districtGroupId}");
 
-    // Returns server UTC timestamp; client computes round-trip by diffing with send time.
     public Task<long> Ping(long clientSentMs) => Task.FromResult(clientSentMs);
 
     public override async Task OnConnectedAsync()
     {
         ConnectedClients.Add(1);
+
+        var user = Context.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            var role = user.FindFirstValue("role");
+
+            if (role == "GeneralObserver")
+            {
+                // Join all existing district groups so all broadcasts reach this client.
+                var allIds = await groupCache.GetAllGroupIdsAsync(Context.ConnectionAborted);
+                foreach (var id in allIds)
+                    await Groups.AddToGroupAsync(
+                        Context.ConnectionId, $"dg:{id}", Context.ConnectionAborted);
+            }
+            else if (role == "Observer")
+            {
+                // sectorId claims carry DistrictGroup UUIDs — join them directly.
+                var sectorIds = user.FindAll("sectorId").Select(c => c.Value);
+                foreach (var sid in sectorIds)
+                    await Groups.AddToGroupAsync(
+                        Context.ConnectionId, $"dg:{sid}", Context.ConnectionAborted);
+            }
+            // Tokens with no role claim (legacy / test) get no auto-join.
+            // Manual JoinDistrictGroup calls still work for them.
+        }
+
         await base.OnConnectedAsync();
     }
 

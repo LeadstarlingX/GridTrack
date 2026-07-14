@@ -20,7 +20,17 @@ internal sealed class DistrictGroupCache(IDbContextFactory<AppDbContext> dbFacto
         var map = await GetOrRefreshAsync(ct);
         return map.TryGetValue(districtId, out var ids) ? ids : [];
     }
-
+    
+    public async Task<IReadOnlyList<Guid>> GetAllGroupIdsAsync(CancellationToken ct)
+    {
+        var map = await GetOrRefreshAsync(ct);
+        // The map is districtId → groupIds[]. Flatten and deduplicate.
+        return map.Values
+            .SelectMany(ids => ids)
+            .Distinct()
+            .ToList();
+    }
+    
     public void Invalidate() => _map = null;
 
     private async Task<Dictionary<string, Guid[]>> GetOrRefreshAsync(CancellationToken ct)

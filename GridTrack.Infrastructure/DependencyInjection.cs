@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Dapper;
+using GridTrack.Application.Abstractions.Authentication;
 using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.Abstractions.Clock;
 using GridTrack.Application.Abstractions.Data;
@@ -9,6 +10,8 @@ using GridTrack.Application.CQRS.Repositories;
 using GridTrack.Application.Dispatch;
 using GridTrack.Application.Interfaces;
 using GridTrack.Domain.Abstractions;
+using GridTrack.Domain.Drivers;
+using GridTrack.Infrastructure.Authentication;
 using GridTrack.Infrastructure.Caching;
 using GridTrack.Infrastructure.Clock;
 using GridTrack.Infrastructure.CQRS.ReadServices;
@@ -29,6 +32,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using StackExchange.Redis;
+using Wolverine;
 
 namespace GridTrack.Infrastructure;
 
@@ -48,6 +52,7 @@ public static class DependencyInjection
         AddSeeding(services);
         AddSimulation(services, configuration);
         AddTelemetryPipeline(services);
+        AddAuth(services);
 
         return services;
     }
@@ -235,6 +240,23 @@ public static class DependencyInjection
         return services;
     }
 
-
+    private static IServiceCollection AddAuth(this IServiceCollection services)
+    {
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddSingleton<ILocalJwtService, LocalJwtService>();
+        services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+        return services;
+    }
+    
+    public static WolverineOptions AddPositionRelayRouting(this WolverineOptions opts)
+    {
+        opts.LocalQueue("position-relay")
+            .MaximumParallelMessages(16);
+        opts.PublishMessage<DriverPositionUpdatedDomainEvent>()
+            .ToLocalQueue("position-relay");
+        return opts;
+    }
     
 }

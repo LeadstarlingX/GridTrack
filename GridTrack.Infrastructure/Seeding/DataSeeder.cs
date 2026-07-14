@@ -1,8 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
+using GridTrack.Application.Abstractions.Authentication;
 using GridTrack.Application.Dispatch;
 using GridTrack.Application.Interfaces;
+using GridTrack.Domain.Authentication;
 using GridTrack.Domain.Deliveries;
+using GridTrack.Domain.DistrictGroups;
 using GridTrack.Domain.Drivers;
 using GridTrack.Domain.H3Districts;
 using GridTrack.Domain.ValueObjects;
@@ -19,6 +22,7 @@ public sealed class DataSeeder(
     IOsrmService osrm,
     IDistrictDataService districtService,
     IRouteCostCalculator costCalculator,
+    IPasswordHasher passwordHasher,
     ILogger<DataSeeder> logger)
 {
     // Max simultaneous OSRM requests during seeding. The 150 route calls used to run
@@ -281,6 +285,8 @@ public sealed class DataSeeder(
         }
         db.Set<Delivery>().AddRange(pendingDeliveries);
         await db.SaveChangesAsync(ct);
+
+        await SeedUsersAsync(ct);
     }
 
     // Fans OSRM calls out across OsrmConcurrency workers; preserves spec order in the
@@ -361,4 +367,70 @@ public sealed class DataSeeder(
 
     private static double RandomRange(double min, double max)
         => min + Rng.NextDouble() * (max - min);
+    
+    private async Task SeedUsersAsync(CancellationToken ct)
+{
+    // Idempotent — skip if already done.
+    if (await db.Set<AppUser>().AnyAsync(ct))
+        return;
+
+    var allDistricts = districtService.GetAll().ToList();
+    if (allDistricts.Count == 0)
+    {
+        logger.LogWarning("No districts available — skipping RBAC user seed.");
+        return;
+    }
+
+    // Divide districts across 4 groups only when none exist yet.
+    var existingGroups = await db.Set<DistrictGroup>().AsNoTracking().ToListAsync(ct);
+    List<Guid> allGroupIds = existingGroups.Select(g => g.Id).ToList();
+
+    if (existingGroups.Count == 0)
+    {
+        var names     = new[] { "North", "South", "East", "West" };
+        var sliceSize = (int)Math.Ceiling(allDistricts.Count / 4.0);
+
+        for (var i = 0; i < 4; i++)
+        {
+            var slice = allDistricts
+                .Skip(i * sliceSize)
+                .Take(sliceSize)
+                .Select(d => d.Id)
+                .ToArray();
+
+            if (slice.Length == 0) continue;
+
+            var groupResult = DistrictGroup.Create(Guid.NewGuid(), names[i], slice);
+            if (groupResult.IsFailure) continue;
+
+            db.Set<DistrictGroup>().Add(groupResult.Value);
+            allGroupIds.Add(groupResult.Value.Id);
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    // GeneralObserver — sees everything.
+    var adminResult = AppUser.Create(
+        Guid.NewGuid(), "admin",
+        passwordHasher.Hash("admin123"),
+        "GeneralObserver",
+        []);
+
+    // Observer — scoped to the first two groups (North + South).
+    var observerSectors = allGroupIds.Take(2).ToArray();
+    var observerResult  = AppUser.Create(
+        Guid.NewGuid(), "observer",
+        passwordHasher.Hash("observer123"),
+        "Observer",
+        observerSectors);
+
+    if (adminResult.IsSuccess)    db.Set<AppUser>().Add(adminResult.Value);
+    if (observerResult.IsSuccess) db.Set<AppUser>().Add(observerResult.Value);
+
+    await db.SaveChangesAsync(ct);
+    logger.LogInformation(
+        "Seeded RBAC users: admin (GeneralObserver), observer (sectors: {Count})",
+        observerSectors.Length);
+}
 }

@@ -2,11 +2,12 @@ using GridTrack.Application.Abstractions.Cache;
 using GridTrack.Application.Abstractions.Telemetry;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Errors;
+using GridTrack.Application.UseCases.Drivers;
 using GridTrack.Domain.Abstractions;
 using GridTrack.Domain.Drivers;
 using NetTopologySuite.Geometries;
 
-namespace GridTrack.Application.UseCases.Drivers;
+namespace GridTrack.Application.UnitTests.UseCases.Drivers;
 
 public sealed record UpdatePositionRequest(Guid DriverId, Point Location, DateTime Timestamp);
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Dapper;
+using GridTrack.Application.Abstractions.Authentication;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
@@ -13,47 +14,65 @@ public sealed class DeliveryReadService : IDeliveryReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
     private readonly AppDbContext _context;
+    private readonly ICurrentUser          _currentUser;
 
-    public DeliveryReadService(ISqlConnectionFactory sqlConnectionFactory, AppDbContext context)
+    public DeliveryReadService(
+        ISqlConnectionFactory sqlConnectionFactory,
+        AppDbContext context,
+        ICurrentUser currentUser)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
-        _context = context;
+        _context              = context;
+        _currentUser          = currentUser;
     }
+
+    // Filtering helper ? add this private property:
+    private string[]? AllowedDistricts => _currentUser.AllowedDistrictIds?.ToArray();
 
     public async Task<DeliveryDto?> GetByIdAsync(Guid id, CancellationToken ct)
     {
         using var connection = _sqlConnectionFactory.CreateConnection();
 
-        const string sql = """
-                           SELECT
-                               d."DeliveryId",
-                               d."CurrentLocation",
-                               d."Status",
-                               d."AssignedDriverId",
-                               dr."Name" AS "AssignedDriverName",
-                               d."ExpectedEta",
-                               d."ActualEta",
-                               d."DistrictId",
-                               d."AnomalyFlag",
-                               d."AnomalyTypeValue",
-                               d."CreatedAt",
-                               d."PickedUpAt",
-                               d."DeliveredAt",
-                               d."CancelledAt",
-                               d."AnomalyReason",
-                               d."RouteDistanceMeters",
-                               d."RouteDurationSeconds",
-                               d."RouteCost"
-                           FROM public."Deliveries" d
-                           LEFT JOIN public."Drivers" dr ON dr."DriverId" = d."AssignedDriverId"
-                           WHERE d."DeliveryId" = @Id
-                           """;
+        // language=sql
+        const string baseSql = """
+                               SELECT
+                                   d."DeliveryId",
+                                   d."CurrentLocation",
+                                   d."Status",
+                                   d."AssignedDriverId",
+                                   dr."Name" AS "AssignedDriverName",
+                                   d."ExpectedEta",
+                                   d."ActualEta",
+                                   d."DistrictId",
+                                   d."AnomalyFlag",
+                                   d."AnomalyTypeValue",
+                                   d."AnomalyReason",
+                                   d."CreatedAt",
+                                   d."PickedUpAt",
+                                   d."DeliveredAt",
+                                   d."RouteDistanceMeters",
+                                   d."RouteDurationSeconds",
+                                   d."RouteCost"
+                               FROM public."Deliveries" d
+                               LEFT JOIN public."Drivers" dr ON dr."DriverId" = d."AssignedDriverId"
+                               WHERE d."DeliveryId" = @Id
+                               """;
 
-        return await connection.QueryFirstOrDefaultAsync<DeliveryDto>(sql, new { Id = id });
+        var allowed = AllowedDistricts;
+        var sql = allowed is null
+            ? baseSql
+            : baseSql + """ AND d."DistrictId" = ANY(@AllowedDistricts::text[]) """;
+
+        return await connection.QueryFirstOrDefaultAsync<DeliveryDto>(
+            sql, new { Id = id, AllowedDistricts = allowed });
     }
 
     public async Task<IEnumerable<DeliveryDto>> GetByDistrictAsync(string districtId, CancellationToken ct)
     {
+        var allowed = AllowedDistricts;
+        if (allowed is not null && !allowed.Contains(districtId))
+            return [];
+        
         using var connection = _sqlConnectionFactory.CreateConnection();
 
         const string sql = """
@@ -152,6 +171,13 @@ public sealed class DeliveryReadService : IDeliveryReadService
         {
             where.Add("""d."Status" = @StatusInt""");
             parameters.Add("StatusInt", statusInt);
+        }
+        
+        var allowed = AllowedDistricts;
+        if (allowed is not null)
+        {
+            where.Add("""d."DistrictId" = ANY(@AllowedDistricts::text[])""");
+            parameters.Add("AllowedDistricts", allowed);
         }
 
         var whereClause = where.Count > 0 ? "WHERE " + string.Join(" AND ", where) : string.Empty;

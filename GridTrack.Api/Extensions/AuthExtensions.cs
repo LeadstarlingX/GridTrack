@@ -1,5 +1,8 @@
 using System.Security.Claims;
+using System.Text;
 using System.Text.Encodings.Web;
+using GridTrack.Application.Abstractions.Authentication;
+using GridTrack.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
@@ -25,6 +28,44 @@ public static class AuthExtensions
                 .AddAuthentication(LoadTestAuthHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, LoadTestAuthHandler>(
                     LoadTestAuthHandler.SchemeName, _ => { });
+            services.AddAuthorization();
+            return services;
+        }
+        
+        // Local HS256 JWT path — active when JwtOptions:Secret is present in config.
+        // Used for the RBAC demo; Clerk is used in production when this key is absent.
+        var jwtSecret = configuration["JwtOptions:Secret"] ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(jwtSecret))
+        {
+            services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+            services
+                .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(o =>
+                {
+                    o.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer           = true,
+                        ValidIssuer              = "gridtrack-local",
+                        ValidateAudience         = true,
+                        ValidAudience            = "gridtrack-api",
+                        ValidateLifetime         = true,
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey         = new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes(jwtSecret)),
+                        ClockSkew                = TimeSpan.FromSeconds(30),
+                    };
+                    o.Events = new JwtBearerEvents
+                    {
+                        OnMessageReceived = ctx =>
+                        {
+                            var token = ctx.Request.Query["access_token"];
+                            if (!string.IsNullOrEmpty(token) &&
+                                ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                                ctx.Token = token;
+                            return Task.CompletedTask;
+                        }
+                    };
+                });
             services.AddAuthorization();
             return services;
         }

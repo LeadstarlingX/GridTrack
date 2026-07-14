@@ -30,26 +30,24 @@ internal sealed class DashboardPushService(
 
     public async Task BroadcastDeliveryUpdateAsync(string districtId, DeliveryDto payload, CancellationToken ct)
     {
-        Console.WriteLine($"[PUSH] Broadcasting DeliveryUpdated id={payload.DeliveryId} etaSecs={(payload.ExpectedEta.HasValue
-            ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds) : -1)}");
-        await hub.Clients.All.SendCoreAsync(
-            "DeliveryUpdated",
-            [
-                new
-                {
-                    deliveryId           = payload.DeliveryId,
-                    status               = payload.Status.ToString(),
-                    assignedDriverId     = payload.AssignedDriverId,
-                    etaSeconds           = payload.ExpectedEta.HasValue
-                        ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds)
-                        : (int?)null,
-                    routeDistanceMeters  = payload.RouteDistanceMeters,
-                    routeDurationSeconds = payload.RouteDurationSeconds,
-                    routeCost            = payload.RouteCost,
-                }
-            ],
-            ct);
+        var message = new
+        {
+            deliveryId           = payload.DeliveryId,
+            status               = payload.Status.ToString(),
+            assignedDriverId     = payload.AssignedDriverId,
+            etaSeconds           = payload.ExpectedEta.HasValue
+                ? (int)Math.Max(0, (payload.ExpectedEta.Value - DateTime.UtcNow).TotalSeconds)
+                : (int?)null,
+            routeDistanceMeters  = payload.RouteDistanceMeters,
+            routeDurationSeconds = payload.RouteDurationSeconds,
+            routeCost            = payload.RouteCost,
+        };
 
+        await hub.Clients.Group(districtId).SendCoreAsync("DeliveryUpdated", [message], ct);
+
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("DeliveryUpdated", [message], ct);
     }
 
     public Task BroadcastAnomalyAsync(string districtId, AnomalyAlertDto payload, CancellationToken ct)
@@ -89,17 +87,27 @@ internal sealed class DashboardPushService(
             [new { districtId, forecastedDemand, updatedAt }],
             ct);
 
-    public Task BroadcastDemandSurgeAsync(
+    public async Task BroadcastDemandSurgeAsync(
         string districtId, int currentCount, double historicalMean, double deviations, CancellationToken ct)
-        => hub.Clients.All.SendCoreAsync(
-            "DemandSurge",
-            [new { districtId, currentCount, historicalMean, deviations, detectedAt = DateTime.UtcNow }],
-            ct);
+    {
+        var payload = new { districtId, currentCount, historicalMean, deviations, detectedAt = DateTime.UtcNow };
 
-    public Task BroadcastAnomalyIncidentAsync(
+        await hub.Clients.Group(districtId).SendCoreAsync("DemandSurge", [payload], ct);
+
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("DemandSurge", [payload], ct);
+    }
+
+    public async Task BroadcastAnomalyIncidentAsync(
         string districtId, int anomalyCount, string summary, CancellationToken ct)
-        => hub.Clients.All.SendCoreAsync(
-            "AnomalyIncident",
-            [new { districtId, anomalyCount, windowMinutes = 30, summary, detectedAt = DateTime.UtcNow }],
-            ct);
+    {
+        var payload = new { districtId, anomalyCount, windowMinutes = 30, summary, detectedAt = DateTime.UtcNow };
+
+        await hub.Clients.Group(districtId).SendCoreAsync("AnomalyIncident", [payload], ct);
+
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("AnomalyIncident", [payload], ct);
+    }
 }
