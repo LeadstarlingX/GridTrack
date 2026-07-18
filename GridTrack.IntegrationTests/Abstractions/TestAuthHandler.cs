@@ -12,10 +12,11 @@ public sealed class TestAuthHandler(
     UrlEncoder encoder)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    // Existing tests use this unchanged — no backward-compat break.
-    public const string ValidToken           = "test-valid-user";
-    public const string GeneralObserverToken = "test-general-observer";
-    public const string ObserverPrefix       = "test-observer|";  // format: test-observer|d1|d2|...
+    
+    public const string ValidToken             = "test-valid-user";
+    public const string GeneralObserverToken   = "test-general-observer";
+    public const string ObserverPrefix         = "test-observer|";        // format: test-observer|d1|d2|...
+    public const string ObserverSectorPrefix   = "test-observer-sector|"; // format: test-observer-sector|uuid1|uuid2|...
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -55,6 +56,9 @@ public sealed class TestAuthHandler(
         _ when token.StartsWith(ObserverPrefix, StringComparison.Ordinal) =>
             BuildObserverClaims(token[ObserverPrefix.Length..]),
 
+        _ when token.StartsWith(ObserverSectorPrefix, StringComparison.Ordinal) =>
+            BuildObserverSectorClaims(token[ObserverSectorPrefix.Length..]),
+
         _ => null
     };
 
@@ -68,6 +72,19 @@ public sealed class TestAuthHandler(
             new("role", "Observer"),
         };
         claims.AddRange(districtIds.Select(d => new Claim("districtId", d)));
+        return [.. claims];
+    }
+    
+    private static Claim[] BuildObserverSectorClaims(string sectorsPart)
+    {
+        // sectorsPart = "uuid1|uuid2"
+        var sectorIds = sectorsPart.Split('|', StringSplitOptions.RemoveEmptyEntries);
+        var claims    = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, "test-observer-sector-id"),
+            new("role", "Observer"),
+        };
+        claims.AddRange(sectorIds.Select(s => new Claim("sectorId", s)));
         return [.. claims];
     }
 }

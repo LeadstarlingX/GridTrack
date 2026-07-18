@@ -50,34 +50,51 @@ internal sealed class DashboardPushService(
             await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("DeliveryUpdated", [message], ct);
     }
 
-    public Task BroadcastAnomalyAsync(string districtId, AnomalyAlertDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendCoreAsync(
-            "AnomalyBroadcast",
-            [new
-            {
-                deliveryId  = payload.DeliveryId,
-                anomalyType = payload.Type.ToString(),
-                reason      = payload.Reason,
-                districtId  = payload.DistrictId,
-                timestamp   = payload.Timestamp,
-            }],
-            ct);
-
-    public Task BroadcastForecastOverlayAsync(string districtId, ForecastDto payload, CancellationToken ct)
-        => hub.Clients.Group(districtId).SendCoreAsync(
-            "ForecastOverlayUpdated",
-            [new
-            {
-                districtId       = payload.DistrictId,
-                forecastedDemand = payload.ExpectedDeliveries,
-                updatedAt        = payload.GeneratedAt,
-            }],
-            ct);
-
-    public Task BroadcastUrgencyUpdateAsync(Guid deliveryId, string? districtId, int urgencyScore, string aiNote, CancellationToken ct)
+    public async Task BroadcastAnomalyAsync(string districtId, AnomalyAlertDto payload, CancellationToken ct)
     {
-        var target = districtId is not null ? hub.Clients.Group(districtId) : hub.Clients.All;
-        return target.SendCoreAsync("UrgencyUpdated", [new { deliveryId, urgencyScore, aiNote }], ct);
+        var message = new
+        {
+            deliveryId  = payload.DeliveryId,
+            anomalyType = payload.Type.ToString(),
+            reason      = payload.Reason,
+            districtId  = payload.DistrictId,
+            timestamp   = payload.Timestamp,
+        };
+
+        await hub.Clients.Group(districtId).SendCoreAsync("AnomalyBroadcast", [message], ct);
+
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("AnomalyBroadcast", [message], ct);
+    }
+
+    public async Task BroadcastForecastOverlayAsync(string districtId, ForecastDto payload, CancellationToken ct)
+    {
+        var message = new
+        {
+            districtId       = payload.DistrictId,
+            forecastedDemand = payload.ExpectedDeliveries,
+            updatedAt        = payload.GeneratedAt,
+        };
+
+        await hub.Clients.Group(districtId).SendCoreAsync("ForecastOverlayUpdated", [message], ct);
+
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("ForecastOverlayUpdated", [message], ct);
+    }
+
+    public async Task BroadcastUrgencyUpdateAsync(Guid deliveryId, string? districtId, int urgencyScore, string aiNote, CancellationToken ct)
+    {
+        if (districtId is null) return;
+
+        var message = new { deliveryId, urgencyScore, aiNote };
+
+        await hub.Clients.Group(districtId).SendCoreAsync("UrgencyUpdated", [message], ct);
+
+        var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+        foreach (var groupId in groupIds)
+            await hub.Clients.Group($"dg:{groupId}").SendCoreAsync("UrgencyUpdated", [message], ct);
     }
 
     public Task BroadcastForecastResultAsync(

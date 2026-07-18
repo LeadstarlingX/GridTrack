@@ -207,13 +207,13 @@ public async Task BroadcastDeliveryUpdate_Should_Send_Null_Route_Fields_When_Not
     // ──────────────────────────────────────────────────────────────
 
     [Test]
-    public async Task BroadcastUrgencyUpdate_Should_Target_All_Clients_When_DistrictId_Is_Null()
+    public async Task BroadcastUrgencyUpdate_Should_Drop_Message_When_DistrictId_Is_Null()
     {
         var (svc, hub) = Build();
 
         await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), null, 7, "ETA breach.", CancellationToken.None);
 
-        await Assert.That(hub.FakeClients.AllProxy.Calls).Count().IsEqualTo(1);
+        await Assert.That(hub.FakeClients.AllProxy.Calls).Count().IsEqualTo(0);
         await Assert.That(hub.FakeClients.GroupProxy.Calls).Count().IsEqualTo(0);
     }
 
@@ -234,9 +234,9 @@ public async Task BroadcastDeliveryUpdate_Should_Send_Null_Route_Fields_When_Not
     {
         var (svc, hub) = Build();
 
-        await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), null, 9, "Critical.", CancellationToken.None);
+        await svc.BroadcastUrgencyUpdateAsync(Guid.NewGuid(), "mezzeh", 9, "Critical.", CancellationToken.None);
 
-        await Assert.That(hub.FakeClients.AllProxy.Calls[0].Method).IsEqualTo("UrgencyUpdated");
+        await Assert.That(hub.FakeClients.GroupProxy.Calls[0].Method).IsEqualTo("UrgencyUpdated");
     }
 
     [Test]
@@ -245,9 +245,9 @@ public async Task BroadcastDeliveryUpdate_Should_Send_Null_Route_Fields_When_Not
         var (svc, hub) = Build();
         var deliveryId = Guid.NewGuid();
 
-        await svc.BroadcastUrgencyUpdateAsync(deliveryId, null, 8, "Significant delay.", CancellationToken.None);
+        await svc.BroadcastUrgencyUpdateAsync(deliveryId, "mezzeh", 8, "Significant delay.", CancellationToken.None);
 
-        var payload = hub.FakeClients.AllProxy.Calls[0].Args[0]!;
+        var payload = hub.FakeClients.GroupProxy.Calls[0].Args[0]!;
         await Assert.That(GetProperty<Guid>(payload, "deliveryId")).IsEqualTo(deliveryId);
         await Assert.That(GetProperty<int>(payload, "urgencyScore")).IsEqualTo(8);
         await Assert.That(GetProperty<string>(payload, "aiNote")).IsEqualTo("Significant delay.");

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Dapper;
+using GridTrack.Application.Abstractions.Authentication;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
@@ -11,11 +12,16 @@ public sealed class DistrictReadService : IDistrictReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
     private readonly IDistrictDataService _districtService;
+    private readonly ICurrentUser _currentUser;
 
-    public DistrictReadService(ISqlConnectionFactory sqlConnectionFactory, IDistrictDataService districtService)
+    public DistrictReadService(
+        ISqlConnectionFactory sqlConnectionFactory,
+        IDistrictDataService  districtService,
+        ICurrentUser          currentUser)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
-        _districtService = districtService;
+        _districtService      = districtService;
+        _currentUser          = currentUser;
     }
 
     public Task<GetDistrictsResponse> GetDistrictsAsync(CancellationToken ct)
@@ -113,6 +119,10 @@ public sealed class DistrictReadService : IDistrictReadService
 
     public async Task<DistrictContextDto> GetDistrictContextAsync(string districtId, CancellationToken ct)
     {
+        var allowed = _currentUser.AllowedDistrictIds;
+        if (allowed is not null && !allowed.Contains(districtId, StringComparer.OrdinalIgnoreCase))
+            return new DistrictContextDto(districtId, 0, 0, 0.0);
+
         using var connection = _sqlConnectionFactory.CreateConnection();
 
         const string deliverySql = """

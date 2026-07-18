@@ -76,10 +76,13 @@ public static class DependencyInjection
         services.AddScoped<IAnomalyReadService, AnomalyReadService>();
         // Analytics read service wrapped with Redis cache-aside decorator
         services.AddScoped<AnalyticsReadService>();
+        
         services.AddScoped<IAnalyticsReadService>(sp =>
             new CachedAnalyticsReadService(
                 sp.GetRequiredService<AnalyticsReadService>(),
-                sp.GetRequiredService<ICacheService>()));
+                sp.GetRequiredService<ICacheService>(),
+                sp.GetRequiredService<ICurrentUser>()));
+        
         services.AddScoped<IDeliveryReadService, DeliveryReadService>();
         services.AddScoped<IDistrictReadService, DistrictReadService>();
         services.AddScoped<IDriverReadService, DriverReadService>();

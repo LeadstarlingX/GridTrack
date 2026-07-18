@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using Dapper;
+using GridTrack.Application.Abstractions.Authentication;
 using GridTrack.Application.Abstractions.Data;
 using GridTrack.Application.CQRS.ReadServices;
 using GridTrack.Application.Dtos;
@@ -9,11 +10,15 @@ namespace GridTrack.Infrastructure.CQRS.ReadServices;
 public sealed class AnomalyReadService : IAnomalyReadService
 {
     private readonly ISqlConnectionFactory _sqlConnectionFactory;
+    private readonly ICurrentUser _currentUser;
 
-    public AnomalyReadService(ISqlConnectionFactory sqlConnectionFactory)
+    public AnomalyReadService(ISqlConnectionFactory sqlConnectionFactory, ICurrentUser currentUser)
     {
         _sqlConnectionFactory = sqlConnectionFactory;
+        _currentUser          = currentUser;
     }
+
+    private string[]? AllowedDistricts => _currentUser.AllowedDistrictIds?.ToArray();
 
     public async Task<IEnumerable<AnomalyAlertDto>> GetEtaAnomaliesAsync(IEnumerable<string> districtIds, CancellationToken ct)
     {
@@ -77,11 +82,36 @@ public sealed class AnomalyReadService : IAnomalyReadService
             where.Add("""d."CreatedAt" < @To""");
             parameters.Add("To", to.Value.Date.AddDays(1));
         }
-        if (!string.IsNullOrWhiteSpace(districtId))
+        
+        var allowed = AllowedDistricts;
+
+        if (allowed is not null)
+        {
+            if (allowed.Length == 0)
+                return new GetAlertsResponse([], null);
+
+            if (!string.IsNullOrWhiteSpace(districtId))
+            {
+                // Caller supplied an explicit district — only honour it if it's in their sector.
+                if (!allowed.Contains(districtId, StringComparer.OrdinalIgnoreCase))
+                    return new GetAlertsResponse([], null);
+
+                where.Add("""d."DistrictId" = @DistrictId""");
+                parameters.Add("DistrictId", districtId);
+            }
+            else
+            {
+                // No district filter from caller — scope to their allowed set.
+                where.Add("""d."DistrictId" = ANY(@AllowedDistricts::text[])""");
+                parameters.Add("AllowedDistricts", allowed);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(districtId))
         {
             where.Add("""d."DistrictId" = @DistrictId""");
             parameters.Add("DistrictId", districtId);
         }
+        
         if (!string.IsNullOrWhiteSpace(anomalyType))
         {
             var typeInt = anomalyType switch
