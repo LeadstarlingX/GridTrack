@@ -24,6 +24,7 @@ public sealed class PositionSimulatorService(
     IOsrmService osrm,
     IServiceScopeFactory scopeFactory,
     IDistrictDataService districts,
+    IDistrictGroupCache districtGroupCache,
     IOptions<SimulatorOptions> options,
     SeedCompletionSignal seedSignal,
     ILogger<PositionSimulatorService> logger) : BackgroundService
@@ -231,6 +232,7 @@ public sealed class PositionSimulatorService(
         var opts = options.Value;
         var broadcastTasks = new List<Task>(_drivers.Count);
         var positionBatch = new List<object>(_drivers.Count);
+        var batchByDistrict = new Dictionary<string, List<object>>();
 
         for (var i = 0; i < _drivers.Count; i++)
         {
@@ -244,8 +246,10 @@ public sealed class PositionSimulatorService(
                     (now - d.LastBroadcastAt).TotalSeconds > opts.StallThresholdSeconds)
                 {
                     _drivers[i] = d with { StallBroadcastSent = true };
-                    broadcastTasks.Add(hub.Clients.All.SendCoreAsync("StallDetected",
-                        [new { driverId = d.Id, driverName = d.Name, districtId = d.DistrictId, stalledSince = d.LastBroadcastAt }], ct));
+                    var stallPayload = new { driverId = d.Id, driverName = d.Name, districtId = d.DistrictId, stalledSince = d.LastBroadcastAt };
+                    var stallGroupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(d.DistrictId, ct);
+                    foreach (var sgid in stallGroupIds)
+                        broadcastTasks.Add(hub.Clients.Group($"dg:{sgid}").SendCoreAsync("StallDetected", [stallPayload], ct));
                 }
                 continue;
             }
@@ -475,7 +479,11 @@ public sealed class PositionSimulatorService(
                     LastBroadcastAt = now,
                 };
                 // Broadcast immediately as available so the frontend doesn't show in-transit during dwell
-                positionBatch.Add(new { driverId = d.Id, lat = dropLat2, lng = dropLng2, districtId = d.DistrictId, deliveryId = (string?)null, routeAhead = (object?)null });
+                var dropEntry = new { driverId = d.Id, lat = dropLat2, lng = dropLng2, districtId = d.DistrictId, deliveryId = (string?)null, routeAhead = (object?)null };
+                positionBatch.Add(dropEntry);
+                if (!batchByDistrict.TryGetValue(d.DistrictId, out var dropBucket))
+                    batchByDistrict[d.DistrictId] = dropBucket = [];
+                dropBucket.Add(dropEntry);
                 logger.LogDebug("Driver {Name} completed delivery", d.Name);
                 continue;
             }
@@ -486,8 +494,7 @@ public sealed class PositionSimulatorService(
             {
                 d = d with { RouteDeviationWaypoint = -1, DeviationTicksLeft = 0 };
                 var wp = d.Waypoints[d.WaypointIndex];
-                broadcastTasks.Add(hub.Clients.All.SendCoreAsync("AnomalyBroadcast",
-                [new
+                var anomalyPayload = new
                 {
                     id          = $"sim-dev-{Guid.NewGuid():N}",
                     deliveryId  = d.ActiveDeliveryId?.ToString() ?? Guid.NewGuid().ToString(),
@@ -499,7 +506,10 @@ public sealed class PositionSimulatorService(
                     lat         = wp.Lat,
                     lng         = wp.Lng,
                     timestamp   = now,
-                }], ct));
+                };
+                var anomalyGroupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(d.DistrictId, ct);
+                foreach (var agid in anomalyGroupIds)
+                    broadcastTasks.Add(hub.Clients.Group($"dg:{agid}").SendCoreAsync("AnomalyBroadcast", [anomalyPayload], ct));
                 if (d.ActiveDeliveryId.HasValue)
                     await InvokeCommandAsync(new FlagDeliveryAnomalyCommand(new FlagAnomalyRequest(
                         d.ActiveDeliveryId.Value, AnomalyType.RouteDeviation, "Driver deviated from assigned route")), ct);
@@ -520,19 +530,19 @@ public sealed class PositionSimulatorService(
                 var remainingSecs = remaining * opts.PositionUpdateIntervalMs / 1000.0 * opts.EtaBufferMultiplier;
                 await SetDeliveryEtaAsync(d.ActiveDeliveryId.Value, now.AddSeconds(remainingSecs), ct);
 
-                broadcastTasks.Add(hub.Clients.All.SendCoreAsync("DeliveryUpdated",
-                [
-                    new
-                    {
-                        deliveryId           = d.ActiveDeliveryId.Value,
-                        status               = "InTransit",
-                        assignedDriverId     = (Guid?)d.Id,
-                        etaSeconds           = remainingSecs > 0 ? (int?)((int)remainingSecs) : null,
-                        routeDistanceMeters  = (double?)null,
-                        routeDurationSeconds = (double?)null,
-                        routeCost            = (decimal?)null,
-                    }
-                ], ct));
+                var etaPayload = new
+                {
+                    deliveryId           = d.ActiveDeliveryId.Value,
+                    status               = "InTransit",
+                    assignedDriverId     = (Guid?)d.Id,
+                    etaSeconds           = remainingSecs > 0 ? (int?)((int)remainingSecs) : null,
+                    routeDistanceMeters  = (double?)null,
+                    routeDurationSeconds = (double?)null,
+                    routeCost            = (decimal?)null,
+                };
+                var etaGroupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(d.DistrictId, ct);
+                foreach (var egid in etaGroupIds)
+                    broadcastTasks.Add(hub.Clients.Group($"dg:{egid}").SendCoreAsync("DeliveryUpdated", [etaPayload], ct));
 
                 lastEtaRefresh = now;
             }
@@ -551,18 +561,27 @@ public sealed class PositionSimulatorService(
                     .ToArray()
                 : null;
 
-            positionBatch.Add(new
+            var posEntry = new
             {
                 driverId   = d.Id,
                 lat, lng,
                 districtId = d.DistrictId,
                 deliveryId = d.ActiveDeliveryId?.ToString(),
                 routeAhead,
-            });
+            };
+            positionBatch.Add(posEntry);
+            if (!batchByDistrict.TryGetValue(d.DistrictId, out var posBucket))
+                batchByDistrict[d.DistrictId] = posBucket = [];
+            posBucket.Add(posEntry);
         }
 
-        if (positionBatch.Count > 0)
-            broadcastTasks.Add(hub.Clients.All.SendCoreAsync("DriverPositionBatch", [positionBatch], ct));
+        // Fan-out per district group so each observer only receives their sector's positions.
+        foreach (var (districtId, positions) in batchByDistrict)
+        {
+            var groupIds = await districtGroupCache.GetGroupIdsForDistrictAsync(districtId, ct);
+            foreach (var gid in groupIds)
+                broadcastTasks.Add(hub.Clients.Group($"dg:{gid}").SendCoreAsync("DriverPositionBatch", [positions], ct));
+        }
         try { await Task.WhenAll(broadcastTasks); }
         catch (Exception ex) { logger.LogWarning(ex, "PositionSimulator: broadcast error"); }
 

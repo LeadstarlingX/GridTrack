@@ -16,24 +16,8 @@ public static class AuthExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var aspEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "";
-
-        // Containerized load-test environment: no Clerk JWT is available, but the SignalR
-        // hub is [Authorize] + RequireAuthorization() and some endpoints need an
-        // authenticated principal. Authenticate every request with a stub identity so k6
-        // can exercise the hub and protected routes. NEVER active outside Docker.
-        if (aspEnv.Equals("Docker", StringComparison.OrdinalIgnoreCase))
-        {
-            services
-                .AddAuthentication(LoadTestAuthHandler.SchemeName)
-                .AddScheme<AuthenticationSchemeOptions, LoadTestAuthHandler>(
-                    LoadTestAuthHandler.SchemeName, _ => { });
-            services.AddAuthorization();
-            return services;
-        }
-        
-        // Local HS256 JWT path — active when JwtOptions:Secret is present in config.
-        // Used for the RBAC demo; Clerk is used in production when this key is absent.
+        // Local HS256 JWT path — takes priority when Secret is configured (including Docker).
+        // Allows the RBAC demo to work inside Docker with real sector-scoped tokens.
         var jwtSecret = configuration["JwtOptions:Secret"] ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(jwtSecret))
         {
@@ -42,6 +26,9 @@ public static class AuthExtensions
                 .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(o =>
                 {
+                    // Keep claim names as written in the token ("role", "districtId", "sectorId").
+                    // Without this the middleware remaps "role" → ClaimTypes.Role, breaking CurrentUser.
+                    o.MapInboundClaims = false;
                     o.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer           = true,
@@ -66,6 +53,19 @@ public static class AuthExtensions
                         }
                     };
                 });
+            services.AddAuthorization();
+            return services;
+        }
+
+        // Docker load-test fallback: no JWT secret configured, bypass auth so k6 can
+        // exercise protected routes without real tokens. NEVER active outside Docker.
+        var aspEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "";
+        if (aspEnv.Equals("Docker", StringComparison.OrdinalIgnoreCase))
+        {
+            services
+                .AddAuthentication(LoadTestAuthHandler.SchemeName)
+                .AddScheme<AuthenticationSchemeOptions, LoadTestAuthHandler>(
+                    LoadTestAuthHandler.SchemeName, _ => { });
             services.AddAuthorization();
             return services;
         }

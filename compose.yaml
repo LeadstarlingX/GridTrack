@@ -137,7 +137,7 @@ services:
       MCP_API_KEY: "${MCP_API_KEY}"
       CLICKHOUSE_HOST: "gridtrack.clickhouse"
     ports:
-      - "8000:8000"   # FastAPI docs  →  http://localhost:8000/docs
+      - "8000:8000"  
     depends_on:
       gridtrack.rabbitmq:
         condition: service_healthy

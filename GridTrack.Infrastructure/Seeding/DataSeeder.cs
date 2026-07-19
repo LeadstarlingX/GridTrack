@@ -286,7 +286,75 @@ public sealed class DataSeeder(
         db.Set<Delivery>().AddRange(pendingDeliveries);
         await db.SaveChangesAsync(ct);
 
+        await SeedHistoricalDeliveriesAsync(activeDrivers, allDistricts, ct);
         await SeedUsersAsync(ct);
+    }
+
+    // Backfills 14 days of completed deliveries with a realistic hourly distribution
+    // so SARIMA (which needs 48+ hourly data points) gets stable training data.
+    // No OSRM calls — routes aren't needed for the count-based forecast model.
+    private async Task SeedHistoricalDeliveriesAsync(
+        IReadOnlyList<Driver> activeDrivers,
+        IReadOnlyList<DistrictInfo> allDistricts,
+        CancellationToken ct)
+    {
+        // Relative hourly delivery likelihood (index = hour 0..23).
+        // Damascus pattern: quiet night, morning/evening peaks.
+        ReadOnlySpan<int> hourWeights =
+        [
+            1, 1, 1, 1, 1, 2,       // 00-05  night
+            5, 10, 18, 20, 18, 16,   // 06-11  morning ramp + peak
+            12, 10, 12, 15, 18, 20,  // 12-17  lunch dip + afternoon peak
+            18, 15, 10, 6, 3, 2,     // 18-23  evening + wind-down
+        ];
+
+        var totalWeight = 0;
+        foreach (var w in hourWeights) totalWeight += w;
+
+        const int daysBack = 14;
+        const int perDay   = 250; // ~10/hr avg → SARIMA stable; ~3 500 rows total
+
+        var now   = DateTime.UtcNow;
+        var batch = new List<Delivery>(daysBack * perDay);
+
+        for (var day = 1; day <= daysBack; day++)
+        {
+            var dayBase = now.Date.AddDays(-day);
+
+            for (var h = 0; h < 24; h++)
+            {
+                var count = (int)Math.Round(perDay * hourWeights[h] / (double)totalWeight);
+                for (var j = 0; j < count; j++)
+                {
+                    var driver = activeDrivers[Rng.Next(activeDrivers.Count)];
+                    var district = districtService.GetById(driver.DistrictId);
+                    if (district is null) continue;
+
+                    var createdAt   = dayBase.AddHours(h).AddMinutes(Rng.Next(0, 60));
+                    var expectedEta = createdAt.AddMinutes(RandomRange(30, 90));
+                    var deliveredAt = createdAt.AddMinutes(RandomRange(20, 110));
+                    var pickedUpAt  = createdAt.AddMinutes(RandomRange(3, 10));
+                    var origin      = Jitter(district.CentroidLat, district.CentroidLng, district.JitterRadius);
+
+                    var result = Delivery.Create(Guid.NewGuid(), origin, driver.DistrictId, createdAt, expectedEta);
+                    if (result.IsFailure) continue;
+
+                    var delivery = result.Value;
+                    delivery.ClearDomainEvents();
+                    delivery.AssignDriver(driver.DriverId);
+                    delivery.MarkPickedUp(origin, pickedUpAt);
+                    delivery.UpdateLocation(origin, pickedUpAt.AddMinutes(1));
+                    delivery.MarkDelivered(deliveredAt);
+                    delivery.ClearDomainEvents();
+
+                    batch.Add(delivery);
+                }
+            }
+        }
+
+        db.Set<Delivery>().AddRange(batch);
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Seeded {Count} historical deliveries over {Days} days (SARIMA training data)", batch.Count, daysBack);
     }
 
     // Fans OSRM calls out across OsrmConcurrency workers; preserves spec order in the
@@ -425,12 +493,21 @@ public sealed class DataSeeder(
         "Observer",
         observerSectors);
 
+    // Observer2 — scoped to the last two groups (East + West).
+    var observer2Sectors = allGroupIds.Skip(2).Take(2).ToArray();
+    var observer2Result  = AppUser.Create(
+        Guid.NewGuid(), "observer2",
+        passwordHasher.Hash("observer2123"),
+        "Observer",
+        observer2Sectors);
+
     if (adminResult.IsSuccess)    db.Set<AppUser>().Add(adminResult.Value);
     if (observerResult.IsSuccess) db.Set<AppUser>().Add(observerResult.Value);
+    if (observer2Result.IsSuccess) db.Set<AppUser>().Add(observer2Result.Value);
 
     await db.SaveChangesAsync(ct);
     logger.LogInformation(
-        "Seeded RBAC users: admin (GeneralObserver), observer (sectors: {Count})",
-        observerSectors.Length);
+        "Seeded RBAC users: admin (GeneralObserver), observer (sectors: {Count}), observer2 (sectors: {Count2})",
+        observerSectors.Length, observer2Sectors.Length);
 }
 }
