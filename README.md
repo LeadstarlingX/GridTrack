@@ -74,6 +74,31 @@ task k6-stress           # high-VU stress
 task k6-throughput       # arrival-rate ceiling
 ```
 
+## MCP server — AI agent integration
+
+The Python pipeline ([gridtrack-forecasting](https://github.com/LeadstarlingX/gridtrack-forecasting))
+exposes an **MCP server** so AI agents can query live fleet data as native tools.
+
+- **URL:** `http://localhost:8000/mcp` (SSE transport)
+- **Auth:** `Authorization: Bearer <MCP_API_KEY>` — key is in `.env` at this repo's root
+- **Tools:** `get_active_drivers`, `get_anomalies`, `get_deliveries_summary`, `get_district_status`, `get_stalled_drivers`, `get_activity_trend`, `get_peak_hours`
+
+**Quick setup for Claude Code** — add to `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "gridtrack": {
+      "type": "sse",
+      "url": "http://localhost:8000/mcp",
+      "headers": { "Authorization": "Bearer gridtrack-mcp-2026" }
+    }
+  }
+}
+```
+
+Full documentation and client examples: [gridtrack-forecasting README](https://github.com/LeadstarlingX/gridtrack-forecasting#mcp-server--ai-agent-integration).
+
 ## Load testing & honest benchmarks
 
 The benchmark tables below are generated from real k6 runs in CI. We deliberately keep them
