@@ -14,8 +14,11 @@ public class DashboardHubTests : BaseIntegrationTest
     {
         var handler = Factory.Server.CreateHandler();
         return new HubConnectionBuilder()
-            .WithUrl($"http://localhost/hubs/dashboard?access_token={token}",
-                o => o.HttpMessageHandlerFactory = _ => handler)
+            .WithUrl("http://localhost/hubs/dashboard", o =>
+            {
+                o.HttpMessageHandlerFactory = _ => handler;
+                o.AccessTokenProvider = () => Task.FromResult<string?>(token);
+            })
             .Build();
     }
 
