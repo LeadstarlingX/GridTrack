@@ -435,21 +435,31 @@ public class PythonPipelineE2ETests
     [NotInParallel]
     public async Task SinglePositionUpdate_Should_Produce_Deterministic_CriticalForecast()
     {
-        // For a brand-new district with exactly one position event, Python's
-        // update_forecast() produces fully deterministic output:
+        // Pins exact forecast values to catch regressions in Python's SARIMA fallback path.
         //
-        //   _windows["malki"] = [now]          → count_last_30 = 1
-        //   expectedDeliveries = 1 * 2 = 2
-        //   _active_drivers["malki"] = {driver} → driver_count = 1
+        // _refit_district queries Deliveries for hourly counts. With exactly one delivery
+        // in the DB the SARIMA history is below SARIMA_MIN_POINTS (48), so:
+        //
+        //   counts = [1.0]                → fallback = counts[-1] * 2 = 1 * 2 = 2
+        //   expectedDeliveries = 2
+        //   _active_drivers[district] = {driver} → driver_count = 1
         //   staffingRatio = 1 / 2 = 0.50
-        //   0.50 < CRITICAL_RATIO (0.70)       → label = "Critical", color = "#f87171"
+        //   0.50 < CRITICAL_RATIO (0.70)  → label = "Critical", color = "#f87171"
         //
-        // This test pins the exact forecast values so a regression in Python's
-        // windowing or ratio logic is caught immediately at the E2E level.
+        // Unique district per run so Python's _windows / _sarima_cache have no prior state.
         await ResetAsync();
 
-        // Unique district per run — guarantees Python's _windows has no prior events.
         var district = $"malki-{Guid.NewGuid():N}";
+
+        // Seed exactly one delivery so Python finds counts = [1.0] → fallback = 2.
+        // Without this the DB is empty after ResetAsync → counts = [] → fallback = 4.0.
+        await SeedDeliveryAsync(
+            Delivery.Create(
+                Guid.NewGuid(),
+                GeoFactory.CreatePoint(new Coordinate(36.281, 33.511)),
+                district,
+                DateTime.UtcNow,
+                null).Value);
 
         await PublishAsync(new DriverPositionIntegrationEvent(
             DriverId:       Guid.NewGuid(),
