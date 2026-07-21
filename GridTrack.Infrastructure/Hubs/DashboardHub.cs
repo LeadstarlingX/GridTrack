@@ -38,27 +38,19 @@ public sealed class DashboardHub(IDistrictGroupCache groupCache) : Hub
         {
             var role = user.FindFirstValue("role");
 
-            // Capture before hub scope is disposed; DefaultGroupManager wraps a singleton.
-            var connectionId = Context.ConnectionId;
-            var groups       = Groups;
-
             if (role == "GeneralObserver")
             {
-                // Fire-and-forget: OnConnectedAsync must return before the handshake response
-                // is sent, so blocking on Redis here would exceed the client's 15-second timeout.
-                _ = Task.Run(async () =>
-                {
-                    var allIds = await groupCache.GetAllGroupIdsAsync(default);
-                    foreach (var id in allIds)
-                        await groups.AddToGroupAsync(connectionId, $"dg:{id}");
-                });
+                var allIds = await groupCache.GetAllGroupIdsAsync(Context.ConnectionAborted);
+                foreach (var id in allIds)
+                    await Groups.AddToGroupAsync(
+                        Context.ConnectionId, $"dg:{id}", Context.ConnectionAborted);
             }
             else if (role == "Observer")
             {
-                // sectorId claims carry DistrictGroup UUIDs — join them directly.
-                var sectorIds = user.FindAll("sectorId").Select(c => c.Value).ToList();
-                _ = Task.WhenAll(sectorIds.Select(sid =>
-                    groups.AddToGroupAsync(connectionId, $"dg:{sid}")));
+                var sectorIds = user.FindAll("sectorId").Select(c => c.Value);
+                foreach (var sid in sectorIds)
+                    await Groups.AddToGroupAsync(
+                        Context.ConnectionId, $"dg:{sid}", Context.ConnectionAborted);
             }
         }
 
