@@ -116,7 +116,8 @@ public class PythonPipelineE2ETests
     //   "babtouma"  → DriverPositionUpdate_Should_Produce_ForecastResult_Via_Python
     //   "mezzeh"    → TwoPositionUpdates_ForDifferentDistricts
     //   "qaboun"    → TwoPositionUpdates_ForDifferentDistricts
-    //   "malki"     → SinglePositionUpdate_Should_Produce_Deterministic_CriticalForecast
+    //   unique GUID → SinglePositionUpdate_Should_Produce_Deterministic_CriticalForecast
+    //                 (guarantees no prior _windows state regardless of test order)
     //   "kafrsousa" → AnomalyAndPositionUpdate_PublishedTogether
     //
     // Anomaly-only tests are free to reuse any district string because
@@ -447,19 +448,22 @@ public class PythonPipelineE2ETests
         // windowing or ratio logic is caught immediately at the E2E level.
         await ResetAsync();
 
+        // Unique district per run — guarantees Python's _windows has no prior events.
+        var district = $"malki-{Guid.NewGuid():N}";
+
         await PublishAsync(new DriverPositionIntegrationEvent(
             DriverId:       Guid.NewGuid(),
-            DistrictId:     "malki",
+            DistrictId:     district,
             Lat:            33.511,
             Lng:            36.281,
             DeliveryStatus: "InTransit",
             Timestamp:      DateTime.UtcNow));
 
         var forecast = await WaitForCacheAsync<ForecastResultMessage>(
-            "forecast:malki", TimeSpan.FromSeconds(30));
+            $"forecast:{district}", TimeSpan.FromSeconds(30));
 
         forecast.Should().NotBeNull();
-        forecast!.DistrictId.Should().Be("malki");
+        forecast!.DistrictId.Should().Be(district);
         forecast.ExpectedDeliveries.Should().Be(2,
             "one event in the last 30 min → expectedDeliveries = 1 * 2 = 2");
         forecast.StaffingRatio.Should().BeApproximately(0.5, precision: 0.01,

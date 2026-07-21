@@ -12,6 +12,7 @@ using GridTrack.Infrastructure.Simulation;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -104,6 +105,10 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
 
             services.RemoveAll<IDashboardPushService>();
             services.AddSingleton(DashboardPushMock);
+
+            // hub.OnConnectedAsync() runs before the handshake response is sent; Redis group
+            // joins in CI take longer than the default 15 s server-side HandshakeTimeout.
+            services.Configure<HubOptions>(o => o.HandshakeTimeout = TimeSpan.FromSeconds(60));
 
             // Force the AI services into their "unavailable" state. Integration tests assert the
             // degraded path (AiAvailable=false, null summary) and must not depend on whether a real
