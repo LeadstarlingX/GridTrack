@@ -202,20 +202,23 @@ public class DashboardHubTests : BaseIntegrationTest
         // Connect with an Observer token that carries this sector's ID.
         var token    = TestAuthHandler.ObserverSectorPrefix + groupId;
         var conn     = BuildConnection(token);
-        var received = new List<string>();
-        conn.On<object>("DriverPositionUpdated", m => received.Add(m.ToString()!));
-    
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        conn.On<object>("DriverPositionUpdated", _ => tcs.TrySetResult());
+
         await conn.StartAsync();
         await conn.InvokeAsync<long>("Ping", 0L);
-    
-        // Send to the sector group — no explicit JoinDistrictGroup call.
+
+        // The hub fire-and-forgets the group join on connect; poll until the join lands.
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<DashboardHub>>();
-        await hubContext.Clients.Group($"dg:{groupId}")
-            .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid() }]);
-    
-        await Task.Delay(300);
-    
-        received.Should().HaveCount(1);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!tcs.Task.IsCompleted && !cts.IsCancellationRequested)
+        {
+            await hubContext.Clients.Group($"dg:{groupId}")
+                .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid() }]);
+            await Task.WhenAny(tcs.Task, Task.Delay(300));
+        }
+
+        tcs.Task.IsCompleted.Should().BeTrue("observer should auto-join the sector group on connect");
     
         await conn.StopAsync();
         await ResetDatabaseAsync();
@@ -235,20 +238,24 @@ public class DashboardHubTests : BaseIntegrationTest
         await using var scope = Factory.Services.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<IDistrictGroupCache>().Invalidate();
 
-        var conn     = BuildConnection(TestAuthHandler.GeneralObserverToken);
-        var received = new List<string>();
-        conn.On<object>("DriverPositionUpdated", m => received.Add(m.ToString()!));
+        var conn = BuildConnection(TestAuthHandler.GeneralObserverToken);
+        var tcs  = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        conn.On<object>("DriverPositionUpdated", _ => tcs.TrySetResult());
 
         await conn.StartAsync();
         await conn.InvokeAsync<long>("Ping", 0L);
 
+        // The hub fire-and-forgets the group join on connect; poll until the join lands.
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<DashboardHub>>();
-        await hubContext.Clients.Group($"dg:{groupId}")
-            .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid() }]);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!tcs.Task.IsCompleted && !cts.IsCancellationRequested)
+        {
+            await hubContext.Clients.Group($"dg:{groupId}")
+                .SendCoreAsync("DriverPositionUpdated", [new { driverId = Guid.NewGuid() }]);
+            await Task.WhenAny(tcs.Task, Task.Delay(300));
+        }
 
-        await Task.Delay(300);
-
-        received.Should().HaveCount(1);
+        tcs.Task.IsCompleted.Should().BeTrue("general observer should auto-join all district groups on connect");
 
         await conn.StopAsync();
         await ResetDatabaseAsync();
