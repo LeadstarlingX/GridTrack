@@ -79,23 +79,54 @@ task k6-throughput       # arrival-rate ceiling
 The Python pipeline ([gridtrack-forecasting](https://github.com/LeadstarlingX/gridtrack-forecasting))
 exposes an **MCP server** so AI agents can query live fleet data as native tools.
 
-- **URL:** `http://localhost:8000/mcp` (SSE transport)
+- **Endpoint:** `http://localhost:8000/mcp/sse` (SSE transport)
 - **Auth:** `Authorization: Bearer <MCP_API_KEY>` — key is in `.env` at this repo's root
 - **Tools:** `get_active_drivers`, `get_anomalies`, `get_deliveries_summary`, `get_district_status`, `get_stalled_drivers`, `get_activity_trend`, `get_peak_hours`
 
-**Quick setup for Claude Code** — add to `.claude/settings.json`:
+### Claude Code
+
+Add to `.claude/settings.json` (or `~/.claude/settings.json` for global):
 
 ```json
 {
   "mcpServers": {
     "gridtrack": {
       "type": "sse",
-      "url": "http://localhost:8000/mcp",
+      "url": "http://localhost:8000/mcp/sse",
       "headers": { "Authorization": "Bearer gridtrack-mcp-2026" }
     }
   }
 }
 ```
+
+### Claude Desktop (Windows)
+
+Claude Desktop requires a stdio bridge because it does not support SSE servers natively.
+
+**1. Install `mcp-remote` globally (one-time):**
+```bash
+npm install -g mcp-remote
+```
+
+**2. Add to `%APPDATA%\Claude\claude_desktop_config.json`:**
+```json
+{
+  "mcpServers": {
+    "gridtrack": {
+      "command": "mcp-remote.cmd",
+      "args": [
+        "http://localhost:8000/mcp/sse",
+        "--header",
+        "Authorization: Bearer gridtrack-mcp-2026"
+      ]
+    }
+  }
+}
+```
+
+**3.** Make sure the Docker stack is running (`docker compose up -d`), then fully restart Claude Desktop.
+
+> **Why `mcp-remote.cmd` instead of `npx`?** Claude Desktop launches servers via `cmd.exe`. On Windows, paths with spaces (e.g. `C:\Program Files\nodejs\npx`) break the command lookup. Installing `mcp-remote` globally puts `mcp-remote.cmd` in `%APPDATA%\Roaming\npm\` — no spaces, no quoting issues.
 
 Full documentation and client examples: [gridtrack-forecasting README](https://github.com/LeadstarlingX/gridtrack-forecasting#mcp-server--ai-agent-integration).
 
