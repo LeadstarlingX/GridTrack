@@ -27,10 +27,9 @@ public class E2EWebAppFactory : WebApplicationFactory<Program>, IAsyncInitialize
 
     private readonly INetwork _network = new NetworkBuilder().Build();
 
-    private readonly PostgreSqlContainer _db =
-        new PostgreSqlBuilder("postgis/postgis:18-3.6")
-            .WithPassword("postgres")
-            .Build();
+    private readonly PostgreSqlContainer _db;
+
+    // Initialized in ctor so the network alias is set before StartAsync.
 
     private readonly RedisContainer _redis =
         new RedisBuilder("redis:8.4.0")
@@ -43,6 +42,12 @@ public class E2EWebAppFactory : WebApplicationFactory<Program>, IAsyncInitialize
 
     public E2EWebAppFactory()
     {
+        _db = new PostgreSqlBuilder("postgis/postgis:18-3.6")
+            .WithPassword("postgres")
+            .WithNetwork(_network)
+            .WithNetworkAliases("postgres")
+            .Build();
+
         _rabbit = new RabbitMqBuilder("rabbitmq:management-alpine")
             .WithUsername("gridtrack")
             .WithPassword("gridtrack")
@@ -124,6 +129,7 @@ public class E2EWebAppFactory : WebApplicationFactory<Program>, IAsyncInitialize
         _python = new ContainerBuilder(PythonImageName)
             .WithNetwork(_network)
             .WithEnvironment("RABBITMQ_URL",   "amqp://gridtrack:gridtrack@rabbitmq:5672")
+            .WithEnvironment("POSTGRES_URL",   "postgresql://postgres:postgres@postgres:5432/postgres")
             .WithEnvironment("GROQ_API_KEY",   "test-key-triggers-fallback")
             .WithEnvironment("GOOGLE_API_KEY", "test-key-triggers-fallback")
             // WithPortBinding maps the container port to a random host port so the
