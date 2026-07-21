@@ -13,13 +13,16 @@ public class DashboardHubTests : BaseIntegrationTest
     private static HubConnection BuildConnection(string token)
     {
         var handler = Factory.Server.CreateHandler();
-        return new HubConnectionBuilder()
+        var conn = new HubConnectionBuilder()
             .WithUrl("http://localhost/hubs/dashboard", o =>
             {
                 o.HttpMessageHandlerFactory = _ => handler;
                 o.AccessTokenProvider = () => Task.FromResult<string?>(token);
             })
             .Build();
+        // CI Redis backplane is slower; OnConnectedAsync auto-joins delay the handshake response.
+        conn.HandshakeTimeout = TimeSpan.FromSeconds(60);
+        return conn;
     }
 
     [Test]
