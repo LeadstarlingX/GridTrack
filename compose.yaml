@@ -133,6 +133,7 @@ services:
       RABBITMQ_URL: "amqp://guest:guest@gridtrack.rabbitmq:5672"
       GROQ_API_KEY: "${GROQ_API_KEY}"
       GOOGLE_API_KEY: "${GOOGLE_API_KEY}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
       POSTGRES_URL: "postgresql://postgres:postgres@gridtrack.db:5432/gridtrack_docker"
       MCP_API_KEY: "${MCP_API_KEY}"
       CLICKHOUSE_HOST: "gridtrack.clickhouse"
