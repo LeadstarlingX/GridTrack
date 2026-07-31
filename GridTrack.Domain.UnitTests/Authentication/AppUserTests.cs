@@ -73,4 +73,27 @@ public class AppUserTests
         await Assert.That(result.IsSuccess).IsTrue();
         await Assert.That(result.Value.SectorIds).IsEquivalentTo(sectorIds);
     }
+
+    [Test]
+    public async Task UpdateSectors_Should_Replace_SectorIds()
+    {
+        var user       = AppUser.Create(Guid.NewGuid(), "ahmad", "hash", "Observer", [Guid.NewGuid()]).Value;
+        var newSectors = new[] { Guid.NewGuid(), Guid.NewGuid() };
+
+        var result = user.UpdateSectors(newSectors);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(user.SectorIds).IsEquivalentTo(newSectors);
+    }
+
+    [Test]
+    public async Task UpdateSectors_With_Empty_Array_Clears_SectorIds()
+    {
+        var user = AppUser.Create(Guid.NewGuid(), "ahmad", "hash", "Observer", [Guid.NewGuid()]).Value;
+
+        var result = user.UpdateSectors([]);
+
+        await Assert.That(result.IsSuccess).IsTrue();
+        await Assert.That(user.SectorIds).IsEmpty();
+    }
 }

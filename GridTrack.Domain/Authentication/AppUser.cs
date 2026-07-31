@@ -23,6 +23,12 @@ public sealed class AppUser : BaseEntity
 
     public bool IsGeneralObserver => Role == "GeneralObserver";
 
+    public Result UpdateSectors(Guid[] sectorIds)
+    {
+        SectorIds = sectorIds ?? [];
+        return Result.Success();
+    }
+
     public static Result<AppUser> Create(
         Guid userId, string username, string passwordHash, string role, Guid[] sectorIds)
     {

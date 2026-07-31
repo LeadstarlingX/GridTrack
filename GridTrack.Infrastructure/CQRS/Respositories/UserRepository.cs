@@ -23,4 +23,7 @@ internal sealed class UserRepository : IUserRepository
 
     public Task<AppUser?> GetByIdAsync(Guid userId, CancellationToken ct)
         => _context.Set<AppUser>().FirstOrDefaultAsync(u => u.UserId == userId, ct);
+
+    public async Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct)
+        => await _context.Set<AppUser>().ToListAsync(ct);
 }

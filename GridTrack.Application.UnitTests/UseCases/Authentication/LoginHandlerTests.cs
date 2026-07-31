@@ -17,6 +17,7 @@ public class LoginHandlerTests
             => Task.FromResult(user);
         public Task AddAsync(AppUser u, CancellationToken ct) => Task.CompletedTask;
         public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken ct) => Task.FromResult<AppUser?>(null);
+        public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<AppUser>>([]);
     }
 
     private sealed class FakeDistrictGroupRepository(IReadOnlyList<DistrictGroup>? groups = null)

@@ -1,6 +1,7 @@
 using FluentValidation;
 using GridTrack.Presentation.Controllers.Deliveries;
 using GridTrack.Presentation.Controllers.DistrictGroups;
+using GridTrack.Presentation.Controllers.Users;
 
 namespace GridTrack.Presentation.Validation;
 
@@ -57,5 +58,17 @@ public sealed class UpdateDistrictGroupHttpRequestValidator : AbstractValidator<
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
         RuleFor(x => x.DistrictIds).NotEmpty();
+    }
+}
+
+public sealed class UpdateUserSectorsHttpRequestValidator : AbstractValidator<UpdateUserSectorsHttpRequest>
+{
+    public UpdateUserSectorsHttpRequestValidator()
+    {
+        RuleFor(x => x.SectorIds).NotNull();
+        RuleFor(x => x.SectorIds).Must(ids => ids.Distinct().Count() == ids.Length)
+            .WithMessage("SectorIds must not contain duplicates.");
+        RuleFor(x => x.SectorIds).Must(ids => ids.Length <= 50)
+            .WithMessage("A user may not be assigned more than 50 sectors.");
     }
 }
