@@ -177,41 +177,42 @@ The benchmark tables below are generated from real k6 runs in CI. We deliberatel
 <!-- K6_COMPARISON_START -->
 ### Comparison Test **✗ WRITE-BEHIND REGRESSED ON SOME PATHS**
 
-> ClickHouse + Postgres + write-behind buffer (`write-behind`) vs Postgres-only synchronous
-> writes (`direct-postgres`). Runs at high concurrency (≥600 driver VUs) to saturate the
-> synchronous Postgres path — at low load both are fast and the comparison is meaningless.
-> ✓/✗ marks whether write-behind matched or beat the direct-postgres baseline at p95.
+> **What it does:** Benchmarks write-behind buffering (Redis queue → ClickHouse + Postgres async) against direct synchronous Postgres writes — the core architectural trade-off in GridTrack's telemetry pipeline.
+>
+> **Why we run it:** Validates that the write-behind buffer is actually faster, not just complexity. If write-behind regresses at p95, the optimization is wrong or broken.
+>
+> **How it works:** Two full runs at ≥600 driver VUs across 6 parallel scenarios, with a full stack teardown between arms. ✓/✗ marks whether write-behind matched or beat direct-postgres at p95. Error rate < 1% is also required — faster but lossy doesn't count.
 
 | Path | p50 WB | p50 Direct | p50 | p90 WB | p90 Direct | p90 | p95 WB | p95 Direct | p95 |
 |------|-------:|-----------:|-----|-------:|-----------:|-----|-------:|-----------:|-----|
-| Telemetry POST ✓ | 1.59 ms | 2.18 ms | 1.4x faster | 2.66 ms | 3.76 ms | 1.4x faster | 4.82 ms | 5.22 ms | 1.1x faster |
-| Analytics reads ✗ | 1.44 ms | 1.17 ms | 1.2x slower | 2.19 ms | 2.18 ms | ~same | 4.74 ms | 4.37 ms | 1.1x slower |
-| Delivery writes ✓ | 3.19 ms | 2.76 ms | 1.2x slower | 5.65 ms | 10.0 ms | 1.8x faster | 14.0 ms | 15.2 ms | 1.1x faster |
-| District-group CRUD ✗ | 2.71 ms | 2.33 ms | 1.2x slower | 5.56 ms | 3.75 ms | 1.5x slower | 13.9 ms | 6.53 ms | 2.1x slower |
+| Telemetry POST ✓ | 184 ms | 2.04 ms | 90.1x slower | 433 ms | 60.00 s | 138.7x faster | 529 ms | 60.00 s | 113.5x faster |
+| Analytics reads ✓ | 164 ms | 1.26 ms | 130.2x slower | 435 ms | 6.63 ms | 65.6x slower | 551 ms | 60.00 s | 108.9x faster |
+| Delivery writes ✓ | 213 ms | 60.00 s | 281.6x faster | 558 ms | 60.00 s | 107.6x faster | 733 ms | 60.00 s | 81.9x faster |
+| District-group CRUD ✓ | 188 ms | 60.00 s | 318.8x faster | 485 ms | 60.00 s | 123.6x faster | 618 ms | 60.00 s | 97.1x faster |
 
 **Measured traffic mix (req/s):**
 
 | Path | Write-behind | Direct-postgres |
 |------|-------------:|----------------:|
-| Driver telemetry | 525.8/s | 527.7/s |
-| Analytics reads | 592.1/s | 593.3/s |
-| Delivery lifecycle | 7.8/s | 7.8/s |
-| District-group CRUD | 8.6/s | 8.6/s |
+| Driver telemetry | 1734.0/s | 50.6/s |
+| Analytics reads | 637.8/s | 54.8/s |
+| Delivery lifecycle | 43.4/s | 0.8/s |
+| District-group CRUD | 18.1/s | 0.2/s |
 
-**Throughput:** write-behind 996.4 req/s vs direct-postgres 996.8 req/s
+**Throughput:** write-behind 1786.9 req/s vs direct-postgres 98.1 req/s
 
-**Error rate:** write-behind 0.79% / direct-postgres 1.66%
+**Error rate:** write-behind 0.51% / direct-postgres 21.80%
 <!-- K6_COMPARISON_END -->
 
 ### Throughput ceiling
 <!-- K6_THROUGHPUT_START -->
 ### Throughput Ceiling Test
 
-> **What it does:** Aggressively ramps request rate until the system buckles — finds the absolute maximum RPS your API can handle before errors spike. This is NOT a performance benchmark, it's a capacity discovery test.
+> **What it does:** Finds the absolute maximum RPS the telemetry pipeline can sustain before error rate spikes — a capacity-discovery test, not a benchmark.
 >
-> **Why we run it:** Know your breaking point before production does. If we can serve 3,000 RPS with <1% errors, we know our scaling limits and can set proper autoscaling thresholds.
+> **Why we run it:** Know the breaking point before production does. Sets the upper bound for autoscaling thresholds and reveals whether the write-behind buffer degrades gracefully or hard-fails under extreme load.
 >
-> **How it works:** Constant arrival rate executor pushes 100 → 500 → 1,000 → 2,000 → 3,000 requests/second with **no sleep between iterations**. No latency thresholds — only error rate <5% matters here.
+> **How it works:** `ramping-arrival-rate` executor escalates 100 → 500 → 1,500 → 3,000 → 5,000 → 8,000 → 12,000 req/s over ~6 min with no sleep. Up to 15,000 VUs pre-allocated. No latency thresholds — only error rate < 5% matters here.
 
 
 
@@ -219,58 +220,58 @@ The benchmark tables below are generated from real k6 runs in CI. We deliberatel
 
 | Result | Value |
 |--------|-------|
-| Peak RPS | **1309.9/s** |
-| Peak concurrent VUs | **100** |
-| Total HTTP requests | **196,501** |
-| Error rate | **2.00%** |
+| Peak RPS | **754.1/s** |
+| Peak concurrent VUs | **500** |
+| Total HTTP requests | **271,501** |
+| Error rate | **0.00%** |
 
 **Telemetry Latency at Peak:**
 
 | Avg | Median | p90 | p95 | Max |
 |----:|-------:|----:|----:|----:|
-| 1.1 ms | 1.1 ms | 1.6 ms | 1.6 ms | 0.05 s |<!-- K6_THROUGHPUT_END -->
+| 0.8 ms | 0.6 ms | 1.1 ms | 1.6 ms | 0.05 s |<!-- K6_THROUGHPUT_END -->
 
 ### Stress test
 <!-- K6_STRESS_START -->
 ### Stress Test **✓ PASSED**
 
-> Latency numbers are informational — they reflect the 2-vCPU shared-runner environment and
-> should not be compared across different hardware. Only error rate is thresholded: a passing
-> test means the system handled the load without requests failing. Latency thresholds exist
-> inside k6 as catastrophic-breakage ceilings (e.g. accidental synchronous DB on the hot path)
-> but are not badged here — the numbers themselves are the signal.
+> **What it does:** High-concurrency soak across all 6 scenarios simultaneously (driver telemetry, analytics reads, delivery lifecycle, district-group CRUD, SignalR, batch ingest) — realistic mixed-workload at production-scale VU counts.
+>
+> **Why we run it:** Catch regressions that only appear under combined load: connection-pool exhaustion, Redis saturation, slow queries that serialize under concurrency, memory leaks invisible in single-scenario runs.
+>
+> **How it works:** Ramp 0 → peak VUs over 30 s, hold for 2 min, ramp down. Only error rate is thresholded (< 1%). Latency numbers are hardware-relative (2-vCPU CI runner) — compare the trend across runs, not the absolute values.
 
 **Latest run — CI stress test:**
 
 | Result | Value |
 |--------|-------|
-| Peak concurrent VUs | **990** |
-| Duration | **3m 32s** |
-| Total HTTP requests | **408,641** |
-| Request throughput | **1926.7/s** |
-| Iterations | **152,271 (718.0/s)** |
-| Checks passed | **419,104 / 422,687 (99%)** |
-| Error rate | **0.77%** |
-| Data received | **11.6 MB/s** |
-| Data sent | **336.1 kB/s** |
+| Peak concurrent VUs | **2,201** |
+| Duration | **3m 31s** |
+| Total HTTP requests | **376,716** |
+| Request throughput | **1778.2/s** |
+| Iterations | **256,983 (1213.1/s)** |
+| Checks passed | **393,765 / 395,566 (100%)** |
+| Error rate | **0.54%** |
+| Data received | **10.8 MB/s** |
+| Data sent | **446.4 kB/s** |
 
 **Latency by path:**
 
 | Path | Avg | Median | p90 | p95 | Max |
 |------|----:|-------:|----:|----:|----:|
-| Driver telemetry | 3.24 ms | 1.64 ms | 5.83 ms | 7.73 ms | 706 ms |
-| Analytics reads | 2.30 ms | 1.59 ms | 2.74 ms | 5.87 ms | 700 ms |
-| Delivery lifecycle | 9.63 ms | 3.20 ms | 10.8 ms | 22.7 ms | 673 ms |
-| District-group CRUD | 8.89 ms | 2.71 ms | 8.69 ms | 19.0 ms | 637 ms |
-| SignalR negotiate | 2.35 ms | 572 µs | 1.57 ms | 3.37 ms | 539 ms |
-| Overall HTTP | 2.69 ms | 1.60 ms | 3.86 ms | 6.87 ms | 706 ms |
+| Driver telemetry | 239 ms | 192 ms | 469 ms | 573 ms | 2.18 s |
+| Analytics reads | 217 ms | 171 ms | 465 ms | 592 ms | 2.78 s |
+| Delivery lifecycle | 300 ms | 227 ms | 607 ms | 769 ms | 3.08 s |
+| District-group CRUD | 259 ms | 190 ms | 550 ms | 716 ms | 2.65 s |
+| SignalR negotiate | 190 ms | 147 ms | 408 ms | 516 ms | 1.19 s |
+| Overall HTTP | 233 ms | 185 ms | 472 ms | 587 ms | 3.08 s |
 
 **Error-rate compliance:**
 
 | Status | Metric | Actual | Threshold |
 |--------|--------|--------|-----------|
-| ✓ http_req_failed rate | 0.77 % | < 1.00 % |
-| ✓ gridtrack_error_rate rate | 0.71 % | < 1.00 % |
+| ✓ http_req_failed rate | 0.54 % | < 1.00 % |
+| ✓ gridtrack_error_rate rate | 0.00 % | < 1.00 % |
 <!-- K6_STRESS_END -->
 
 ## Code coverage
@@ -281,10 +282,10 @@ High coverage on the layers that hold the business rules — and we measure the 
 <!-- COVERAGE_START -->
 | Layer | Line Coverage |
 |-------|---------------|
-| Domain | 94.3% |
-| Application | 85.2% |
-| Infrastructure | 76.7% |
-| Presentation | 87.1% |
+| Domain | 97.8% |
+| Application | 91.7% |
+| Infrastructure | 78.8% |
+| Presentation | 86.2% |
 <!-- COVERAGE_END -->
 
 ## License
